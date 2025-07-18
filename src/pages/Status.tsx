@@ -1,480 +1,284 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
-import { Link } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
-import { RedemptionRequest } from "@/types";
-import "@/styles/notifications.css";
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { RedemptionRequest } from '@/types';
+import { Link } from 'react-router-dom';
 
 export default function Status() {
-  const [requestId, setRequestId] = useState("");
-  const [robloxUsername, setRobloxUsername] = useState("");
-  const [activeTab, setActiveTab] = useState("id");
-  const [error, setError] = useState<string | null>(null);
-  const [request, setRequest] = useState<RedemptionRequest | null>(null);
-  const [recentRequests, setRecentRequests] = useState<RedemptionRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [publicRequests, setPublicRequests] = useState<RedemptionRequest[]>([]);
-  
-  useEffect(() => {
-    // Fetch recent public requests on component mount
-    fetchPublicRequests();
-  }, []);
-  
-  const fetchPublicRequests = async () => {
-    try {
-      // First fetch the redemption requests
-      const { data, error } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(5);
-        
-      if (error) {
-        console.error("Error fetching public requests:", error);
-        return;
-      }
-      
-      if (!data || data.length === 0) {
-        setPublicRequests([]);
-        return;
-      }
-      
-      // Get all codes from the requests
-      const codes = data.map(item => item.code);
-      
-      // Fetch the code values
-      const { data: codeValues, error: codeError } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes")
-        .select("code, value")
-        .in("code", codes);
-        
-      if (codeError) {
-        console.error("Error fetching code values:", codeError);
-      } else if (codeValues) {
-        // Create a map of code to value
-        const valuesMap: Record<string, number> = {};
-        codeValues.forEach(item => {
-          valuesMap[item.code] = item.value;
-        });
-        
-        // Add the robux_value to each request
-        const requestsWithValues = data.map(req => ({
-          ...req,
-          robux_value: valuesMap[req.code] || null
-        }));
-        
-        setPublicRequests(requestsWithValues);
-      } else {
-        setPublicRequests(data);
-      }
-    } catch (error) {
-      console.error("Error in fetchPublicRequests:", error);
-    }
-  };
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResult, setSearchResult] = useState<RedemptionRequest | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
-  const fetchByRequestId = async () => {
-    if (!requestId.trim()) {
-      setError("กรุณากรอกหมายเลขคำขอ");
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      toast.error('กรุณาใส่ชื่อผู้ใช้หรือข้อมูลติดต่อ');
       return;
     }
 
-    setError(null);
-    setRequest(null);
-    setIsLoading(true);
+    setLoading(true);
+    setSearched(true);
 
     try {
-      // Get the redemption request
       const { data, error } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests")
-        .select("*")
-        .eq("id", requestId.trim())
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+        .select('*')
+        .or(`roblox_username.ilike.%${searchTerm}%,contact_info.ilike.%${searchTerm}%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
 
-      if (error || !data) {
-        setError("ไม่พบคำขอที่ตรงกับหมายเลขที่ระบุ");
-        return;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
       }
+
+      setSearchResult(data || null);
       
-      // Get the code value
-      const { data: codeData, error: codeError } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes")
-        .select("value")
-        .eq("code", data.code)
-        .single();
-        
-      if (!codeError && codeData) {
-        // Add the Robux value to the request data
-        setRequest({
-          ...data,
-          robux_value: codeData.value
-        });
-      } else {
-        setRequest(data);
+      if (!data) {
+        toast.error('ไม่พบข้อมูลคำขอ');
       }
     } catch (error) {
-      console.error("Error fetching by ID:", error);
-      setError("เกิดข้อผิดพลาดในการค้นหา");
+      console.error('Search error:', error);
+      toast.error('เกิดข้อผิดพลาดในการค้นหา');
+      setSearchResult(null);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const fetchByUsername = async () => {
-    if (!robloxUsername.trim()) {
-      setError("กรุณากรอกชื่อผู้ใช้ Roblox");
-      return;
-    }
-
-    setError(null);
-    setRecentRequests([]);
-    setIsLoading(true);
-
-    try {
-      // Fetch requests by username
-      const { data, error } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests")
-        .select("*")
-        .eq("roblox_username", robloxUsername.trim())
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching by username:", error);
-        setError("เกิดข้อผิดพลาดในการค้นหา");
-        return;
-      }
-      
-      if (!data || data.length === 0) {
-        setError("ไม่พบคำขอที่ตรงกับชื่อผู้ใช้ Roblox ที่ระบุ");
-        return;
-      }
-      
-      // Get all codes from the requests
-      const codes = data.map(item => item.code);
-      
-      // Fetch the code values
-      const { data: codeValues, error: codeError } = await supabase
-        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes")
-        .select("code, value")
-        .in("code", codes);
-        
-      if (codeError) {
-        console.error("Error fetching code values:", codeError);
-        setRecentRequests(data);
-      } else if (codeValues) {
-        // Create a map of code to value
-        const valuesMap: Record<string, number> = {};
-        codeValues.forEach(item => {
-          valuesMap[item.code] = item.value;
-        });
-        
-        // Add the robux_value to each request
-        const requestsWithValues = data.map(req => ({
-          ...req,
-          robux_value: valuesMap[req.code] || null
-        }));
-        
-        setRecentRequests(requestsWithValues);
-      } else {
-        setRecentRequests(data);
-      }
-    } catch (error) {
-      console.error("Error fetching by username:", error);
-      setError("เกิดข้อผิดพลาดในการค้นหา");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSearch = () => {
-    if (activeTab === "id") {
-      fetchByRequestId();
-    } else {
-      fetchByUsername();
-    }
-  };
-
-  const getStatusText = (status: string) => {
+  const getStatusInfo = (status: string) => {
     switch (status) {
-      case "pending":
-        return "รอดำเนินการ";
-      case "processing":
-        return "กำลังดำเนินการ";
-      case "completed":
-        return "เสร็จสิ้น";
-      case "rejected":
-        return "ปฏิเสธ";
+      case 'pending':
+        return { text: 'รอดำเนินการ', color: 'bg-yellow-500/20 text-yellow-300', icon: '⏳' };
+      case 'processing':
+        return { text: 'กำลังดำเนินการ', color: 'bg-blue-500/20 text-blue-300', icon: '🔄' };
+      case 'completed':
+        return { text: 'เสร็จสิ้น', color: 'bg-green-500/20 text-green-300', icon: '✅' };
+      case 'rejected':
+        return { text: 'ยกเลิก', color: 'bg-red-500/20 text-red-300', icon: '❌' };
       default:
-        return status;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">รอดำเนินการ</Badge>;
-      case "processing":
-        return <Badge variant="outline" className="bg-blue-100 text-blue-800 hover:bg-blue-100">กำลังดำเนินการ</Badge>;
-      case "completed":
-        return <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-100">เสร็จสิ้น</Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-100">ปฏิเสธ</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+        return { text: 'ไม่ทราบสถานะ', color: 'bg-gray-500/20 text-gray-300', icon: '❓' };
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4">
-      {/* Removed notification component from Status page */}
-      
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-center">ตรวจสอบสถานะคำขอ</CardTitle>
-          <CardDescription className="text-center">
-            คุณสามารถตรวจสอบสถานะของคำขอแลกรับ Robux ของคุณได้ที่นี่
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="id">ค้นหาด้วยหมายเลขคำขอ</TabsTrigger>
-              <TabsTrigger value="username">ค้นหาด้วยชื่อผู้ใช้ Roblox</TabsTrigger>
-            </TabsList>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
+      </div>
 
-            <TabsContent value="id" className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="กรอกหมายเลขคำขอของคุณ"
-                  value={requestId}
-                  onChange={(e) => setRequestId(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && fetchByRequestId()}
-                />
-                <Button 
-                  onClick={fetchByRequestId}
-                  disabled={isLoading}
-                >
-                  {isLoading ? "กำลังค้นหา..." : "ค้นหา"}
-                </Button>
+      {/* Header */}
+      <header className="relative z-10 bg-black/20 backdrop-blur-lg border-b border-white/10">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-2xl">
+                <span className="text-3xl">🔍</span>
               </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {request && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">รายละเอียดคำขอ</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <dl className="divide-y">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">หมายเลขคำขอ:</dt>
-                        <dd className="col-span-1 sm:col-span-2 font-mono text-xs sm:text-sm break-all">{request.id}</dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">โค้ด:</dt>
-                        <dd className="col-span-1 sm:col-span-2 font-mono">{request.code}</dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">จำนวน Robux:</dt>
-                        <dd className="col-span-1 sm:col-span-2">{request.robux_value || "N/A"} Robux</dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">ชื่อผู้ใช้ Roblox:</dt>
-                        <dd className="col-span-1 sm:col-span-2">{request.roblox_username}</dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">สถานะ:</dt>
-                        <dd className="col-span-1 sm:col-span-2">{getStatusBadge(request.status)}</dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">วันที่ส่งคำขอ:</dt>
-                        <dd className="col-span-1 sm:col-span-2">
-                          {new Date(request.created_at).toLocaleDateString("th-TH", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}
-                        </dd>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 py-2">
-                        <dt className="font-medium text-gray-500">อัปเดตล่าสุด:</dt>
-                        <dd className="col-span-1 sm:col-span-2">
-                          {new Date(request.updated_at).toLocaleDateString("th-TH", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}
-                        </dd>
-                      </div>
-                    </dl>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="username" className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="กรอกชื่อผู้ใช้ Roblox ของคุณ"
-                  value={robloxUsername}
-                  onChange={(e) => setRobloxUsername(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && fetchByUsername()}
-                />
-                <Button 
-                  onClick={fetchByUsername}
-                  disabled={isLoading}
-                >
-                  {isLoading ? "กำลังค้นหา..." : "ค้นหา"}
-                </Button>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                  ตรวจสอบสถานะ
+                </h1>
+                <p className="text-blue-200 text-sm">เช็คสถานะคำขอแลกโค้ดของคุณ</p>
               </div>
+            </div>
+            <Link to="/">
+              <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+                🏠 กลับหน้าหลัก
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+      {/* Main Content */}
+      <main className="relative z-10 container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          {/* Search Form */}
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
+                <span className="text-3xl">🔍</span>
+                <span>ค้นหาสถานะคำขอ</span>
+              </CardTitle>
+              <p className="text-blue-200">ใส่ชื่อผู้ใช้ Roblox หรือข้อมูลติดต่อที่ใช้ส่งคำขอ</p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <Input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="ชื่อผู้ใช้ Roblox หรือข้อมูลติดต่อ"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 text-lg p-4"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
+              <Button
+                onClick={handleSearch}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-4 text-lg"
+              >
+                {loading ? 'กำลังค้นหา...' : '🔍 ค้นหาสถานะ'}
+              </Button>
+            </CardContent>
+          </Card>
 
-              {recentRequests.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-medium mb-3">คำขอล่าสุดของ {robloxUsername}</h3>
-                  <div className="border rounded-md overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-gray-50 border-b">
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">โค้ด</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Robux</th>
-                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {recentRequests.map((req) => (
-                          <tr key={req.id}>
-                            <td className="px-2 py-2 text-sm text-gray-500 whitespace-nowrap">
-                              {new Date(req.created_at).toLocaleDateString("th-TH")}
-                            </td>
-                            <td className="px-2 py-2 font-mono text-xs sm:text-sm">
-                              {req.code}
-                            </td>
-                            <td className="px-2 py-2 whitespace-nowrap">
-                              {req.robux_value || "N/A"}
-                            </td>
-                            <td className="px-2 py-2 whitespace-nowrap">
-                              {getStatusBadge(req.status)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {/* Search Results */}
+          {searched && (
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center space-x-2">
+                  <span className="text-2xl">📋</span>
+                  <span>ผลการค้นหา</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {searchResult ? (
+                  <div className="space-y-6">
+                    {/* Status Card */}
+                    <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-bold text-white">สถานะคำขอ</h3>
+                        <Badge className={getStatusInfo(searchResult.status).color + ' text-lg px-4 py-2'}>
+                          {getStatusInfo(searchResult.status).icon} {getStatusInfo(searchResult.status).text}
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-white">
+                        <div>
+                          <p className="text-sm text-white/60 mb-1">ชื่อผู้ใช้ Roblox</p>
+                          <p className="font-semibold">{searchResult.roblox_username}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-white/60 mb-1">ประเภทคำขอ</p>
+                          <p className="font-semibold">
+                            {searchResult.robux_amount > 0 ? `${searchResult.robux_amount} Robux` : 'บัญชีไก่ตัน'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-white/60 mb-1">วันที่ส่งคำขอ</p>
+                          <p className="font-semibold">
+                            {new Date(searchResult.created_at).toLocaleDateString('th-TH', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-white/60 mb-1">อัพเดทล่าสุด</p>
+                          <p className="font-semibold">
+                            {new Date(searchResult.updated_at).toLocaleDateString('th-TH', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {searchResult.admin_notes && (
+                        <div className="mt-4 p-4 bg-white/10 rounded-lg">
+                          <p className="text-sm text-white/60 mb-2">หมายเหตุจากแอดมิน</p>
+                          <p className="text-white">{searchResult.admin_notes}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status Timeline */}
+                    <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+                      <h3 className="text-xl font-bold text-white mb-4">ขั้นตอนการดำเนินการ</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-sm">✓</span>
+                          </div>
+                          <div className="text-white">
+                            <p className="font-semibold">ส่งคำขอเรียบร้อย</p>
+                            <p className="text-sm text-white/60">คำขอของคุณได้รับการบันทึกในระบบแล้ว</p>
+                          </div>
+                        </div>
+                        
+                        <div className={`flex items-center space-x-4 ${['processing', 'completed'].includes(searchResult.status) ? 'opacity-100' : 'opacity-50'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${['processing', 'completed'].includes(searchResult.status) ? 'bg-blue-500' : 'bg-gray-500'}`}>
+                            <span className="text-white text-sm">{['processing', 'completed'].includes(searchResult.status) ? '✓' : '○'}</span>
+                          </div>
+                          <div className="text-white">
+                            <p className="font-semibold">กำลังดำเนินการ</p>
+                            <p className="text-sm text-white/60">แอดมินได้เริ่มดำเนินการคำขอของคุณแล้ว</p>
+                          </div>
+                        </div>
+                        
+                        <div className={`flex items-center space-x-4 ${searchResult.status === 'completed' ? 'opacity-100' : 'opacity-50'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${searchResult.status === 'completed' ? 'bg-green-500' : 'bg-gray-500'}`}>
+                            <span className="text-white text-sm">{searchResult.status === 'completed' ? '✓' : '○'}</span>
+                          </div>
+                          <div className="text-white">
+                            <p className="font-semibold">เสร็จสิ้น</p>
+                            <p className="text-sm text-white/60">คำขอของคุณได้รับการดำเนินการเรียบร้อยแล้ว</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contact Info */}
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                      <p className="text-blue-200 text-sm">
+                        <strong>💡 คำแนะนำ:</strong> หากคำขอของคุณอยู่ในสถานะ "เสร็จสิ้น" แต่ยังไม่ได้รับของรางวัล 
+                        กรุณาติดต่อแอดมินผ่านช่องทางที่ท่านระบุไว้ในคำขอ
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <Button variant="link" asChild>
-            <Link to="/">กลับไปหน้าแรก</Link>
-          </Button>
-        </CardFooter>
-      </Card>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">😔</div>
+                    <h3 className="text-xl font-bold text-white mb-2">ไม่พบข้อมูลคำขอ</h3>
+                    <p className="text-white/60 mb-6">
+                      ไม่พบคำขอที่ตรงกับข้อมูลที่ค้นหา กรุณาตรวจสอบการพิมพ์หรือลองใช้ข้อมูลอื่น
+                    </p>
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                      <p className="text-yellow-200 text-sm">
+                        <strong>💡 เคล็ดลับการค้นหา:</strong><br/>
+                        • ใช้ชื่อผู้ใช้ Roblox ที่ใช้ส่งคำขอ<br/>
+                        • ใช้ข้อมูลติดต่อ (Discord, Line ID) ที่ระบุในคำขอ<br/>
+                        • ตรวจสอบการพิมพ์ให้ถูกต้อง
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-      <div className="mt-8 w-full max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">คำขอล่าสุดในระบบ</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {publicRequests.length > 0 ? (
-              <div className="border rounded-md overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อผู้ใช้</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Robux</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {publicRequests.map((req) => (
-                      <tr key={req.id}>
-                        <td className="px-2 py-2 text-sm text-gray-500 whitespace-nowrap">
-                          {new Date(req.created_at).toLocaleDateString("th-TH")}
-                        </td>
-                        <td className="px-2 py-2 text-xs sm:text-sm">
-                          {req.roblox_username}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          {req.robux_value || "N/A"}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          {getStatusBadge(req.status)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-gray-500">ไม่มีคำขอล่าสุดในระบบ</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="mt-8 w-full max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">ขั้นตอนการแลกรับ Robux</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-3">
-              <div className="bg-blue-100 text-blue-800 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">1</div>
-              <div>
-                <p>กรอกข้อมูลและส่งคำขอแลกรับ Robux ที่หน้าแรก</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="bg-blue-100 text-blue-800 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">2</div>
-              <div>
-                <p>ระบบจะส่งคำขอของคุณไปยังทีมแอดมิน</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="bg-blue-100 text-blue-800 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">3</div>
-              <div>
-                <p>แอดมินจะดำเนินการเติม Robux ให้คุณผ่านรหัส ID และรหัสผ่าน</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <div className="bg-blue-100 text-blue-800 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">4</div>
-              <div>
-                <p>เมื่อดำเนินการเสร็จสิ้น สถานะคำขอจะเปลี่ยนเป็น "เสร็จสิ้น"</p>
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              <p>หากมีข้อสงสัยหรือต้องการสอบถามเพิ่มเติม กรุณาติดต่อทีมแอดมินผ่านช่องทางที่ระบุในคำขอของคุณ</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Help Section */}
+          {!searched && (
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-bold text-white mb-4">🆘 ช่วยเหลือ</h3>
+                <div className="space-y-3 text-white/80">
+                  <p><strong>วิธีการค้นหา:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li>ใส่ชื่อผู้ใช้ Roblox ที่ใช้ส่งคำขอ</li>
+                    <li>หรือใส่ข้อมูลติดต่อ (Discord, Line ID) ที่ระบุในคำขอ</li>
+                  </ul>
+                  <p className="text-sm mt-4"><strong>หมายเหตุ:</strong> ระบบจะแสดงคำขอล่าสุดที่ตรงกับข้อมูลที่ค้นหา</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

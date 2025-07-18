@@ -1,130 +1,117 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { Link, Navigate } from 'react-router-dom';
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [isDebugMode, setIsDebugMode] = useState(false);
-  const { login, user, isLoading, isAdmin, authError } = useAuth();
-  const navigate = useNavigate();
+  const { user, signIn } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Enable debug mode with query param ?debug=true
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const debug = urlParams.get('debug');
-    setIsDebugMode(debug === 'true');
-  }, []);
-
-  useEffect(() => {
-    // If user is already logged in and is an admin, redirect to admin page
-    if (user && isAdmin) {
-      navigate("/admin");
-    }
-  }, [user, isAdmin, navigate]);
+  if (user) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError(null);
     
-    if (!email) {
-      setLoginError("กรุณากรอกอีเมล");
+    if (!formData.email || !formData.password) {
+      toast.error('กรุณากรอกอีเมลและรหัสผ่าน');
       return;
     }
-    
-    if (!password) {
-      setLoginError("กรุณากรอกรหัสผ่าน");
-      return;
-    }
-    
-    const { success, error } = await login(email, password);
-    
-    if (!success) {
-      setLoginError(error || "การเข้าสู่ระบบล้มเหลว");
-      console.error("Login failed:", error);
-    } else {
-      console.log("Login successful, redirecting to admin page");
+
+    setIsLoading(true);
+
+    try {
+      await signIn(formData.email, formData.password);
+      toast.success('เข้าสู่ระบบสำเร็จ');
+    } catch (error: any) {
+      toast.error('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h1 className="text-center text-3xl font-extrabold text-gray-900">
-            เข้าสู่ระบบแอดมิน
-          </h1>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            กรอกข้อมูลของคุณเพื่อเข้าสู่ระบบ
-          </p>
-        </div>
-
-        <Card>
-          <form onSubmit={handleSubmit}>
-            <CardHeader>
-              <CardTitle>เข้าสู่ระบบ</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {loginError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{loginError}</AlertDescription>
-                </Alert>
-              )}
-              
-              {isDebugMode && authError && (
-                <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800">
-                  <AlertDescription className="font-mono text-xs break-all">{authError}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="email">อีเมล</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="กรอกอีเมลของคุณ"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">รหัสผ่าน</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="กรอกรหัสผ่านของคุณ"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                />
-              </div>
-            </CardContent>
-
-            <CardFooter>
-              <Button className="w-full" type="submit" disabled={isLoading}>
-                {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-        
-        {/* Debug mode indicator */}
-        {isDebugMode && (
-          <div className="text-center text-xs text-gray-500 mt-4">
-            Debug Mode Active
-          </div>
-        )}
+    <div className="min-h-screen bg-gradient-to-br from-red-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
+      {/* Background Effects */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-red-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
       </div>
+
+      <Card className="w-full max-w-md bg-white/10 backdrop-blur-xl border-white/20 relative z-10">
+        <CardHeader className="text-center space-y-4">
+          <div className="w-20 h-20 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
+            <span className="text-4xl">🔐</span>
+          </div>
+          <CardTitle className="text-3xl text-white bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">
+            เข้าสู่ระบบแอดมิน
+          </CardTitle>
+          <p className="text-white/60">เข้าสู่ระบบเพื่อจัดการคำขอและข้อมูล</p>
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                อีเมล
+              </label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="admin@example.com"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-white text-sm font-medium mb-2">
+                รหัสผ่าน
+              </label>
+              <Input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="••••••••"
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                required
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-semibold py-3 text-lg"
+            >
+              {isLoading ? 'กำลังเข้าสู่ระบบ...' : '🔐 เข้าสู่ระบบ'}
+            </Button>
+          </form>
+
+          <div className="text-center">
+            <Link to="/">
+              <Button variant="ghost" className="text-white/70 hover:text-white hover:bg-white/10">
+                ← กลับหน้าหลัก
+              </Button>
+            </Link>
+          </div>
+
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+            <p className="text-yellow-200 text-sm text-center">
+              <strong>สำหรับแอดมินเท่านั้น</strong><br/>
+              หากคุณไม่ใช่แอดมิน กรุณากลับไปหน้าหลัก
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
