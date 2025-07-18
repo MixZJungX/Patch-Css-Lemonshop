@@ -7,7 +7,6 @@
     }
   ],
   "routes": [
-    // ถ้าเป็น SPA แล้วอยากให้ทุกเส้นทางโหลด index.html
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
