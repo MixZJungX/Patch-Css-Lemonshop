@@ -15,6 +15,13 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        'thai': ['Kanit', 'Noto Sans Thai', 'system-ui', 'sans-serif'],
+        'thai-body': ['Sarabun', 'Noto Sans Thai', 'system-ui', 'sans-serif'],
+        'english': ['Inter', 'system-ui', 'sans-serif'],
+        'display': ['Kanit', 'system-ui', 'sans-serif'],
+        'mono': ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

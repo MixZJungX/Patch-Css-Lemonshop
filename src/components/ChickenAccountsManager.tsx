@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Trash, Plus } from "lucide-react";
+import { AlertCircle, Trash, Plus, FileUp, Edit, Check, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ChickenAccount } from "@/types";
 import {
@@ -32,116 +32,202 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 
 export function ChickenAccountsManager() {
   const [accounts, setAccounts] = useState<ChickenAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Single account form
+  const [newCode, setNewCode] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newProductName, setNewProductName] = useState("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [bulkInput, setBulkInput] = useState("");
   const [isAddingAccount, setIsAddingAccount] = useState(false);
+  
+  // Bulk import
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
   const [isBulkAdding, setIsBulkAdding] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [importResults, setImportResults] = useState<{
-    total: number;
-    successful: number;
-    duplicates: number;
-  } | null>(null);
-
+  
   // Statistics
   const [totalAccounts, setTotalAccounts] = useState(0);
   const [usedAccounts, setUsedAccounts] = useState(0);
   const [availableAccounts, setAvailableAccounts] = useState(0);
+  
+  // Editing states
+  const [editingAccount, setEditingAccount] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editProductName, setEditProductName] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     fetchChickenAccounts();
-  }, [refreshTrigger]);
+  }, []);
 
   const fetchChickenAccounts = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Get all accounts for admin
-      const { data, error } = await supabase
+      console.log("Fetching chicken accounts...");
+      
+      // Test connection first
+      const { data: testData, error: testError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("count", { count: 'exact' });
+      
+      console.log("Connection test:", { testData, testError });
+      
+      if (testError) {
+        console.error("Connection test failed:", testError);
+        // Try a simpler query without auth requirement
+        const { data: publicData, error: publicError } = await supabase
+          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+          .select("*")
+          .eq("status", "available")
+          .limit(5);
+          
+        console.log("Public query result:", { publicData, publicError });
+        
+        if (publicError) {
+          throw new Error(`Database connection failed: ${publicError.message}`);
+        }
+        
+        // If public query works, try admin query
+        const { data: adminData, error: adminError } = await supabase
+          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+          .select("*")
+          .order("created_at", { ascending: false });
+          
+        if (adminError) {
+          console.error("Admin query failed:", adminError);
+          // Use public data as fallback
+          setAccounts(publicData || []);
+          setError("แสดงข้อมูลบางส่วน: ไม่สามารถเข้าถึงข้อมูลทั้งหมดได้");
+          
+          // Calculate statistics from public data
+          const currentAccounts = publicData || [];
+          const total = currentAccounts.length;
+          const used = currentAccounts.filter(account => account.status === 'used').length;
+          const available = total - used;
+          
+          setTotalAccounts(total);
+          setUsedAccounts(used);
+          setAvailableAccounts(available);
+        } else {
+          setAccounts(adminData || []);
+          
+          // Calculate statistics from admin data
+          const currentAccounts = adminData || [];
+          const total = currentAccounts.length;
+          const used = currentAccounts.filter(account => account.status === 'used').length;
+          const available = total - used;
+          
+          setTotalAccounts(total);
+          setUsedAccounts(used);
+          setAvailableAccounts(available);
+        }
+      } else {
+        // Connection test passed, get full data
+        const { data, error } = await supabase
+          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Database error:", error);
-        throw error;
+        console.log("Full query result:", { data, error });
+
+        if (error) {
+          throw error;
+        }
+
+        setAccounts(data || []);
+        
+        // Calculate statistics from the newly fetched data
+        const currentAccounts = data || [];
+        const total = currentAccounts.length;
+        const used = currentAccounts.filter(account => account.status === 'used').length;
+        const available = total - used;
+        
+        setTotalAccounts(total);
+        setUsedAccounts(used);
+        setAvailableAccounts(available);
       }
-
-      setAccounts(data || []);
       
-      // Calculate statistics
-      const total = data?.length || 0;
-      const used = data?.filter(account => account.status === 'used').length || 0;
-      const available = total - used;
-      
-      setTotalAccounts(total);
-      setUsedAccounts(used);
-      setAvailableAccounts(available);
+      console.log("Successfully loaded chicken accounts");
     } catch (error) {
       console.error("Error fetching chicken accounts:", error);
-      setError("ไม่สามารถดึงข้อมูลบัญชีไก่ตันได้");
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          setError("เกิดปัญหาการเชื่อมต่อ กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่");
+        } else {
+          setError(`ไม่สามารถดึงข้อมูลบัญชีไก่ตันได้: ${error.message}`);
+        }
+      } else {
+        setError("เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddAccount = async () => {
-    if (!newUsername || !newPassword) {
-      setError("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
+    if (!newCode || !newUsername || !newPassword) {
+      setError("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
     setIsAddingAccount(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      // Check if the username already exists
-      const { data: existingAccounts, error: checkError } = await supabase
+      // Check if code already exists
+      const { data: existingCode, error: checkError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .select("id")
-        .eq("username", newUsername);
+        .eq("code", newCode)
+        .limit(1);
 
       if (checkError) {
         throw checkError;
       }
 
-      if (existingAccounts && existingAccounts.length > 0) {
-        setError(`บัญชีผู้ใช้ "${newUsername}" มีอยู่ในระบบแล้ว`);
+      if (existingCode && existingCode.length > 0) {
+        setError(`โค้ด "${newCode}" มีอยู่ในระบบแล้ว`);
         setIsAddingAccount(false);
         return;
       }
 
-      // Add new account with proper structure
+      // Add new account
       const { error: insertError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .insert([{
+          code: newCode,
           username: newUsername,
           password: newPassword,
-          status: 'available',
-          used_by: null
+          product_name: newProductName || null,
+          status: 'available'
         }]);
 
       if (insertError) {
         throw insertError;
       }
 
+      setSuccess("เพิ่มบัญชีไก่ตันสำเร็จ");
+      setNewCode("");
       setNewUsername("");
       setNewPassword("");
+      setNewProductName("");
       setAddDialogOpen(false);
-      setRefreshTrigger(prev => prev + 1);
+      fetchChickenAccounts();
     } catch (error) {
       console.error("Error adding chicken account:", error);
-      if (error instanceof Error) {
-        setError(`ไม่สามารถเพิ่มบัญชีไก่ตันได้: ${error.message}`);
-      } else {
-        setError("ไม่สามารถเพิ่มบัญชีไก่ตันได้");
-      }
+      setError("ไม่สามารถเพิ่มบัญชีไก่ตันได้");
     } finally {
       setIsAddingAccount(false);
     }
@@ -155,70 +241,43 @@ export function ChickenAccountsManager() {
 
     setIsBulkAdding(true);
     setError(null);
-    // Reset import results
-    setImportResults(null);
+    setSuccess(null);
 
     try {
-      // Clean the input - only allow basic ASCII characters and common delimiters
-      const cleanInput = bulkInput
-        .trim()
-        .replace(/\r\n/g, '\n')
-        .replace(/[^\x20-\x7E\n:,|]/g, ''); // Only allow ASCII printable chars and delimiters
-      
-      const lines = cleanInput.split('\n');
-      
-      // Parse all accounts first
+      const lines = bulkInput.trim().split('\n');
       const accountsToAdd = [];
-      const usernamesInBatch = new Set(); // To check for duplicates within the batch
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        // Skip empty lines
-        if (!trimmedLine) {
-          continue;
-        }
+      const errors = [];
 
-        // Try to split by various delimiters
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Support multiple formats: code:username:password or code,username,password
         let parts: string[] = [];
-        
-        if (trimmedLine.includes(':')) {
-          parts = trimmedLine.split(':');
-        } else if (trimmedLine.includes(',')) {
-          parts = trimmedLine.split(',');
-        } else if (trimmedLine.includes('|')) {
-          parts = trimmedLine.split('|');
-        } else if (trimmedLine.includes(' ')) {
-          parts = trimmedLine.split(' ');
-        } else {
-          // If no common delimiters found, skip this line
+        if (line.includes(':')) {
+          parts = line.split(':');
+        } else if (line.includes(',')) {
+          parts = line.split(',');
+        } else if (line.includes('|')) {
+          parts = line.split('|');
+        }
+
+        if (parts.length < 3) {
+          errors.push(`บรรทัดที่ ${i + 1}: รูปแบบไม่ถูกต้อง`);
           continue;
         }
 
-        if (parts.length < 2) {
+        const code = parts[0].trim();
+        const username = parts[1].trim();
+        const password = parts[2].trim();
+        const productName = parts[3] ? parts[3].trim() : "";
+
+        if (!code || !username || !password) {
+          errors.push(`บรรทัดที่ ${i + 1}: ข้อมูลไม่ครบถ้วน`);
           continue;
         }
 
-        const username = parts[0].trim();
-        const password = parts[1].trim();
-
-        if (!username || !password) {
-          continue;
-        }
-
-        // Skip duplicates within the batch
-        if (usernamesInBatch.has(username)) {
-          continue;
-        }
-        
-        usernamesInBatch.add(username);
-
-        // Create account object that matches the new table structure
-        accountsToAdd.push({
-          username,
-          password,
-          status: 'available',
-          used_by: null
-        });
+        accountsToAdd.push({ code, username, password, product_name: productName || null });
       }
 
       if (accountsToAdd.length === 0) {
@@ -227,76 +286,53 @@ export function ChickenAccountsManager() {
         return;
       }
 
-      // Check for existing usernames in the database
-      const usernamesToCheck = accountsToAdd.map(a => a.username);
-      
-      const { data: existingAccounts, error: checkError } = await supabase
+      // Check for duplicate codes in the database
+      const codes = accountsToAdd.map(a => a.code);
+      const { data: existingCodes, error: checkError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
-        .select("username")
-        .in("username", usernamesToCheck);
+        .select("code")
+        .in("code", codes);
 
       if (checkError) {
         throw checkError;
       }
 
-      // Create a set of existing usernames for quick lookup
-      const existingUsernames = new Set((existingAccounts || []).map(a => a.username));
-      
-      // Filter out accounts that already exist in the database
-      const uniqueAccounts = accountsToAdd.filter(account => !existingUsernames.has(account.username));
-      
+      const existingCodeSet = new Set((existingCodes || []).map(c => c.code));
+      const uniqueAccounts = accountsToAdd.filter(account => !existingCodeSet.has(account.code));
       const duplicateCount = accountsToAdd.length - uniqueAccounts.length;
-      
-      // Insert accounts in smaller batches for better reliability
-      if (uniqueAccounts.length === 0) {
-        setImportResults({
-          total: accountsToAdd.length,
-          successful: 0,
-          duplicates: duplicateCount
-        });
-        setIsBulkAdding(false);
-        return;
-      }
-      
-      // Create smaller batches of 10 accounts each
-      const batchSize = 10;
-      const batches = [];
-      
-      for (let i = 0; i < uniqueAccounts.length; i += batchSize) {
-        batches.push(uniqueAccounts.slice(i, i + batchSize));
-      }
-      
-      let insertedCount = 0;
-      
-      for (const batch of batches) {
-        const { error } = await supabase
-          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
-          .insert(batch);
 
-        if (error) {
-          throw error;
-        } else {
-          insertedCount += batch.length;
+      // Insert unique accounts
+      if (uniqueAccounts.length > 0) {
+        const { error: insertError } = await supabase
+          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+          .insert(uniqueAccounts.map(account => ({
+            code: account.code,
+            username: account.username,
+            password: account.password,
+            product_name: account.product_name,
+            status: 'available'
+          })));
+
+        if (insertError) {
+          throw insertError;
         }
       }
-      
-      // Set final import results
-      setImportResults({
-        total: accountsToAdd.length,
-        successful: insertedCount,
-        duplicates: duplicateCount
-      });
-      
+
+      let successMessage = `นำเข้าบัญชีสำเร็จ ${uniqueAccounts.length} รายการ`;
+      if (duplicateCount > 0) {
+        successMessage += `, ข้ามโค้ดซ้ำ ${duplicateCount} รายการ`;
+      }
+      if (errors.length > 0) {
+        successMessage += `, พบข้อผิดพลาด ${errors.length} รายการ`;
+      }
+
+      setSuccess(successMessage);
       setBulkInput("");
-      setRefreshTrigger(prev => prev + 1);
-      
+      setBulkSheetOpen(false);
+      fetchChickenAccounts();
     } catch (error) {
       console.error("Error bulk importing accounts:", error);
-      if (error instanceof Error) {
-        setError(`ไม่สามารถนำเข้าบัญชีไก่ตันได้: ${error.message}`);
-      } else {
-        setError("ไม่สามารถนำเข้าบัญชีไก่ตันได้");
-      }
+      setError("ไม่สามารถนำเข้าบัญชีได้");
     } finally {
       setIsBulkAdding(false);
     }
@@ -317,10 +353,11 @@ export function ChickenAccountsManager() {
         throw error;
       }
 
-      setRefreshTrigger(prev => prev + 1);
+      setSuccess("ลบบัญชีสำเร็จ");
+      fetchChickenAccounts();
     } catch (error) {
       console.error("Error deleting chicken account:", error);
-      setError("ไม่สามารถลบบัญชีไก่ตันได้");
+      setError("ไม่สามารถลบบัญชีได้");
     }
   };
 
@@ -334,7 +371,8 @@ export function ChickenAccountsManager() {
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .update({
           status: 'available',
-          used_by: null
+          used_by: null,
+          used_at: null
         })
         .eq("id", id);
 
@@ -342,10 +380,62 @@ export function ChickenAccountsManager() {
         throw error;
       }
 
-      setRefreshTrigger(prev => prev + 1);
+      setSuccess("รีเซ็ตบัญชีสำเร็จ");
+      fetchChickenAccounts();
     } catch (error) {
       console.error("Error resetting chicken account:", error);
-      setError("ไม่สามารถรีเซ็ตบัญชีไก่ตันได้");
+      setError("ไม่สามารถรีเซ็ตบัญชีได้");
+    }
+  };
+
+  const startEditing = (account: ChickenAccount) => {
+    setEditingAccount(account.id);
+    setEditUsername(account.username);
+    setEditPassword(account.password);
+    setEditProductName(account.product_name || "");
+  };
+
+  const cancelEditing = () => {
+    setEditingAccount(null);
+    setEditUsername("");
+    setEditPassword("");
+    setEditProductName("");
+  };
+
+  const saveAccountEdit = async (id: string) => {
+    if (!editUsername.trim() || !editPassword.trim()) {
+      setError("กรุณากรอกชื่อผู้ใช้และรหัสผ่านให้ครบถ้วน");
+      return;
+    }
+
+    setIsUpdating(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase
+        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+        .update({
+          username: editUsername.trim(),
+          password: editPassword.trim(),
+          product_name: editProductName.trim() || null
+        })
+        .eq("id", id);
+
+      if (error) {
+        throw error;
+      }
+
+      setSuccess("อัปเดตบัญชีสำเร็จ");
+      setEditingAccount(null);
+      setEditUsername("");
+      setEditPassword("");
+      setEditProductName("");
+      fetchChickenAccounts();
+    } catch (error) {
+      console.error("Error updating chicken account:", error);
+      setError("ไม่สามารถอัปเดตบัญชีได้");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -363,21 +453,13 @@ export function ChickenAccountsManager() {
             </Alert>
           )}
 
-          {importResults && (
-            <Alert className={`mb-4 ${importResults.successful > 0 ? 'bg-green-50' : 'bg-yellow-50'}`}>
-              <AlertDescription>
-                <p className="font-medium">ผลการนำเข้าบัญชี</p>
-                <ul className="text-sm mt-1">
-                  <li>นำเข้าสำเร็จ: {importResults.successful} บัญชี</li>
-                  {importResults.duplicates > 0 && (
-                    <li>มีบัญชีซ้ำในระบบ: {importResults.duplicates} บัญชี (ข้ามไป)</li>
-                  )}
-                  <li>รวมทั้งหมด: {importResults.total} บัญชี</li>
-                </ul>
-              </AlertDescription>
+          {success && (
+            <Alert className="mb-4 bg-green-50 border-green-200">
+              <AlertDescription className="text-green-800">{success}</AlertDescription>
             </Alert>
           )}
 
+          {/* Statistics */}
           <div className="flex flex-wrap gap-4 mb-6">
             <div className="bg-blue-50 p-4 rounded-lg flex-1 min-w-[200px]">
               <div className="text-2xl font-bold">{totalAccounts}</div>
@@ -393,35 +475,37 @@ export function ChickenAccountsManager() {
             </div>
           </div>
 
+          {/* Action Buttons */}
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium">รายการบัญชี</h3>
             <div className="flex gap-2">
-              <Sheet>
+              {/* Bulk Import Sheet */}
+              <Sheet open={bulkSheetOpen} onOpenChange={setBulkSheetOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline">นำเข้าหลายบัญชี</Button>
+                  <Button variant="outline">
+                    <FileUp className="mr-2 h-4 w-4" />
+                    นำเข้าหลายบัญชี
+                  </Button>
                 </SheetTrigger>
                 <SheetContent>
                   <SheetHeader>
                     <SheetTitle>นำเข้าบัญชีไก่ตันหลายรายการ</SheetTitle>
                     <SheetDescription>
-                      วางข้อมูลบัญชีในรูปแบบ username:password (แต่ละบัญชีบรรทัดใหม่)
+                      วางข้อมูลในรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน:ชื่อสินค้า (แต่ละบัญชีบรรทัดใหม่)
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
                       <Label htmlFor="bulk-accounts">ข้อมูลบัญชี</Label>
-                      <textarea
+                      <Textarea
                         id="bulk-accounts"
-                        className="min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        placeholder="username1:password1&#10;username2:password2&#10;username3:password3"
+                        className="min-h-[200px]"
+                        placeholder="ABC123:ChickenUser1:password123:Free Fire&#10;DEF456:ChickenUser2:password456:RoV&#10;GHI789:ChickenUser3:password789"
                         value={bulkInput}
                         onChange={(e) => setBulkInput(e.target.value)}
                       />
                       <p className="text-xs text-gray-500">
-                        รองรับรูปแบบ username:password, username,password, username|password หรือ username password
-                      </p>
-                      <p className="text-xs text-gray-500 font-medium">
-                        บัญชีที่มีชื่อผู้ใช้ (username) ซ้ำในระบบจะถูกข้ามโดยอัตโนมัติ
+                        รองรับรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน:ชื่อสินค้า (ชื่อสินค้าไม่บังคับ)
                       </p>
                     </div>
                     <Button 
@@ -434,6 +518,7 @@ export function ChickenAccountsManager() {
                 </SheetContent>
               </Sheet>
               
+              {/* Add Single Account Dialog */}
               <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
@@ -450,12 +535,21 @@ export function ChickenAccountsManager() {
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
+                      <Label htmlFor="code">โค้ด</Label>
+                      <Input
+                        id="code"
+                        value={newCode}
+                        onChange={(e) => setNewCode(e.target.value)}
+                        placeholder="ABC123"
+                      />
+                    </div>
+                    <div className="grid gap-2">
                       <Label htmlFor="username">ชื่อผู้ใช้</Label>
                       <Input
                         id="username"
                         value={newUsername}
                         onChange={(e) => setNewUsername(e.target.value)}
-                        placeholder="username"
+                        placeholder="ChickenUser1"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -464,7 +558,16 @@ export function ChickenAccountsManager() {
                         id="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="password"
+                        placeholder="password123"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="product-name">ชื่อสินค้า (ไม่บังคับ)</Label>
+                      <Input
+                        id="product-name"
+                        value={newProductName}
+                        onChange={(e) => setNewProductName(e.target.value)}
+                        placeholder="Free Fire, RoV, etc."
                       />
                     </div>
                   </div>
@@ -481,6 +584,7 @@ export function ChickenAccountsManager() {
             </div>
           </div>
 
+          {/* Accounts Table */}
           {loading ? (
             <div className="text-center py-4">กำลังโหลดข้อมูล...</div>
           ) : (
@@ -488,25 +592,64 @@ export function ChickenAccountsManager() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>โค้ด</TableHead>
                     <TableHead>ชื่อผู้ใช้</TableHead>
                     <TableHead>รหัสผ่าน</TableHead>
+                    <TableHead>ชื่อสินค้า</TableHead>
                     <TableHead>สถานะ</TableHead>
                     <TableHead>ผู้ใช้งาน</TableHead>
+                    <TableHead>วันที่ใช้</TableHead>
                     <TableHead className="text-right">จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {accounts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center">
+                      <TableCell colSpan={8} className="text-center">
                         ไม่พบข้อมูลบัญชี
                       </TableCell>
                     </TableRow>
                   ) : (
                     accounts.map((account) => (
                       <TableRow key={account.id}>
-                        <TableCell className="font-medium">{account.username}</TableCell>
-                        <TableCell className="font-mono">{account.password}</TableCell>
+                        <TableCell className="font-mono font-medium">{account.code}</TableCell>
+                        <TableCell>
+                          {editingAccount === account.id ? (
+                            <Input
+                              value={editUsername}
+                              onChange={(e) => setEditUsername(e.target.value)}
+                              className="min-w-[120px]"
+                              disabled={isUpdating}
+                            />
+                          ) : (
+                            account.username
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {editingAccount === account.id ? (
+                            <Input
+                              value={editPassword}
+                              onChange={(e) => setEditPassword(e.target.value)}
+                              className="min-w-[120px]"
+                              disabled={isUpdating}
+                            />
+                          ) : (
+                            account.password
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingAccount === account.id ? (
+                            <Input
+                              value={editProductName}
+                              onChange={(e) => setEditProductName(e.target.value)}
+                              className="min-w-[120px]"
+                              disabled={isUpdating}
+                              placeholder="ชื่อสินค้า (ไม่บังคับ)"
+                            />
+                          ) : (
+                            account.product_name || "-"
+                          )}
+                        </TableCell>
                         <TableCell>
                           <span
                             className={`px-2 py-1 rounded-full text-xs ${
@@ -519,26 +662,65 @@ export function ChickenAccountsManager() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          {account.used_by ? account.used_by : "-"}
+                          {account.used_by || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {account.used_at 
+                            ? new Date(account.used_at).toLocaleDateString('th-TH')
+                            : "-"
+                          }
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {account.status === 'used' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleResetAccount(account.id)}
-                              >
-                                รีเซ็ต
-                              </Button>
+                            {editingAccount === account.id ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => saveAccountEdit(account.id)}
+                                  disabled={isUpdating}
+                                  className="text-green-600 hover:bg-green-50"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={cancelEditing}
+                                  disabled={isUpdating}
+                                  className="text-gray-600 hover:bg-gray-50"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditing(account)}
+                                  className="text-blue-600 hover:bg-blue-50"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                {account.status === 'used' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleResetAccount(account.id)}
+                                  >
+                                    รีเซ็ต
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteAccount(account.id)}
+                                >
+                                  <Trash className="h-4 w-4" />
+                                </Button>
+                              </>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteAccount(account.id)}
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
