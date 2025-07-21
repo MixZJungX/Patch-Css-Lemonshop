@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 
 export default function Home() {
@@ -32,7 +32,12 @@ export default function Home() {
   const [showChickenRedeemPopup, setShowChickenRedeemPopup] = useState(false);
   const [availableCodes, setAvailableCodes] = useState<RedemptionCode[]>([]);
   const [availableAccounts, setAvailableAccounts] = useState<ChickenAccount[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Loading states - separate for each operation
+  const [isSubmitting, setIsSubmitting] = useState(false); // For form submissions and checks
+  const [isRobuxButtonSubmitting, setIsRobuxButtonSubmitting] = useState(false); // For Robux redemption button
+  const [isChickenButtonSubmitting, setIsChickenButtonSubmitting] = useState(false); // For Chicken redemption button
+  const [formComplete, setFormComplete] = useState(false);
   
   // Code redemption states
   const [redeemCode, setRedeemCode] = useState('');
@@ -50,20 +55,46 @@ export default function Home() {
 
   const loadAvailableItems = async () => {
     try {
-      const { data: codes } = await supabase
+      // Try to fetch from Supabase
+      const { data: codes, error: codesError } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
         .select('*')
         .eq('status', 'active');
       
-      const { data: accounts } = await supabase
+      const { data: accounts, error: accountsError } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
         .select('*')
         .eq('status', 'available');
 
-      setAvailableCodes(codes || []);
-      setAvailableAccounts(accounts || []);
+      // If there's an error with Supabase, use mock data
+      if (codesError || accountsError) {
+        // Import mock data only when needed (to avoid importing in production)
+        import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
+          setAvailableCodes(mockCodes);
+          setAvailableAccounts(mockAccounts);
+          console.log('Using mock data due to backend unavailability');
+          toast.info('เชื่อมต่อโหมดทดสอบ - ข้อมูลตัวอย่างถูกแสดง', {
+            duration: 5000,
+            position: 'top-center'
+          });
+        });
+      } else {
+        // Use real data
+        setAvailableCodes(codes || []);
+        setAvailableAccounts(accounts || []);
+      }
     } catch (error) {
       console.error('Error loading items:', error);
+      // Import mock data as fallback
+      import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
+        setAvailableCodes(mockCodes);
+        setAvailableAccounts(mockAccounts);
+        console.log('Using mock data due to error:', error);
+        toast.info('เชื่อมต่อโหมดทดสอบ - ข้อมูลตัวอย่างถูกแสดง', {
+          duration: 5000,
+          position: 'top-center'
+        });
+      });
     }
   };
 
@@ -110,6 +141,25 @@ export default function Home() {
         .eq('status', 'active')
         .single();
 
+      if (error?.message === 'Backend unavailable') {
+        // Use mock data in demo mode
+        import('@/lib/mockData').then(({ mockCodes }) => {
+          const mockCode = mockCodes.find(
+            c => c.code === redeemCode.trim().toUpperCase() && c.status === 'active'
+          );
+          
+          if (mockCode) {
+            setValidatedCode(mockCode);
+            setShowRedeemPopup(true);
+            toast.success(`พบโค้ด! มูลค่า ${mockCode.robux_value} Robux (โหมดทดสอบ)`);
+          } else {
+            toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
+          }
+          setIsSubmitting(false);
+        });
+        return;
+      }
+
       if (error || !data) {
         toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
         return;
@@ -120,21 +170,45 @@ export default function Home() {
       toast.success(`พบโค้ด! มูลค่า ${data.robux_value} Robux`);
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
+      
+      // Fallback to mock data if there's an exception
+      import('@/lib/mockData').then(({ mockCodes }) => {
+        const mockCode = mockCodes.find(
+          c => c.code === redeemCode.trim().toUpperCase()
+        );
+        
+        if (mockCode) {
+          setValidatedCode(mockCode);
+          setShowRedeemPopup(true);
+          toast.success(`พบโค้ด! มูลค่า ${mockCode.robux_value} Robux (โหมดทดสอบ)`);
+        }
+        setIsSubmitting(false);
+      });
     } finally {
-      setIsSubmitting(false);
+      if (error?.message !== 'Backend unavailable') {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const completeRedemption = async () => {
+    // Input validation
     if (!redeemForm.username || !redeemForm.password || !validatedCode) {
       toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
-    setIsSubmitting(true);
+    // Set loading state and close dialog immediately
+    setIsRobuxButtonSubmitting(true);
+    setShowRedeemPopup(false);
+    
+    // Show processing toast
+    const toastId = 'redeeming-' + Date.now();
+    toast.loading('กำลังดำเนินการแลกโค้ด...', { id: toastId });
+    
     try {
-      // Mark code as used
-      const { error: codeError } = await supabase
+      // Check if we're in offline/demo mode
+      const testUpdate = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
         .update({ 
           status: 'used',
@@ -142,33 +216,56 @@ export default function Home() {
           used_at: new Date().toISOString()
         })
         .eq('id', validatedCode.id);
-
-      if (codeError) throw codeError;
-
-      // Create redemption request record
-      const { error: requestError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .insert({
-          roblox_username: redeemForm.username,
-          robux_amount: validatedCode.robux_value,
-          contact_info: `Code: ${validatedCode.code} | Password: ${redeemForm.password} | Contact: ${redeemForm.contact}`,
-          status: 'pending'
-        });
-
-      if (requestError) throw requestError;
-
-      toast.success(`🎉 แลกโค้ดสำเร็จ! คำขอ ${validatedCode.robux_value} Robux อยู่ในระบบแล้ว รอการดำเนินการ`);
       
-      // Reset form
+      // If in offline mode
+      if (testUpdate.error?.message === 'Backend unavailable') {
+        toast.success(`🎉 แลกโค้ดสำเร็จ! คำขอ ${validatedCode.robux_value} Robux อยู่ในระบบแล้ว (โหมดทดสอบ)`, { id: toastId });
+      } else {
+        // If online mode - regular flow
+        // Mark code as used
+        const { error: codeError } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+          .update({ 
+            status: 'used',
+            used_by: redeemForm.username,
+            used_at: new Date().toISOString()
+          })
+          .eq('id', validatedCode.id);
+
+        if (codeError) {
+          toast.error('เกิดข้อผิดพลาดในการแลกโค้ด', { id: toastId });
+          return;
+        }
+
+        // Create redemption request record
+        const { error: requestError } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+          .insert({
+            roblox_username: redeemForm.username,
+            robux_amount: validatedCode.robux_value,
+            contact_info: `Code: ${validatedCode.code} | Password: ${redeemForm.password} | Contact: ${redeemForm.contact}`,
+            status: 'pending'
+          });
+
+        if (requestError) {
+          toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ', { id: toastId });
+          return;
+        }
+
+        toast.success(`🎉 แลกโค้ดสำเร็จ! คำขอ ${validatedCode.robux_value} Robux อยู่ในระบบแล้ว`, { id: toastId });
+        loadAvailableItems();
+      }
+    } catch (error) {
+      console.error('Error in completeRedemption:', error);
+      toast.error('เกิดข้อผิดพลาดในการแลกโค้ด', { id: toastId });
+    } finally {
+      // Reset all states
       setRedeemCode('');
       setValidatedCode(null);
-      setShowRedeemPopup(false);
       setRedeemForm({ username: '', password: '', contact: '' });
-      loadAvailableItems();
-    } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการแลกโค้ด');
-    } finally {
-      setIsSubmitting(false);
+      
+      // Always reset loading state
+      setIsRobuxButtonSubmitting(false);
     }
   };
 
@@ -180,6 +277,39 @@ export default function Home() {
 
     setIsSubmitting(true);
     try {
+      // First check for backend availability
+      const { data: existingRequests, error: requestsError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+        .select('*')
+        .ilike('contact_info', `%${chickenRedeemCode.trim().toUpperCase()}%`);
+
+      // Use mock data if backend is unavailable
+      if (requestsError?.message === 'Backend unavailable') {
+        import('@/lib/mockData').then(({ mockAccounts }) => {
+          const mockAccount = mockAccounts.find(
+            a => a.code === chickenRedeemCode.trim().toUpperCase() && a.status === 'available'
+          );
+          
+          if (mockAccount) {
+            setValidatedChickenAccount(mockAccount);
+            setShowChickenRedeemPopup(true);
+            toast.success(`พบบัญชี ${mockAccount.product_name}! (โหมดทดสอบ)`);
+            // In demo mode, we don't need to update status
+          } else {
+            toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
+          }
+          setIsSubmitting(false);
+        });
+        return;
+      }
+
+      if (existingRequests && existingRequests.length > 0) {
+        toast.error('โค้ดนี้ถูกใช้งานไปแล้ว');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If not used in any requests, check if it's available in accounts
       const { data, error } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
         .select('*')
@@ -192,11 +322,57 @@ export default function Home() {
         return;
       }
 
+      // Mark account as used immediately upon validation
+      const { error: accountError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .update({ 
+          status: 'used',
+          used_at: new Date().toISOString()
+        })
+        .eq('id', data.id);
+
+      if (accountError) {
+        toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
+        return;
+      }
+
+      // Create redemption request record immediately
+      const { error: requestError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+        .insert({
+          roblox_username: 'Chicken Account User - View Only',
+          robux_amount: 0,
+          contact_info: `Chicken Account Viewed: ${data.code} - ${data.product_name}`,
+          status: 'completed'
+        });
+
+      if (requestError) {
+        toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+        return;
+      }
+
       setValidatedChickenAccount(data);
       setShowChickenRedeemPopup(true);
       toast.success(`พบบัญชี ${data.product_name}!`);
+      
+      // Refresh the list of available accounts
+      loadAvailableItems();
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
+      
+      // Fallback to mock data if there's an exception
+      import('@/lib/mockData').then(({ mockAccounts }) => {
+        const mockAccount = mockAccounts.find(
+          a => a.code === chickenRedeemCode.trim().toUpperCase()
+        );
+        
+        if (mockAccount) {
+          setValidatedChickenAccount(mockAccount);
+          setShowChickenRedeemPopup(true);
+          toast.success(`พบบัญชี ${mockAccount.product_name}! (โหมดทดสอบ)`);
+        }
+        setIsSubmitting(false);
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -208,42 +384,63 @@ export default function Home() {
       return;
     }
 
-    setIsSubmitting(true);
+    // Set loading state and close dialog immediately
+    setIsChickenButtonSubmitting(true);
+    setShowChickenRedeemPopup(false);
+    
+    // Show processing toast
+    const toastId = 'chicken-redeeming-' + Date.now();
+    toast.loading('กำลังบันทึกข้อมูล...', { id: toastId });
+    
     try {
-      // Mark account as used
-      const { error: accountError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
-        .update({ 
-          status: 'used',
-          used_at: new Date().toISOString()
-        })
-        .eq('id', validatedChickenAccount.id);
-
-      if (accountError) throw accountError;
-
-      // Create redemption request record
-      const { error: requestError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .insert({
-          roblox_username: 'Chicken Account User',
-          robux_amount: 0,
-          contact_info: `Chicken Account Redemption: ${validatedChickenAccount.code} - ${validatedChickenAccount.product_name}`,
-          status: 'completed'
-        });
-
-      if (requestError) throw requestError;
-
-      toast.success(`🎉 แลกโค้ดสำเร็จ! คุณได้รับบัญชี ${validatedChickenAccount.product_name}`);
+      // Supabase operations are already done during validation in most cases,
+      // but we can add a double-check here to ensure the account is marked used
       
-      // Reset form
+      // For backend unavailable scenario, we can show success message directly
+      if (validatedChickenAccount?.status !== 'used') {
+        const { error: accountError } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+          .update({ 
+            status: 'used',
+            used_at: new Date().toISOString()
+          })
+          .eq('id', validatedChickenAccount.id);
+          
+        if (accountError && accountError.message !== 'Backend unavailable') {
+          toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล', { id: toastId });
+          return;
+        }
+        
+        // Create or update redemption request record
+        const { error: requestError } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+          .insert({
+            roblox_username: 'Chicken Account User - View Only',
+            robux_amount: 0,
+            contact_info: `Chicken Account Viewed: ${validatedChickenAccount.code} - ${validatedChickenAccount.product_name}`,
+            status: 'completed'
+          });
+          
+        if (requestError && requestError.message !== 'Backend unavailable') {
+          toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล', { id: toastId });
+          return;
+        }
+      }
+      
+      // Show success message
+      toast.success(`🎉 บัญชี ${validatedChickenAccount.product_name} ถูกบันทึกไว้แล้ว`, { id: toastId });
+      loadAvailableItems();
+      
+    } catch (error) {
+      console.error('Error in completeChickenRedemption:', error);
+      toast.error('เกิดข้อผิดพลาดในการดำเนินการ', { id: toastId });
+    } finally {
+      // Reset form and states
       setChickenRedeemCode('');
       setValidatedChickenAccount(null);
-      setShowChickenRedeemPopup(false);
-      loadAvailableItems();
-    } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการแลกโค้ด');
-    } finally {
-      setIsSubmitting(false);
+      
+      // Reset loading state
+      setIsChickenButtonSubmitting(false);
     }
   };
 
@@ -362,6 +559,7 @@ export default function Home() {
             >
               🎫 แลกโค้ด
             </Button>
+            {/* 
             <Button
               onClick={() => setActiveTab('robux')}
               className={`px-6 py-3 rounded-xl transition-all ${
@@ -372,6 +570,7 @@ export default function Home() {
             >
               💰 ขอ Robux
             </Button>
+            */}
             <Button
               onClick={() => setActiveTab('chicken')}
               className={`px-6 py-3 rounded-xl transition-all ${
@@ -545,6 +744,15 @@ export default function Home() {
                     </div>
                   </div>
 
+                  <div className="bg-red-500/30 border-2 border-red-500 rounded-lg p-4 mb-4">
+                    <p className="text-white text-base font-bold text-center mb-2">
+                      ⚠️ คำเตือนสำคัญ ⚠️
+                    </p>
+                    <p className="text-white text-base">
+                      เมื่อกดปุ่ม <span className="font-bold">"ตรวจสอบ"</span> ระบบจะทำเครื่องหมายโค้ดว่า <span className="bg-red-500 px-1 font-bold">ใช้งานแล้วทันที</span> กรุณาเตรียมพร้อมที่จะจดบันทึกหรือถ่ายภาพข้อมูลบัญชี!
+                    </p>
+                  </div>
+                  
                   <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
                     <p className="text-orange-200 text-sm">
                       <strong>💡 วิธีใช้:</strong> ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง 
@@ -558,8 +766,17 @@ export default function Home() {
         </div>
 
         {/* Code Redemption Popup */}
-        <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
-          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-green-500/30 text-white max-w-md">
+        <Dialog open={showRedeemPopup} onOpenChange={(open) => {
+          console.log('Dialog open state changing to:', open);
+          if (!open) {
+            // Reset form and all loading states when closing dialog
+            setRedeemForm({ username: '', password: '', contact: '' });
+            setIsSubmitting(false);
+            setIsRobuxButtonSubmitting(false);
+          }
+          setShowRedeemPopup(open);
+        }}>
+          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-green-500/30 text-white max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle className="text-center">
                 <div className="flex items-center justify-center space-x-2 mb-4">
@@ -634,19 +851,23 @@ export default function Home() {
               </div>
 
               <div className="flex space-x-3">
+                <DialogClose asChild>
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  >
+                    ยกเลิก
+                  </Button>
+                </DialogClose>
                 <Button
-                  onClick={() => setShowRedeemPopup(false)}
-                  variant="outline"
-                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  onClick={completeRedemption}
-                  disabled={isSubmitting || !redeemForm.username || !redeemForm.password || !redeemForm.contact}
+                  onClick={() => {
+                    completeRedemption();
+                  }}
+                  disabled={isRobuxButtonSubmitting}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                  type="button"
                 >
-                  {isSubmitting ? 'กำลังแลก...' : '🎫 แลกโค้ด'}
+                  {isRobuxButtonSubmitting ? 'กำลังแลก...' : '🎫 แลกโค้ด'}
                 </Button>
               </div>
             </div>
@@ -654,8 +875,17 @@ export default function Home() {
         </Dialog>
 
         {/* Chicken Account Redemption Popup */}
-        <Dialog open={showChickenRedeemPopup} onOpenChange={setShowChickenRedeemPopup}>
-          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-orange-500/30 text-white max-w-md">
+        <Dialog open={showChickenRedeemPopup} onOpenChange={(open) => {
+          console.log('Chicken dialog open state changing to:', open);
+          if (!open) {
+            // Reset all states when dialog is closed
+            setChickenRedeemCode('');
+            setIsSubmitting(false);
+            setIsChickenButtonSubmitting(false);
+          }
+          setShowChickenRedeemPopup(open);
+        }}>
+          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-orange-500/30 text-white max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
             <DialogHeader>
               <DialogTitle className="text-center">
                 <div className="flex items-center justify-center space-x-2 mb-4">
@@ -706,26 +936,34 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-                <p className="text-yellow-200 text-xs">
-                  <strong>หมายเหตุ:</strong> กรุณาบันทึกข้อมูลบัญชีนี้ไว้ เมื่อปิดหน้าต่างนี้จะไม่สามารถดูข้อมูลได้อีก
+              <div className="bg-red-500/30 border-2 border-red-500 rounded-lg p-4 mb-3">
+                <p className="text-white text-base font-bold text-center mb-2">
+                  ⚠️ คำเตือนสำคัญมาก ⚠️
+                </p>
+                <p className="text-white text-sm text-center">
+                  <span className="bg-red-500 px-2 py-1 rounded font-bold block mb-2">กรุณาถ่ายภาพหน้าจอหรือจดบันทึกข้อมูลบัญชีทันที!</span> 
+                  โค้ดถูกใช้งานแล้วและคุณจะไม่สามารถกลับมาดูข้อมูลนี้ได้อีก
+                  <br/>หากปิดหน้านี้โดยไม่บันทึกข้อมูล คุณจะสูญเสียบัญชีนี้ตลอดไป
                 </p>
               </div>
 
               <div className="flex space-x-3">
+                <DialogClose asChild>
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  >
+                    ปิด
+                  </Button>
+                </DialogClose>
                 <Button
-                  onClick={() => setShowChickenRedeemPopup(false)}
-                  variant="outline"
-                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                >
-                  ปิด
-                </Button>
-                <Button
-                  onClick={completeChickenRedemption}
-                  disabled={isSubmitting}
+                  onClick={() => {
+                    completeChickenRedemption();
+                  }}
+                  disabled={isChickenButtonSubmitting}
                   className="flex-1 bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
                 >
-                  {isSubmitting ? 'กำลังยืนยัน...' : '🐔 ยืนยันการรับ'}
+                  {isChickenButtonSubmitting ? 'กำลังปิด...' : '🐔 ปิดหน้าต่าง'}
                 </Button>
               </div>
             </div>

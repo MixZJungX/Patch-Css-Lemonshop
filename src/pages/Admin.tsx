@@ -17,7 +17,9 @@ import { Upload } from 'lucide-react';
 export default function Admin() {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts'>('requests');
+  const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<RedemptionRequest[]>([]);
   const [codes, setCodes] = useState<RedemptionCode[]>([]);
   const [accounts, setAccounts] = useState<ChickenAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,15 @@ export default function Admin() {
   useEffect(() => {
     loadData();
   }, []);
+  
+  // Filter requests based on activeRequestFilter
+  useEffect(() => {
+    if (activeRequestFilter === 'all') {
+      setFilteredRequests(requests);
+    } else {
+      setFilteredRequests(requests.filter(request => request.status === activeRequestFilter));
+    }
+  }, [requests, activeRequestFilter]);
 
   const loadData = async () => {
     setLoading(true);
@@ -51,9 +62,50 @@ export default function Admin() {
         supabase.from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts').select('*').order('created_at', { ascending: false })
       ]);
 
-      setRequests(requestsRes.data || []);
+      // Process requests to match used accounts
+      const allAccounts = accountsRes.data || [];
+      let allRequests = requestsRes.data || [];
+      
+      // Remove duplicate redemption requests (keeping only most recent)
+      // First, group requests by roblox_username
+      const requestsByUsername = {};
+      allRequests.forEach(request => {
+        const username = request.roblox_username.toLowerCase().trim();
+        // Group by username, keeping the most recent request
+        if (!requestsByUsername[username] || new Date(request.created_at) > new Date(requestsByUsername[username].created_at)) {
+          requestsByUsername[username] = request;
+        }
+      });
+      
+      // Convert back to array
+      allRequests = Object.values(requestsByUsername);
+      
+      // For each request, try to find a matching chicken account by code or username
+      const processedRequests = allRequests.map(request => {
+        // Only process chicken redemption requests (not robux)
+        if (request.robux_amount === 0 && !request.assigned_account_code) {
+          // Find a used account that might match this request
+          const usedAccount = allAccounts.find(acc => 
+            acc.status === 'used' && 
+            // Match by username
+            (acc.username === request.roblox_username ||
+            // Or by code in contact_info
+            request.contact_info.includes(acc.code))
+          );
+          
+          if (usedAccount) {
+            return {
+              ...request,
+              assigned_account_code: usedAccount.code
+            };
+          }
+        }
+        return request;
+      });
+
+      setRequests(processedRequests);
       setCodes(codesRes.data || []);
-      setAccounts(accountsRes.data || []);
+      setAccounts(allAccounts);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
@@ -196,8 +248,9 @@ export default function Admin() {
       setBulkImportText('');
       setShowBulkImportDialog(false);
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -295,7 +348,7 @@ export default function Admin() {
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
+                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -312,7 +365,66 @@ export default function Admin() {
         {activeTab === 'requests' && (
           <Card className="bg-white/10 backdrop-blur-xl border-white/20">
             <CardHeader>
-              <CardTitle className="text-white">📋 จัดการคำขอ</CardTitle>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <CardTitle className="text-white">📋 จัดการคำขอ</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setActiveRequestFilter('all')}
+                    size="sm"
+                    className={`px-3 py-1 ${
+                      activeRequestFilter === 'all'
+                        ? 'bg-white text-gray-900 shadow-lg'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    ทั้งหมด ({requests.length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRequestFilter('pending')}
+                    size="sm"
+                    className={`px-3 py-1 ${
+                      activeRequestFilter === 'pending'
+                        ? 'bg-yellow-400 text-yellow-900 shadow-lg'
+                        : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
+                    }`}
+                  >
+                    รอดำเนินการ ({requests.filter(r => r.status === 'pending').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRequestFilter('processing')}
+                    size="sm"
+                    className={`px-3 py-1 ${
+                      activeRequestFilter === 'processing'
+                        ? 'bg-blue-400 text-blue-900 shadow-lg'
+                        : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
+                    }`}
+                  >
+                    กำลังดำเนินการ ({requests.filter(r => r.status === 'processing').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRequestFilter('completed')}
+                    size="sm"
+                    className={`px-3 py-1 ${
+                      activeRequestFilter === 'completed'
+                        ? 'bg-green-400 text-green-900 shadow-lg'
+                        : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                    }`}
+                  >
+                    สำเร็จแล้ว ({requests.filter(r => r.status === 'completed').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRequestFilter('rejected')}
+                    size="sm"
+                    className={`px-3 py-1 ${
+                      activeRequestFilter === 'rejected'
+                        ? 'bg-red-400 text-red-900 shadow-lg'
+                        : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                    }`}
+                  >
+                    ยกเลิก ({requests.filter(r => r.status === 'rejected').length})
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -330,26 +442,52 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {requests.map(request => {
+                    {filteredRequests.length === 0 ? (
+                      <TableRow className="border-white/10">
+                        <TableCell colSpan={8} className="text-center text-white py-8">
+                          {loading ? 
+                            "กำลังโหลดข้อมูล..." : 
+                            activeRequestFilter === 'all' ? 
+                              "ไม่พบคำขอในระบบ" : 
+                              `ไม่พบคำขอในสถานะ "${
+                                activeRequestFilter === 'pending' ? 'รอดำเนินการ' :
+                                activeRequestFilter === 'processing' ? 'กำลังดำเนินการ' :
+                                activeRequestFilter === 'completed' ? 'สำเร็จแล้ว' : 'ยกเลิก'
+                              }"`
+                          }
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredRequests.map(request => {
+                      // Find matching chicken account if assigned
+                      const assignedAccount = request.assigned_account_code 
+                        ? accounts.find(acc => acc.code === request.assigned_account_code) 
+                        : null;
+                      
                       // Extract code from contact_info if it contains "Code:"
                       const codeMatch = request.contact_info.match(/Code: ([A-Z0-9]+)/);
-                      const code = codeMatch ? codeMatch[1] : '-';
+                      const code = request.assigned_account_code || (codeMatch ? codeMatch[1] : '-');
                       
-                      // Extract password from contact_info if it contains "Password:"
-                      const passwordMatch = request.contact_info.match(/Password: ([^\|]+)/);
-                      const password = passwordMatch ? passwordMatch[1].trim() : '-';
+                      // Use assigned account username or extract from contact_info
+                      const username = assignedAccount ? assignedAccount.username : request.roblox_username;
+                      
+                      // Use assigned account password or extract from contact_info
+                      const passwordMatch = request.contact_info.match(/Password: ([^|]+)/);
+                      const password = assignedAccount ? assignedAccount.password : (passwordMatch ? passwordMatch[1].trim() : '-');
                       
                       // Extract contact (phone number) from contact_info
-                      const contactMatch = request.contact_info.match(/Contact: ([^\|]+)/);
+                      const contactMatch = request.contact_info.match(/Contact: ([^|]+)/);
                       const contact = contactMatch ? contactMatch[1].trim() : '-';
+                      
+                      // Get product type from assigned account
+                      const productType = assignedAccount ? assignedAccount.product_name : (request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน');
                       
                       return (
                         <TableRow key={request.id} className="border-white/10">
                           <TableCell className="text-white font-mono text-sm font-bold">{code}</TableCell>
-                          <TableCell className="text-white">{request.roblox_username}</TableCell>
+                          <TableCell className="text-white">{username}</TableCell>
                           <TableCell className="text-white font-mono text-xs">{password}</TableCell>
                           <TableCell className="text-white">
-                            {request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
+                            {productType}
                           </TableCell>
                           <TableCell className="text-white text-sm">{contact}</TableCell>
                           <TableCell>
@@ -373,6 +511,7 @@ export default function Admin() {
                                 size="sm"
                                 onClick={() => updateRequestStatus(request.id, 'processing')}
                                 className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs"
+                                disabled={request.status === 'processing'}
                               >
                                 ดำเนินการ
                               </Button>
@@ -380,6 +519,7 @@ export default function Admin() {
                                 size="sm"
                                 onClick={() => updateRequestStatus(request.id, 'completed')}
                                 className="bg-green-500/20 text-green-300 hover:bg-green-500/30 text-xs"
+                                disabled={request.status === 'completed'}
                               >
                                 เสร็จสิ้น
                               </Button>
@@ -387,6 +527,7 @@ export default function Admin() {
                                 size="sm"
                                 onClick={() => updateRequestStatus(request.id, 'rejected')}
                                 className="bg-red-500/20 text-red-300 hover:bg-red-500/30 text-xs"
+                                disabled={request.status === 'rejected'}
                               >
                                 ยกเลิก
                               </Button>

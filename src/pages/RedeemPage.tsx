@@ -218,7 +218,10 @@ export default function RedeemPage() {
           
           <DialogFooter className="mt-4">
             <Button 
-              onClick={() => setShowCodeDialog(false)} 
+              onClick={(e) => {
+                e.preventDefault();
+                setShowCodeDialog(false);
+              }} 
               className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
             >
               เสร็จสิ้น

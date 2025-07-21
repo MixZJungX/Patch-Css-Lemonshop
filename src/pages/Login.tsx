@@ -31,7 +31,7 @@ export default function Login() {
     try {
       await signIn(formData.email, formData.password);
       toast.success('เข้าสู่ระบบสำเร็จ');
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
     } finally {
       setIsLoading(false);

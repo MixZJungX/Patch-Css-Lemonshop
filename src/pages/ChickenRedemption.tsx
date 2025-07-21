@@ -38,6 +38,21 @@ export default function ChickenRedemption() {
     try {
       console.log("Searching for code:", redeemCode.trim());
       
+      // First check if this code has been used in any redemption request
+      const { data: existingRequests, error: requestsError } = await supabase
+        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests")
+        .select("*")
+        .ilike("contact_info", `%${redeemCode.trim()}%`);
+      
+      if (requestsError) {
+        console.error("Error checking existing requests:", requestsError);
+      } else if (existingRequests && existingRequests.length > 0) {
+        setError('รหัสแลกบัญชีนี้ถูกใช้งานไปแล้ว');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // If no existing request found with this code, proceed to check for available account
       const { data: matchingAccount, error: findError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .select("*")
@@ -60,6 +75,7 @@ export default function ChickenRedemption() {
 
       const accountToRedeem = matchingAccount[0];
       
+      // Update the account status to used
       const { error: updateError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .update({
@@ -71,6 +87,22 @@ export default function ChickenRedemption() {
         
       if (updateError) {
         throw updateError;
+      }
+      
+      // Create a single redemption request record
+      const { error: requestError } = await supabase
+        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests")
+        .insert({
+          roblox_username: accountToRedeem.username,
+          robux_amount: 0,
+          contact_info: `Code: ${accountToRedeem.code} | Username: ${accountToRedeem.username} | Password: ${accountToRedeem.password} | Product: ${accountToRedeem.product_name}`,
+          status: 'completed',
+          assigned_account_code: accountToRedeem.code
+        });
+        
+      if (requestError) {
+        console.error("Error creating redemption request:", requestError);
+        // Continue showing the account even if request creation fails
       }
       
       setRedeemedAccount(accountToRedeem);
@@ -287,6 +319,7 @@ export default function ChickenRedemption() {
           </div>
           <div className="flex justify-center">
             <Button
+              type="button"
               onClick={() => setShowAccountDialog(false)}
               className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
             >
