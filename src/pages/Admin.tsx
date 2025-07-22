@@ -62,50 +62,9 @@ export default function Admin() {
         supabase.from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts').select('*').order('created_at', { ascending: false })
       ]);
 
-      // Process requests to match used accounts
-      const allAccounts = accountsRes.data || [];
-      let allRequests = requestsRes.data || [];
-      
-      // Remove duplicate redemption requests (keeping only most recent)
-      // First, group requests by roblox_username
-      const requestsByUsername = {};
-      allRequests.forEach(request => {
-        const username = request.roblox_username.toLowerCase().trim();
-        // Group by username, keeping the most recent request
-        if (!requestsByUsername[username] || new Date(request.created_at) > new Date(requestsByUsername[username].created_at)) {
-          requestsByUsername[username] = request;
-        }
-      });
-      
-      // Convert back to array
-      allRequests = Object.values(requestsByUsername);
-      
-      // For each request, try to find a matching chicken account by code or username
-      const processedRequests = allRequests.map(request => {
-        // Only process chicken redemption requests (not robux)
-        if (request.robux_amount === 0 && !request.assigned_account_code) {
-          // Find a used account that might match this request
-          const usedAccount = allAccounts.find(acc => 
-            acc.status === 'used' && 
-            // Match by username
-            (acc.username === request.roblox_username ||
-            // Or by code in contact_info
-            request.contact_info.includes(acc.code))
-          );
-          
-          if (usedAccount) {
-            return {
-              ...request,
-              assigned_account_code: usedAccount.code
-            };
-          }
-        }
-        return request;
-      });
-
-      setRequests(processedRequests);
+      setRequests(requestsRes.data || []);
       setCodes(codesRes.data || []);
-      setAccounts(allAccounts);
+      setAccounts(accountsRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
@@ -458,36 +417,25 @@ export default function Admin() {
                         </TableCell>
                       </TableRow>
                     ) : filteredRequests.map(request => {
-                      // Find matching chicken account if assigned
-                      const assignedAccount = request.assigned_account_code 
-                        ? accounts.find(acc => acc.code === request.assigned_account_code) 
-                        : null;
-                      
                       // Extract code from contact_info if it contains "Code:"
                       const codeMatch = request.contact_info.match(/Code: ([A-Z0-9]+)/);
-                      const code = request.assigned_account_code || (codeMatch ? codeMatch[1] : '-');
+                      const code = codeMatch ? codeMatch[1] : '-';
                       
-                      // Use assigned account username or extract from contact_info
-                      const username = assignedAccount ? assignedAccount.username : request.roblox_username;
-                      
-                      // Use assigned account password or extract from contact_info
+                      // Extract password from contact_info if it contains "Password:"
                       const passwordMatch = request.contact_info.match(/Password: ([^|]+)/);
-                      const password = assignedAccount ? assignedAccount.password : (passwordMatch ? passwordMatch[1].trim() : '-');
+                      const password = passwordMatch ? passwordMatch[1].trim() : '-';
                       
                       // Extract contact (phone number) from contact_info
                       const contactMatch = request.contact_info.match(/Contact: ([^|]+)/);
                       const contact = contactMatch ? contactMatch[1].trim() : '-';
                       
-                      // Get product type from assigned account
-                      const productType = assignedAccount ? assignedAccount.product_name : (request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน');
-                      
                       return (
                         <TableRow key={request.id} className="border-white/10">
                           <TableCell className="text-white font-mono text-sm font-bold">{code}</TableCell>
-                          <TableCell className="text-white">{username}</TableCell>
+                          <TableCell className="text-white">{request.roblox_username}</TableCell>
                           <TableCell className="text-white font-mono text-xs">{password}</TableCell>
                           <TableCell className="text-white">
-                            {productType}
+                            {request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
                           </TableCell>
                           <TableCell className="text-white text-sm">{contact}</TableCell>
                           <TableCell>
