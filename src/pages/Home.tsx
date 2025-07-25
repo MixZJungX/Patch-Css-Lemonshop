@@ -2,29 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
+import { GamepadIcon, Settings } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'redeem' | 'robux' | 'chicken'>('redeem');
-  const [robuxForm, setRobuxForm] = useState({
-    username: '',
-    amount: '',
-    contact: '',
-    paymentMethod: ''
+  const [activeTab, setActiveTab] = useState<'redeem' | 'chicken' | 'rainbow'>('redeem');
+  
+  // Rainbow Six form states
+  const [rainbowForm, setRainbowForm] = useState({
+    ubisoftEmail: '',
+    ubisoftPassword: '',
+    hasXboxAccount: false,
+    xboxEmail: '',
+    xboxPassword: '',
+    redeemCode: '',
+    contact: ''
   });
-  const [chickenForm, setChickenForm] = useState({
-    username: '',
-    gameType: '',
-    contact: '',
-    notes: ''
-  });
+  const [showRainbowRedeemPopup, setShowRainbowRedeemPopup] = useState(false);
+  const [isRainbowButtonSubmitting, setIsRainbowButtonSubmitting] = useState(false);
+  const [rainbowGameInfo, setRainbowGameInfo] = useState<{ code: string } | null>(null);
   
   // Chicken account redemption states
   const [chickenRedeemCode, setChickenRedeemCode] = useState('');
@@ -32,12 +34,13 @@ export default function Home() {
   const [showChickenRedeemPopup, setShowChickenRedeemPopup] = useState(false);
   const [availableCodes, setAvailableCodes] = useState<RedemptionCode[]>([]);
   const [availableAccounts, setAvailableAccounts] = useState<ChickenAccount[]>([]);
+  const [totalRobuxValue, setTotalRobuxValue] = useState(0);
+  const [totalActiveAccounts, setTotalActiveAccounts] = useState(0);
   
-  // Loading states - separate for each operation
-  const [isSubmitting, setIsSubmitting] = useState(false); // For form submissions and checks
-  const [isRobuxButtonSubmitting, setIsRobuxButtonSubmitting] = useState(false); // For Robux redemption button
-  const [isChickenButtonSubmitting, setIsChickenButtonSubmitting] = useState(false); // For Chicken redemption button
-  const [formComplete, setFormComplete] = useState(false);
+  // Loading states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRobuxButtonSubmitting, setIsRobuxButtonSubmitting] = useState(false);
+  const [isChickenButtonSubmitting, setIsChickenButtonSubmitting] = useState(false);
   
   // Code redemption states
   const [redeemCode, setRedeemCode] = useState('');
@@ -53,9 +56,23 @@ export default function Home() {
     loadAvailableItems();
   }, []);
 
+  // Calculate statistics when data changes
+  useEffect(() => {
+    if (availableCodes.length > 0) {
+      const totalValue = availableCodes.reduce((sum, code) => sum + (code.robux_value || code.robux_amount || 0), 0);
+      setTotalRobuxValue(totalValue);
+    }
+  }, [availableCodes]);
+
+  useEffect(() => {
+    if (availableAccounts.length > 0) {
+      const activeAccounts = availableAccounts.filter(account => !account.is_redeemed).length;
+      setTotalActiveAccounts(activeAccounts);
+    }
+  }, [availableAccounts]);
+
   const loadAvailableItems = async () => {
     try {
-      // Try to fetch from Supabase
       const { data: codes, error: codesError } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
         .select('*')
@@ -66,487 +83,392 @@ export default function Home() {
         .select('*')
         .eq('status', 'available');
 
-      // If there's an error with Supabase, use mock data
       if (codesError || accountsError) {
-        // Import mock data only when needed (to avoid importing in production)
         import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
           setAvailableCodes(mockCodes);
           setAvailableAccounts(mockAccounts);
-          console.log('Using mock data due to backend unavailability');
-          toast.info('เชื่อมต่อโหมดทดสอบ - ข้อมูลตัวอย่างถูกแสดง', {
-            duration: 5000,
-            position: 'top-center'
-          });
+          toast.info('เชื่อมต่อโหมดทดสอบ - ข้อมูลตัวอย่างถูกแสดง');
         });
       } else {
-        // Use real data
         setAvailableCodes(codes || []);
         setAvailableAccounts(accounts || []);
       }
     } catch (error) {
       console.error('Error loading items:', error);
-      // Import mock data as fallback
       import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
         setAvailableCodes(mockCodes);
         setAvailableAccounts(mockAccounts);
-        console.log('Using mock data due to error:', error);
-        toast.info('เชื่อมต่อโหมดทดสอบ - ข้อมูลตัวอย่างถูกแสดง', {
-          duration: 5000,
-          position: 'top-center'
-        });
       });
-    }
-  };
-
-  const handleRobuxSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!robuxForm.username || !robuxForm.amount || !robuxForm.contact || !robuxForm.paymentMethod) {
-      toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .insert({
-          roblox_username: robuxForm.username,
-          robux_amount: parseInt(robuxForm.amount),
-          contact_info: `${robuxForm.contact} | วิธีจ่าย: ${robuxForm.paymentMethod}`,
-          status: 'pending'
-        });
-
-      if (error) throw error;
-      toast.success('ส่งคำขอแลก Robux สำเร็จ! รอการติดต่อกลับ');
-      setRobuxForm({ username: '', amount: '', contact: '', paymentMethod: '' });
-    } catch (error) {
-      toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่');
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const validateCode = async () => {
     if (!redeemCode.trim()) {
-      toast.error('กรุณาใส่โค้ด');
+      toast.error("กรุณากรอกโค้ดที่ได้รับ");
       return;
     }
 
     setIsSubmitting(true);
+    
     try {
-      const { data, error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
-        .select('*')
-        .eq('code', redeemCode.trim().toUpperCase())
-        .eq('status', 'active')
-        .single();
+      const foundCode = availableCodes.find(code => 
+        code.code.toLowerCase() === redeemCode.toLowerCase() && 
+        code.status === 'active'
+      );
 
-      if (error?.message === 'Backend unavailable') {
-        // Use mock data in demo mode
-        import('@/lib/mockData').then(({ mockCodes }) => {
-          const mockCode = mockCodes.find(
-            c => c.code === redeemCode.trim().toUpperCase() && c.status === 'active'
-          );
-          
-          if (mockCode) {
-            setValidatedCode(mockCode);
-            setShowRedeemPopup(true);
-            toast.success(`พบโค้ด! มูลค่า ${mockCode.robux_value} Robux (โหมดทดสอบ)`);
-          } else {
-            toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
-          }
-          setIsSubmitting(false);
-        });
+      if (!foundCode) {
+        toast.error("โค้ดไม่ถูกต้องหรือหมดอายุแล้ว");
         return;
       }
 
-      if (error || !data) {
-        toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
-        return;
-      }
-
-      setValidatedCode(data);
+      setValidatedCode(foundCode);
       setShowRedeemPopup(true);
-      toast.success(`พบโค้ด! มูลค่า ${data.robux_value} Robux`);
+      toast.success("โค้ดถูกต้อง! กรุณากรอกข้อมูลเพื่อรับ Robux");
+
     } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
-      
-      // Fallback to mock data if there's an exception
-      import('@/lib/mockData').then(({ mockCodes }) => {
-        const mockCode = mockCodes.find(
-          c => c.code === redeemCode.trim().toUpperCase()
-        );
-        
-        if (mockCode) {
-          setValidatedCode(mockCode);
-          setShowRedeemPopup(true);
-          toast.success(`พบโค้ด! มูลค่า ${mockCode.robux_value} Robux (โหมดทดสอบ)`);
-        }
-        setIsSubmitting(false);
-      });
+      console.error('Error validating code:', error);
+      toast.error("เกิดข้อผิดพลาดในการตรวจสอบโค้ด");
     } finally {
-      if (error?.message !== 'Backend unavailable') {
-        setIsSubmitting(false);
-      }
+      setIsSubmitting(false);
     }
   };
 
-  const completeRedemption = async () => {
-    // Input validation
-    if (!redeemForm.username || !redeemForm.password || !validatedCode) {
-      toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
+  const handleRobuxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!redeemForm.username.trim() || !redeemForm.password.trim() || !redeemForm.contact.trim()) {
+      toast.error("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
-    // Set loading state and close dialog immediately
     setIsRobuxButtonSubmitting(true);
-    setShowRedeemPopup(false);
-    
-    // Show processing toast
-    const toastId = 'redeeming-' + Date.now();
-    toast.loading('กำลังดำเนินการแลกโค้ด...', { id: toastId });
-    
+    const toastId = toast.loading('กำลังดำเนินการแลกโค้ด...');
+
     try {
-      // Check if we're in offline/demo mode
-      const testUpdate = await supabase
+      // First, update the code status to 'used' in Supabase
+      const { error: updateError } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
         .update({ 
           status: 'used',
-          used_by: redeemForm.username,
+          used_by: redeemForm.contact,
           used_at: new Date().toISOString()
         })
-        .eq('id', validatedCode.id);
-      
-      // If in offline mode
-      if (testUpdate.error?.message === 'Backend unavailable') {
-        toast.success(`🎉 แลกโค้ดสำเร็จ! คำขอ ${validatedCode.robux_value} Robux อยู่ในระบบแล้ว (โหมดทดสอบ)`, { id: toastId });
-      } else {
-        // If online mode - regular flow
-        // Mark code as used
-        const { error: codeError } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
-          .update({ 
-            status: 'used',
-            used_by: redeemForm.username,
-            used_at: new Date().toISOString()
-          })
-          .eq('id', validatedCode.id);
+        .eq('id', validatedCode!.id);
 
-        if (codeError) {
-          toast.error('เกิดข้อผิดพลาดในการแลกโค้ด', { id: toastId });
-          return;
-        }
+      if (updateError) {
+        // If Supabase update fails, try localStorage fallback
+        console.warn('Supabase update failed, using localStorage:', updateError);
+        const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]');
+        const updatedLocalCodes = localCodes.map((code: RedemptionCode) => 
+          code.code === validatedCode!.code ? 
+          { ...code, status: 'used', used_by: redeemForm.contact, used_at: new Date().toISOString() } : 
+          code
+        );
+        localStorage.setItem('redemption_codes', JSON.stringify(updatedLocalCodes));
+      }
 
-        // Create redemption request record
+      const requestData: RedemptionRequest = {
+        id: crypto.randomUUID(),
+        code_id: validatedCode!.id,
+        roblox_username: redeemForm.username,
+        roblox_password: redeemForm.password,
+        contact_info: redeemForm.contact,
+        robux_amount: validatedCode!.robux_amount,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
+
+      // Try to save redemption request to Supabase
+      try {
         const { error: requestError } = await supabase
           .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-          .insert({
-            roblox_username: redeemForm.username,
-            robux_amount: validatedCode.robux_value,
-            contact_info: `Code: ${validatedCode.code} | Password: ${redeemForm.password} | Contact: ${redeemForm.contact}`,
-            status: 'pending'
-          });
-
+          .insert([requestData]);
+        
         if (requestError) {
-          toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ', { id: toastId });
-          return;
+          console.warn('Failed to save request to Supabase:', requestError);
         }
-
-        toast.success(`🎉 แลกโค้ดสำเร็จ! คำขอ ${validatedCode.robux_value} Robux อยู่ในระบบแล้ว`, { id: toastId });
-        loadAvailableItems();
+      } catch (error) {
+        console.warn('Supabase request save failed, continuing with success message');
       }
-    } catch (error) {
-      console.error('Error in completeRedemption:', error);
-      toast.error('เกิดข้อผิดพลาดในการแลกโค้ด', { id: toastId });
-    } finally {
-      // Reset all states
+
+      toast.success(`🎉 แลกโค้ดสำเร็จ! คุณจะได้รับ ${validatedCode!.robux_value || validatedCode!.robux_amount} Robux ภายใน 24 ชั่วโมง`, { id: toastId });
+      
+      setRedeemForm({ username: '', password: '', contact: '' });
       setRedeemCode('');
       setValidatedCode(null);
-      setRedeemForm({ username: '', password: '', contact: '' });
-      
-      // Always reset loading state
+      setShowRedeemPopup(false);
+      loadAvailableItems();
+
+    } catch (error) {
+      console.error('Error submitting redemption:', error);
+      toast.error('เกิดข้อผิดพลาดในการดำเนินการ', { id: toastId });
+    } finally {
       setIsRobuxButtonSubmitting(false);
     }
   };
 
-  const validateChickenCode = async () => {
-    if (!chickenRedeemCode.trim()) {
-      toast.error('กรุณาใส่โค้ด');
+  const handleRainbowRedeemCode = async () => {
+    if (!rainbowForm.redeemCode.trim()) {
+      toast.error("กรุณากรอกโค้ดเกม Rainbow Six");
       return;
     }
 
-    setIsSubmitting(true);
+    if (!rainbowForm.ubisoftEmail.trim() || !rainbowForm.ubisoftPassword.trim()) {
+      toast.error("กรุณากรอกข้อมูล Ubisoft ให้ครบถ้วน");
+      return;
+    }
+
+    if (rainbowForm.hasXboxAccount && (!rainbowForm.xboxEmail.trim() || !rainbowForm.xboxPassword.trim())) {
+      toast.error("กรุณากรอกข้อมูล Xbox ให้ครบถ้วน");
+      return;
+    }
+
+    if (!rainbowForm.contact.trim()) {
+      toast.error("กรุณากรอกข้อมูลติดต่อ");
+      return;
+    }
+
+    // Check if the redeem code exists in the database
     try {
-      // First check for backend availability
-      const { data: existingRequests, error: requestsError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .select('*')
-        .ilike('contact_info', `%${chickenRedeemCode.trim().toUpperCase()}%`);
-
-      // Use mock data if backend is unavailable
-      if (requestsError?.message === 'Backend unavailable') {
-        import('@/lib/mockData').then(({ mockAccounts }) => {
-          const mockAccount = mockAccounts.find(
-            a => a.code === chickenRedeemCode.trim().toUpperCase() && a.status === 'available'
-          );
-          
-          if (mockAccount) {
-            setValidatedChickenAccount(mockAccount);
-            setShowChickenRedeemPopup(true);
-            toast.success(`พบบัญชี ${mockAccount.product_name}! (โหมดทดสอบ)`);
-            // In demo mode, we don't need to update status
-          } else {
-            toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
-          }
-          setIsSubmitting(false);
-        });
-        return;
-      }
-
-      if (existingRequests && existingRequests.length > 0) {
-        toast.error('โค้ดนี้ถูกใช้งานไปแล้ว');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // If not used in any requests, check if it's available in accounts
-      const { data, error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
-        .select('*')
-        .eq('code', chickenRedeemCode.trim().toUpperCase())
+      const { data: codeCheck, error: codeError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+        .select('code, product_name, status')
+        .eq('code', rainbowForm.redeemCode)
+        .eq('product_name', 'Rainbow Six Credits')
         .eq('status', 'available')
         .single();
 
-      if (error || !data) {
-        toast.error('โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว');
-        return;
-      }
-
-      // Mark account as used immediately upon validation
-      const { error: accountError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
-        .update({ 
-          status: 'used',
-          used_at: new Date().toISOString()
-        })
-        .eq('id', data.id);
-
-      if (accountError) {
-        toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
-        return;
-      }
-
-      // Create redemption request record immediately
-      const { error: requestError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .insert({
-          roblox_username: 'Chicken Account User - View Only',
-          robux_amount: 0,
-          contact_info: `Chicken Account Viewed: ${data.code} - ${data.product_name}`,
-          status: 'completed'
-        });
-
-      if (requestError) {
-        toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
-        return;
-      }
-
-      setValidatedChickenAccount(data);
-      setShowChickenRedeemPopup(true);
-      toast.success(`พบบัญชี ${data.product_name}!`);
-      
-      // Refresh the list of available accounts
-      loadAvailableItems();
-    } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด');
-      
-      // Fallback to mock data if there's an exception
-      import('@/lib/mockData').then(({ mockAccounts }) => {
-        const mockAccount = mockAccounts.find(
-          a => a.code === chickenRedeemCode.trim().toUpperCase()
+      if (codeError || !codeCheck) {
+        // Check localStorage for Rainbow Six codes
+        const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]');
+        const localCode = localCodes.find(code => 
+          code.code === rainbowForm.redeemCode.toUpperCase() && 
+          code.status === 'available' &&
+          code.product_name === 'Rainbow Six Credits'
         );
         
-        if (mockAccount) {
-          setValidatedChickenAccount(mockAccount);
-          setShowChickenRedeemPopup(true);
-          toast.success(`พบบัญชี ${mockAccount.product_name}! (โหมดทดสอบ)`);
+        if (!localCode) {
+          toast.error('โค้ดที่กรอกไม่ถูกต้องหรือไม่พร้อมใช้งาน กรุณาตรวจสอบโค้ด Rainbow Six อีกครั้ง');
+          return;
         }
-        setIsSubmitting(false);
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const completeChickenRedemption = async () => {
-    if (!validatedChickenAccount) {
-      toast.error('เกิดข้อผิดพลาด');
+        
+        // Mark localStorage code as used
+        const updatedCodes = localCodes.map(code => 
+          code.code === rainbowForm.redeemCode.toUpperCase() ? 
+          { ...code, status: 'used', used_at: new Date().toISOString() } : 
+          code
+        );
+        localStorage.setItem('redemption_codes', JSON.stringify(updatedCodes));
+      }
+    } catch (error) {
+      toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด กรุณาลองใหม่อีกครั้ง');
       return;
     }
 
-    // Set loading state and close dialog immediately
-    setIsChickenButtonSubmitting(true);
-    setShowChickenRedeemPopup(false);
-    
-    // Show processing toast
-    const toastId = 'chicken-redeeming-' + Date.now();
-    toast.loading('กำลังบันทึกข้อมูล...', { id: toastId });
-    
+    setIsRainbowButtonSubmitting(true);
+    const toastId = toast.loading('กำลังส่งคำขอแลกโค้ด...');
+
     try {
-      // Supabase operations are already done during validation in most cases,
-      // but we can add a double-check here to ensure the account is marked used
-      
-      // For backend unavailable scenario, we can show success message directly
-      if (validatedChickenAccount?.status !== 'used') {
-        const { error: accountError } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
-          .update({ 
-            status: 'used',
-            used_at: new Date().toISOString()
-          })
-          .eq('id', validatedChickenAccount.id);
-          
-        if (accountError && accountError.message !== 'Backend unavailable') {
-          toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล', { id: toastId });
-          return;
-        }
-        
-        // Create or update redemption request record
-        const { error: requestError } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-          .insert({
-            roblox_username: 'Chicken Account User - View Only',
-            robux_amount: 0,
-            contact_info: `Chicken Account Viewed: ${validatedChickenAccount.code} - ${validatedChickenAccount.product_name}`,
-            status: 'completed'
-          });
-          
-        if (requestError && requestError.message !== 'Backend unavailable') {
-          toast.error('เกิดข้อผิดพลาดในการบันทึกข้อมูล', { id: toastId });
-          return;
-        }
+      // Simulate sending request to shop
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Create redemption request data
+      const requestData = {
+        id: crypto.randomUUID(),
+        redeemCode: rainbowForm.redeemCode,
+        ubisoftEmail: rainbowForm.ubisoftEmail,
+        ubisoftPassword: rainbowForm.ubisoftPassword,
+        hasXboxAccount: rainbowForm.hasXboxAccount,
+        xboxEmail: rainbowForm.xboxEmail || '',
+        xboxPassword: rainbowForm.xboxPassword || '',
+        contact: rainbowForm.contact,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        type: 'rainbow_six'
+      };
+
+      // Update Rainbow Six code status to 'used' in Supabase first
+      const { error: updateCodeError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+        .update({ 
+          status: 'used',
+          used_by: rainbowForm.contact,
+          used_at: new Date().toISOString()
+        })
+        .eq('code', rainbowForm.redeemCode)
+        .eq('product_name', 'Rainbow Six Credits');
+
+      if (updateCodeError) {
+        console.warn('Supabase Rainbow Six code update failed:', updateCodeError);
+        // Already handled localStorage update above in the check section
       }
-      
-      // Show success message
-      toast.success(`🎉 บัญชี ${validatedChickenAccount.product_name} ถูกบันทึกไว้แล้ว`, { id: toastId });
-      loadAvailableItems();
-      
+
+      // Try to save to Supabase or localStorage
+      try {
+        // If Supabase is available, save there
+        const { error } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+          .insert([requestData]);
+        
+        if (error) throw error;
+      } catch (error) {
+        // Fallback to localStorage
+        console.log('Saving to localStorage as fallback');
+        const existingRequests = JSON.parse(localStorage.getItem('rainbow_requests') || '[]');
+        existingRequests.push(requestData);
+        localStorage.setItem('rainbow_requests', JSON.stringify(existingRequests));
+      }
+
+      setShowRainbowRedeemPopup(true);
+      toast.success('ส่งคำขอแลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
+
+      // Reset form
+      setRainbowForm({
+        ubisoftEmail: '',
+        ubisoftPassword: '',
+        hasXboxAccount: false,
+        xboxEmail: '',
+        xboxPassword: '',
+        redeemCode: '',
+        contact: ''
+      });
+
     } catch (error) {
-      console.error('Error in completeChickenRedemption:', error);
-      toast.error('เกิดข้อผิดพลาดในการดำเนินการ', { id: toastId });
+      console.error('Error submitting Rainbow Six request:', error);
+      toast.error('เกิดข้อผิดพลาดในการส่งคำขอ', { id: toastId });
     } finally {
-      // Reset form and states
-      setChickenRedeemCode('');
-      setValidatedChickenAccount(null);
-      
-      // Reset loading state
+      setIsRainbowButtonSubmitting(false);
+    }
+  };
+
+  const handleChickenRedeemCode = async () => {
+    if (!chickenRedeemCode.trim()) {
+      toast.error("กรุณากรอกโค้ดแลกรับบัญชี");
+      return;
+    }
+
+    setIsChickenButtonSubmitting(true);
+    const toastId = toast.loading('กำลังตรวจสอบโค้ด...');
+
+    try {
+      const foundAccount = availableAccounts.find(account => 
+        (account.code || account.redeem_code).toLowerCase() === chickenRedeemCode.toLowerCase() && 
+        account.status === 'available'
+      );
+
+      if (!foundAccount) {
+        toast.error("โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว", { id: toastId });
+        return;
+      }
+
+      // Update account status to 'used' in Supabase
+      const { error: updateError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .update({ 
+          status: 'used',
+          used_by: 'anonymous_user',
+          used_at: new Date().toISOString()
+        })
+        .eq('id', foundAccount.id);
+
+      if (updateError) {
+        // If Supabase update fails, try localStorage fallback
+        console.warn('Supabase update failed, using localStorage:', updateError);
+        const localAccounts = JSON.parse(localStorage.getItem('chicken_accounts') || '[]');
+        const updatedLocalAccounts = localAccounts.map((account: ChickenAccount) => 
+          account.code === foundAccount.code ? 
+          { ...account, status: 'used', used_by: 'anonymous_user', used_at: new Date().toISOString() } : 
+          account
+        );
+        localStorage.setItem('chicken_accounts', JSON.stringify(updatedLocalAccounts));
+      }
+
+      setValidatedChickenAccount(foundAccount);
+      setShowChickenRedeemPopup(true);
+      toast.success("โค้ดถูกต้อง! แสดงข้อมูลบัญชี", { id: toastId });
+
+      // Refresh available accounts after marking as used
+      loadAvailableItems();
+
+    } catch (error) {
+      console.error('Error validating chicken code:', error);
+      toast.error("เกิดข้อผิดพลาดในการตรวจสอบโค้ด", { id: toastId });
+    } finally {
       setIsChickenButtonSubmitting(false);
     }
   };
 
-  const handleChickenSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chickenForm.username || !chickenForm.gameType || !chickenForm.contact) {
-      toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-        .insert({
-          roblox_username: chickenForm.username,
-          robux_amount: 0,
-          contact_info: `${chickenForm.contact} | เกม: ${chickenForm.gameType} | หมายเหตุ: ${chickenForm.notes}`,
-          status: 'pending'
-        });
-
-      if (error) throw error;
-      toast.success('ส่งคำขอบัญชีไก่ตันสำเร็จ! รอการติดต่อกลับ');
-      setChickenForm({ username: '', gameType: '', contact: '', notes: '' });
-    } catch (error) {
-      toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-4000"></div>
-      </div>
-
-      {/* Header */}
-      <header className="relative z-10 bg-black/20 backdrop-blur-lg border-b border-white/10">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-2xl">
-                <span className="text-3xl">💎</span>
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  ระบบแลกของรางวัล
-                </h1>
-                <p className="text-purple-200 text-sm">Robux & Chicken Accounts Exchange</p>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl flex items-center justify-center">
+              <span className="text-white text-2xl">💎</span>
             </div>
-            <div className="flex space-x-3">
-              <Link to="/status">
-                <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
-                  🔍 เช็คสถานะ
-                </Button>
-              </Link>
-              <Link to="/admin">
-                <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                  👑 แอดมิน
-                </Button>
-              </Link>
+            <div>
+              <h1 className="text-white text-xl font-bold">ระบบแลกของรางวัล</h1>
+              <p className="text-purple-200 text-sm">Robux & Chicken Accounts Exchange</p>
             </div>
           </div>
+          
+          <div className="flex space-x-3">
+            <Link to="/status">
+              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all">
+                🔍 เช็คสถานะ
+              </Button>
+            </Link>
+            <Link to="/admin">
+              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all">
+                <Settings className="w-4 h-4 mr-2" />
+                👑 แอดมิน
+              </Button>
+            </Link>
+          </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="relative z-10 container mx-auto px-4 py-8">
-        {/* Stats Section */}
+        {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl mb-2">🎮</div>
-              <div className="text-2xl font-bold text-purple-300">{availableCodes.length}</div>
-              <div className="text-sm text-purple-200">Robux Codes</div>
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+            <CardContent className="p-6">
+              <div className="text-4xl mb-2">🎮</div>
+              <div className="text-2xl font-bold text-white">{availableCodes.filter(code => code.status === 'active').length}</div>
+              <div className="text-purple-200 text-sm">Robux Codes</div>
+              <div className="text-xs text-white/60 mt-1">{totalRobuxValue.toLocaleString()} R$</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl mb-2">🐔</div>
-              <div className="text-2xl font-bold text-pink-300">{availableAccounts.length}</div>
-              <div className="text-sm text-pink-200">Chicken Accounts</div>
+          
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+            <CardContent className="p-6">
+              <div className="text-4xl mb-2">🐔</div>
+              <div className="text-2xl font-bold text-white">{availableAccounts.filter(account => account.status === 'available').length}</div>
+              <div className="text-purple-200 text-sm">Chicken Accounts</div>
+              <div className="text-xs text-white/60 mt-1">พร้อมใช้งาน</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl mb-2">⚡</div>
-              <div className="text-2xl font-bold text-yellow-300">24/7</div>
-              <div className="text-sm text-yellow-200">Online Service</div>
+          
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+            <CardContent className="p-6">
+              <div className="text-4xl mb-2">⚡</div>
+              <div className="text-2xl font-bold text-yellow-400">24/7</div>
+              <div className="text-purple-200 text-sm">Online Service</div>
+              <div className="text-xs text-white/60 mt-1">บริการตลอดเวลา</div>
             </CardContent>
           </Card>
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl mb-2">🔒</div>
-              <div className="text-2xl font-bold text-green-300">100%</div>
-              <div className="text-sm text-green-200">Secure</div>
+          
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+            <CardContent className="p-6">
+              <div className="text-4xl mb-2">🔒</div>
+              <div className="text-2xl font-bold text-green-400">100%</div>
+              <div className="text-purple-200 text-sm">Secure</div>
+              <div className="text-xs text-white/60 mt-1">ปลอดภัยแน่นอน</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Tab Navigation */}
+
+
         <div className="flex justify-center mb-8">
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-2 border border-white/20">
             <Button
@@ -559,18 +481,6 @@ export default function Home() {
             >
               🎫 แลกโค้ด
             </Button>
-            {/* 
-            <Button
-              onClick={() => setActiveTab('robux')}
-              className={`px-6 py-3 rounded-xl transition-all ${
-                activeTab === 'robux'
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                  : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              💰 ขอ Robux
-            </Button>
-            */}
             <Button
               onClick={() => setActiveTab('chicken')}
               className={`px-6 py-3 rounded-xl transition-all ${
@@ -581,445 +491,292 @@ export default function Home() {
             >
               🐔 แลกไก่ตัน
             </Button>
+            
+            <Button
+              onClick={() => setActiveTab('rainbow')}
+              className={`px-6 py-3 rounded-xl transition-all ${
+                activeTab === 'rainbow'
+                  ? 'bg-gradient-to-r from-blue-600 to-orange-600 text-white shadow-lg'
+                  : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              🎮 Rainbow Six
+            </Button>
           </div>
         </div>
 
-        {/* Forms */}
-        <div className="max-w-2xl mx-auto">
-          {activeTab === 'redeem' ? (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+        {/* Main Content Area */}
+        <div className="max-w-4xl mx-auto">
+          {(activeTab === 'redeem' || activeTab === 'chicken') && (
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-3xl">🎫</span>
-                  <span>แลกโค้ดรับ Robux</span>
+                  <span className="text-3xl">{activeTab === 'redeem' ? '💳' : '🐔'}</span>
+                  <span>{activeTab === 'redeem' ? 'แลกโค้ดรับ Robux' : 'แลกโค้ดรับบัญชีไก่ตัน'}</span>
                 </CardTitle>
-                <p className="text-green-200">ใส่โค้ดที่ได้รับเพื่อแลกเป็น Robux</p>
+                <p className="text-blue-200">
+                  {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับเพื่อแลกเป็น Robux' : 'ใส่โค้ดที่ได้รับเพื่อแลกบัญชีเกมไก่ตัน'}
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div>
                     <label className="block text-white text-sm font-medium mb-2">
-                      โค้ดที่ได้รับ
+                      {activeTab === 'redeem' ? 'โค้ดที่ได้รับ' : 'โค้ดที่ได้รับ'}
                     </label>
                     <div className="flex space-x-3">
                       <Input
-                        value={redeemCode}
-                        onChange={(e) => setRedeemCode(e.target.value)}
+                        value={activeTab === 'redeem' ? redeemCode : chickenRedeemCode}
+                        onChange={(e) => activeTab === 'redeem' ? setRedeemCode(e.target.value) : setChickenRedeemCode(e.target.value)}
                         placeholder="ใส่โค้ดที่ได้รับ"
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1"
-                        onKeyPress={(e) => e.key === 'Enter' && validateCode()}
+                        onKeyPress={(e) => e.key === 'Enter' && (activeTab === 'redeem' ? validateCode() : handleChickenRedeemCode())}
                       />
                       <Button
-                        onClick={validateCode}
-                        disabled={isSubmitting}
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                        onClick={activeTab === 'redeem' ? validateCode : handleChickenRedeemCode}
+                        disabled={activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting}
+                        className={`bg-gradient-to-r ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
                       >
-                        {isSubmitting ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
+                        {(activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting) ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
                       </Button>
                     </div>
-                  </div>
-
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                    <p className="text-green-200 text-sm">
-                      <strong>💡 วิธีใช้:</strong> ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง 
-                      จะมีหน้าต่างขึ้นมาให้ใส่ชื่อผู้ใช้และรหัสผ่าน Roblox เพื่อรับ Robux
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : activeTab === 'robux' ? (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-3xl">💎</span>
-                  <span>แลกเป็น Robux</span>
-                </CardTitle>
-                <p className="text-purple-200">กรอกข้อมูลเพื่อแลกโค้ดเป็น Robux</p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <form onSubmit={handleRobuxSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      ชื่อผู้เล่น Roblox
-                    </label>
-                    <Input
-                      value={robuxForm.username}
-                      onChange={(e) => setRobuxForm(prev => ({ ...prev, username: e.target.value }))}
-                      placeholder="ใส่ชื่อผู้เล่น Roblox"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      จำนวน Robux ที่ต้องการ
-                    </label>
-                    <Select onValueChange={(value) => setRobuxForm(prev => ({ ...prev, amount: value }))}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                        <SelectValue placeholder="เลือกจำนวน Robux" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-900 border-gray-700">
-                        {availableCodes.map(code => (
-                          <SelectItem key={code.id} value={code.robux_value.toString()}>
-                            {code.robux_value} Robux
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      วิธีการจ่ายเงิน
-                    </label>
-                    <Select onValueChange={(value) => setRobuxForm(prev => ({ ...prev, paymentMethod: value }))}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                        <SelectValue placeholder="เลือกวิธีจ่าย" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-900 border-gray-700">
-                        <SelectItem value="truemoney">TrueMoney Wallet</SelectItem>
-                        <SelectItem value="promptpay">PromptPay</SelectItem>
-                        <SelectItem value="bank">โอนธนาคาร</SelectItem>
-                        <SelectItem value="crypto">Cryptocurrency</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      ข้อมูลติดต่อ
-                    </label>
-                    <Textarea
-                      value={robuxForm.contact}
-                      onChange={(e) => setRobuxForm(prev => ({ ...prev, contact: e.target.value }))}
-                      placeholder="Discord, Line ID, หรือเบอร์โทร"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      rows={3}
-                      required
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 text-lg"
-                  >
-                    {isSubmitting ? 'กำลังส่งคำขอ...' : '💎 ส่งคำขอแลก Robux'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-3xl">🐔</span>
-                  <span>แลกโค้ดรับบัญชีไก่ตัน</span>
-                </CardTitle>
-                <p className="text-orange-200">ใส่โค้ดที่ได้รับเพื่อแลกบัญชีเกมไก่ตัน</p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      โค้ดที่ได้รับ
-                    </label>
-                    <div className="flex space-x-3">
-                      <Input
-                        value={chickenRedeemCode}
-                        onChange={(e) => setChickenRedeemCode(e.target.value)}
-                        placeholder="ใส่โค้ดที่ได้รับ"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1"
-                        onKeyPress={(e) => e.key === 'Enter' && validateChickenCode()}
-                      />
-                      <Button
-                        onClick={validateChickenCode}
-                        disabled={isSubmitting}
-                        className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
-                      >
-                        {isSubmitting ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="bg-red-500/30 border-2 border-red-500 rounded-lg p-4 mb-4">
-                    <p className="text-white text-base font-bold text-center mb-2">
-                      ⚠️ คำเตือนสำคัญ ⚠️
-                    </p>
-                    <p className="text-white text-base">
-                      เมื่อกดปุ่ม <span className="font-bold">"ตรวจสอบ"</span> ระบบจะทำเครื่องหมายโค้ดว่า <span className="bg-red-500 px-1 font-bold">ใช้งานแล้วทันที</span> กรุณาเตรียมพร้อมที่จะจดบันทึกหรือถ่ายภาพข้อมูลบัญชี!
-                    </p>
                   </div>
                   
-                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                    <p className="text-orange-200 text-sm">
-                      <strong>💡 วิธีใช้:</strong> ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง 
-                      จะมีหน้าต่างขึ้นมาแสดงชื่อผู้ใช้และรหัสผ่านของบัญชีเกม
+                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                    <p className="text-blue-100 text-sm">
+                      <strong>💡 วิธีใช้:</strong> {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง จะมีหน้าต่างขึ้นมาให้ใส่ชื่อผู้ใช้และรหัสผ่าน Roblox เพื่อรับ Robux' : 'โค้ดที่ได้รับจะถูกตรวจสอบและแสดงข้อมูลบัญชีที่สามารถใช้งานได้ กรุณาเก็บข้อมูลบัญชีอย่างปลอดภัยหลังจากได้รับ'}
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           )}
-        </div>
 
-        {/* Code Redemption Popup */}
-        <Dialog open={showRedeemPopup} onOpenChange={(open) => {
-          console.log('Dialog open state changing to:', open);
-          if (!open) {
-            // Reset form and all loading states when closing dialog
-            setRedeemForm({ username: '', password: '', contact: '' });
-            setIsSubmitting(false);
-            setIsRobuxButtonSubmitting(false);
-          }
-          setShowRedeemPopup(open);
-        }}>
-          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-green-500/30 text-white max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
-            <DialogHeader>
-              <DialogTitle className="text-center">
-                <div className="flex items-center justify-center space-x-2 mb-4">
-                  <span className="text-4xl">🎉</span>
-                  <div>
-                    <div className="text-2xl font-bold text-green-400">โค้ดถูกต้อง!</div>
-                    <div className="text-sm text-green-300">
-                      คุณจะได้ {validatedCode?.robux_value} Robux
+          {activeTab === 'rainbow' && (
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
+                  <GamepadIcon className="w-8 h-8" />
+                  <span>แลกโค้ด Rainbow Six</span>
+                </CardTitle>
+                <p className="text-blue-200">กรอกข้อมูลบัญชี Ubisoft และโค้ดเพื่อแลกรับ</p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ubisoft-email" className="text-white/80">อีเมล Ubisoft</Label>
+                    <Input
+                      id="ubisoft-email"
+                      type="email"
+                      value={rainbowForm.ubisoftEmail}
+                      onChange={(e) => setRainbowForm(prev => ({ ...prev, ubisoftEmail: e.target.value }))}
+                      placeholder="email@example.com"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ubisoft-password" className="text-white/80">รหัสผ่าน Ubisoft</Label>
+                    <Input
+                      id="ubisoft-password"
+                      type="password"
+                      value={rainbowForm.ubisoftPassword}
+                      onChange={(e) => setRainbowForm(prev => ({ ...prev, ubisoftPassword: e.target.value }))}
+                      placeholder="••••••••"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="has-xbox"
+                        checked={rainbowForm.hasXboxAccount}
+                        onCheckedChange={(checked) => setRainbowForm(prev => ({ 
+                          ...prev, 
+                          hasXboxAccount: checked as boolean,
+                          xboxEmail: checked ? prev.xboxEmail : '',
+                          xboxPassword: checked ? prev.xboxPassword : ''
+                        }))}
+                        className="border-white/40 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      />
+                      <Label htmlFor="has-xbox" className="text-white/80 cursor-pointer">
+                        มีบัญชี Xbox เชื่อมต่อกับ Ubisoft
+                      </Label>
                     </div>
+                    
+                    {rainbowForm.hasXboxAccount && (
+                      <div className="space-y-3 pl-6 border-l-2 border-blue-500/30">
+                        <div className="space-y-2">
+                          <Label htmlFor="xbox-email" className="text-white/80">อีเมล Xbox</Label>
+                          <Input
+                            id="xbox-email"
+                            type="email"
+                            value={rainbowForm.xboxEmail}
+                            onChange={(e) => setRainbowForm(prev => ({ ...prev, xboxEmail: e.target.value }))}
+                            placeholder="xbox@example.com"
+                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="xbox-password" className="text-white/80">รหัสผ่าน Xbox</Label>
+                          <Input
+                            id="xbox-password"
+                            type="password"
+                            value={rainbowForm.xboxPassword}
+                            onChange={(e) => setRainbowForm(prev => ({ ...prev, xboxPassword: e.target.value }))}
+                            placeholder="••••••••"
+                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rainbow-redeem-code" className="text-white/80">โค้ดแลกรับ Rainbow Six</Label>
+                    <Input
+                      id="rainbow-redeem-code"
+                      value={rainbowForm.redeemCode}
+                      onChange={(e) => setRainbowForm(prev => ({ ...prev, redeemCode: e.target.value }))}
+                      placeholder="กรอกโค้ดแลกรับ"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50 h-11 text-center font-mono uppercase"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="contact" className="text-white/80">ข้อมูลติดต่อ</Label>
+                    <Input
+                      id="contact"
+                      value={rainbowForm.contact}
+                      onChange={(e) => setRainbowForm(prev => ({ ...prev, contact: e.target.value }))}
+                      placeholder="Discord หรือ LINE ID สำหรับติดต่อกลับ"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                    />
                   </div>
                 </div>
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
-                <p className="text-green-200 text-sm mb-2">
-                  <strong>โค้ด:</strong> {validatedCode?.code}
-                </p>
-                <p className="text-green-200 text-sm">
-                  <strong>มูลค่า:</strong> {validatedCode?.robux_value} Robux
-                </p>
-              </div>
+                
+                <Button 
+                  onClick={handleRainbowRedeemCode} 
+                  className="w-full mt-6 bg-gradient-to-r from-blue-600 via-orange-600 to-red-600 hover:from-blue-700 hover:via-orange-700 hover:to-red-700 text-white font-bold py-3 text-lg" 
+                  disabled={isRainbowButtonSubmitting}
+                >
+                  {isRainbowButtonSubmitting ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>กำลังส่งคำขอ...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <GamepadIcon className="w-4 h-4" />
+                      <span>ส่งคำขอแลกโค้ด</span>
+                    </div>
+                  )}
+                </Button>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    ชื่อผู้ใช้ Roblox
-                  </label>
-                  <Input
-                    value={redeemForm.username}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="ใส่ชื่อผู้ใช้ Roblox"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    รหัสผ่าน Roblox
-                  </label>
-                  <Input
-                    type="password"
-                    value={redeemForm.password}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="ใส่รหัสผ่าน Roblox"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    <span className="text-red-400">*</span> เบอร์โทรศัพท์ (สำคัญมาก)
-                  </label>
-                  <Input
-                    value={redeemForm.contact}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
-                    placeholder="กรุณาใส่เบอร์โทรศัพท์ของคุณ (จำเป็นต้องมี)"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 border-red-400/50"
-                  />
-                  <p className="text-red-300 text-xs mt-1">
-                    ⚠️ เบอร์โทรศัพท์จำเป็นสำหรับการติดต่อและยืนยันตัวตน
+                <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                  <h4 className="text-blue-200 font-medium mb-2">💡 คำแนะนำ</h4>
+                  <p className="text-blue-100 text-sm">
+                    • กรอกข้อมูลบัญชี Ubisoft ของคุณให้ครบถ้วน<br/>
+                    • หากมีบัญชี Xbox เชื่อมต่อ กรุณาติ๊กและกรอกข้อมูล Xbox ด้วย<br/>
+                    • ทางร้านจะดำเนินการรีดีมโค้ดให้ภายใน 24 ชั่วโมง<br/>
+                    • กรุณาให้ข้อมูลติดต่อที่ถูกต้องเพื่อการติดตามสถานะ
                   </p>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                <p className="text-red-200 text-xs">
-                  <strong>⚠️ สำคัญ:</strong> เบอร์โทรศัพท์จำเป็นสำหรับการติดต่อและยืนยันตัวตน
-                  <br />ข้อมูลอื่นใช้สำหรับการส่ง Robux เท่านั้น เราไม่เก็บรหัสผ่านของคุณ
-                </p>
-              </div>
 
-              <div className="flex space-x-3">
-                <DialogClose asChild>
-                  <Button
-                    variant="outline"
-                    className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  >
-                    ยกเลิก
-                  </Button>
-                </DialogClose>
-                <Button
-                  onClick={() => {
-                    completeRedemption();
-                  }}
+
+        {/* Rainbow Six Success Dialog */}
+        <Dialog open={showRainbowRedeemPopup} onOpenChange={setShowRainbowRedeemPopup}>
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
+            <DialogHeader>
+              <DialogTitle className="text-blue-600 text-xl">🎮 แลกรับโค้ด Rainbow Six สำเร็จ!</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                โค้ดเกมของคุณ
+              </DialogDescription>
+            </DialogHeader>
+            
+            {rainbowGameInfo && (
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <p className="text-sm text-gray-500 font-medium">โค้ดเกม Rainbow Six:</p>
+                <div className="bg-white p-3 rounded border font-mono text-lg mt-1 text-center tracking-wider">
+                  {rainbowGameInfo.code}
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter className="mt-4">
+              <Button 
+                onClick={() => {
+                  setShowRainbowRedeemPopup(false);
+                  setRainbowGameInfo(null);
+                }} 
+                className="w-full bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700"
+              >
+                เสร็จสิ้น
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Robux Redemption Dialog */}
+        <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
+            <DialogHeader>
+              <DialogTitle className="text-green-600 text-xl">🎫 แลกโค้ดรับ Robux</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                กรอกข้อมูล Roblox ของคุณเพื่อรับ {validatedCode?.robux_value || validatedCode?.robux_amount} Robux
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleRobuxSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="username">ชื่อผู้ใช้ Roblox</Label>
+                <Input
+                  id="username"
+                  value={redeemForm.username}
+                  onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
+                  placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">รหัสผ่าน Roblox</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={redeemForm.password}
+                  onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="รหัสผ่านของคุณ"
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact">ข้อมูลติดต่อ</Label>
+                <Input
+                  id="contact"
+                  value={redeemForm.contact}
+                  onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
+                  placeholder="Discord หรือ LINE ID"
+                />
+              </div>
+              
+              <DialogFooter className="mt-4">
+                <Button 
+                  type="submit"
                   disabled={isRobuxButtonSubmitting}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                  type="button"
+                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                 >
                   {isRobuxButtonSubmitting ? 'กำลังแลก...' : '🎫 แลกโค้ด'}
                 </Button>
-              </div>
-            </div>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
-
-        {/* Chicken Account Redemption Popup */}
-        <Dialog open={showChickenRedeemPopup} onOpenChange={(open) => {
-          console.log('Chicken dialog open state changing to:', open);
-          if (!open) {
-            // Reset all states when dialog is closed
-            setChickenRedeemCode('');
-            setIsSubmitting(false);
-            setIsChickenButtonSubmitting(false);
-          }
-          setShowChickenRedeemPopup(open);
-        }}>
-          <DialogContent className="bg-gray-900/95 backdrop-blur-xl border-orange-500/30 text-white max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
-            <DialogHeader>
-              <DialogTitle className="text-center">
-                <div className="flex items-center justify-center space-x-2 mb-4">
-                  <span className="text-4xl">🎉</span>
-                  <div>
-                    <div className="text-2xl font-bold text-orange-400">พบบัญชีเกมแล้ว!</div>
-                    <div className="text-sm text-orange-300">
-                      {validatedChickenAccount?.product_name}
-                    </div>
-                  </div>
-                </div>
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                <div className="text-center mb-4">
-                  <p className="text-orange-200 text-sm mb-2">
-                    <strong>โค้ด:</strong> {validatedChickenAccount?.code}
-                  </p>
-                  <p className="text-orange-200 text-sm">
-                    <strong>ประเภทบัญชี:</strong> {validatedChickenAccount?.product_name}
-                  </p>
-                </div>
-                
-                <div className="bg-white/10 rounded-lg p-4 space-y-3">
-                  <div className="text-center">
-                    <p className="text-white text-lg font-bold mb-3">ข้อมูลบัญชีของคุณ</p>
-                  </div>
-                  
-                  <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-green-200 text-sm">ชื่อผู้ใช้:</span>
-                      <span className="text-white font-mono font-bold">{validatedChickenAccount?.username}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-green-200 text-sm">รหัสผ่าน:</span>
-                      <span className="text-white font-mono font-bold">{validatedChickenAccount?.password}</span>
-                    </div>
-                  </div>
-                  
-                  {validatedChickenAccount?.notes && (
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                      <p className="text-blue-200 text-sm mb-1">หมายเหตุ:</p>
-                      <p className="text-white text-sm">{validatedChickenAccount.notes}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-red-500/30 border-2 border-red-500 rounded-lg p-4 mb-3">
-                <p className="text-white text-base font-bold text-center mb-2">
-                  ⚠️ คำเตือนสำคัญมาก ⚠️
-                </p>
-                <p className="text-white text-sm text-center">
-                  <span className="bg-red-500 px-2 py-1 rounded font-bold block mb-2">กรุณาถ่ายภาพหน้าจอหรือจดบันทึกข้อมูลบัญชีทันที!</span> 
-                  โค้ดถูกใช้งานแล้วและคุณจะไม่สามารถกลับมาดูข้อมูลนี้ได้อีก
-                  <br/>หากปิดหน้านี้โดยไม่บันทึกข้อมูล คุณจะสูญเสียบัญชีนี้ตลอดไป
-                </p>
-              </div>
-
-              <div className="flex space-x-3">
-                <DialogClose asChild>
-                  <Button
-                    variant="outline"
-                    className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                  >
-                    ปิด
-                  </Button>
-                </DialogClose>
-                <Button
-                  onClick={() => {
-                    completeChickenRedemption();
-                  }}
-                  disabled={isChickenButtonSubmitting}
-                  className="flex-1 bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
-                >
-                  {isChickenButtonSubmitting ? 'กำลังปิด...' : '🐔 ปิดหน้าต่าง'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Available Items Display */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-          {/* Available Robux Codes */}
-          <Card className="bg-white/5 backdrop-blur-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center space-x-2">
-                <span className="text-2xl">💎</span>
-                <span>โค้ด Robux ที่มี</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {availableCodes.map(code => (
-                  <div key={code.id} className="flex justify-between items-center p-3 bg-white/10 rounded-lg">
-                    <span className="text-white font-medium">{code.robux_value} Robux</span>
-                    <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
-                      มีอยู่
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Available Chicken Accounts */}
-          <Card className="bg-white/5 backdrop-blur-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white flex items-center space-x-2">
-                <span className="text-2xl">🐔</span>
-                <span>บัญชีไก่ตันที่มี</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {Array.from(new Set(availableAccounts.map(acc => acc.product_name))).map(product => {
-                  const count = availableAccounts.filter(acc => acc.product_name === product).length;
-                  return (
-                    <div key={product} className="flex justify-between items-center p-3 bg-white/10 rounded-lg">
-                      <span className="text-white font-medium">{product}</span>
-                      <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30">
-                        {count} บัญชี
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

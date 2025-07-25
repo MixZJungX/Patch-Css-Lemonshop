@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
 
+
 // Configure QueryClient with error handling
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/status" element={<Status />} />
               <Route path="/login" element={<Login />} />
               <Route path="/old" element={<Index />} />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Trash, Plus, FileUp, Edit, Check, X } from "lucide-react";
+import { AlertCircle, Trash, Plus, FileUp, Edit, Check, X, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { ChickenAccount } from "@/types";
 import {
@@ -39,6 +39,7 @@ export function ChickenAccountsManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   
   // Single account form
   const [newCode, setNewCode] = useState("");
@@ -227,7 +228,11 @@ export function ChickenAccountsManager() {
       fetchChickenAccounts();
     } catch (error) {
       console.error("Error adding chicken account:", error);
-      setError("ไม่สามารถเพิ่มบัญชีไก่ตันได้");
+      if (error instanceof Error) {
+        setError(`เกิดข้อผิดพลาดในการเพิ่มบัญชี: ${error.message}`);
+      } else {
+        setError("ไม่สามารถเพิ่มบัญชีไก่ตันได้");
+      }
     } finally {
       setIsAddingAccount(false);
     }
@@ -439,6 +444,20 @@ export function ChickenAccountsManager() {
     }
   };
 
+  // Filter accounts based on search term
+  const filteredAccounts = accounts.filter(account => {
+    if (!searchTerm) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      account.username.toLowerCase().includes(searchLower) ||
+      account.password.toLowerCase().includes(searchLower) ||
+      (account.code && account.code.toLowerCase().includes(searchLower)) ||
+      (account.status && account.status.toLowerCase().includes(searchLower)) ||
+      (account.product_name && account.product_name.toLowerCase().includes(searchLower))
+    );
+  });
+
   return (
     <div className="space-y-6">
       <Card>
@@ -473,6 +492,28 @@ export function ChickenAccountsManager() {
               <div className="text-2xl font-bold text-gray-600">{usedAccounts}</div>
               <div className="text-sm text-gray-500">บัญชีที่ใช้ไปแล้ว</div>
             </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="ค้นหาบัญชีไก่ตัน (ชื่อผู้ใช้, รหัสผ่าน, โค้ด, สถานะ, หรือชื่อสินค้า)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {searchTerm && (
+              <Button
+                onClick={() => setSearchTerm('')}
+                variant="outline"
+                size="sm"
+              >
+                ล้างการค้นหา
+              </Button>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -603,14 +644,14 @@ export function ChickenAccountsManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {accounts.length === 0 ? (
+                  {filteredAccounts.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center">
-                        ไม่พบข้อมูลบัญชี
+                        {searchTerm ? `ไม่พบบัญชีที่ค้นหา "${searchTerm}"` : 'ไม่พบข้อมูลบัญชี'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    accounts.map((account) => (
+                    filteredAccounts.map((account) => (
                       <TableRow key={account.id}>
                         <TableCell className="font-mono font-medium">{account.code}</TableCell>
                         <TableCell>
