@@ -731,6 +731,82 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
+        {/* Chicken Account Redemption Dialog */}
+        <Dialog open={showChickenRedeemPopup} onOpenChange={setShowChickenRedeemPopup}>
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
+            <DialogHeader>
+              <DialogTitle className="text-orange-600 text-xl">🐔 บัญชีไก่ตันของคุณ</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                ข้อมูลบัญชีเกมไก่ตันที่คุณแลกรับ
+              </DialogDescription>
+            </DialogHeader>
+            
+            {validatedChickenAccount && (
+              <div className="space-y-4">
+                <div className="p-4 border rounded-lg bg-orange-50">
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
+                      <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                        {validatedChickenAccount.username || validatedChickenAccount.account_username || 'ไม่มีข้อมูล'}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
+                      <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                        {validatedChickenAccount.password || validatedChickenAccount.account_password || 'ไม่มีข้อมูล'}
+                      </div>
+                    </div>
+                    {(validatedChickenAccount.email || validatedChickenAccount.account_email) && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">อีเมล:</Label>
+                        <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                          {validatedChickenAccount.email || validatedChickenAccount.account_email}
+                        </div>
+                      </div>
+                    )}
+                    {(validatedChickenAccount.level || validatedChickenAccount.account_level) && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">เลเวล:</Label>
+                        <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                          {validatedChickenAccount.level || validatedChickenAccount.account_level}
+                        </div>
+                      </div>
+                    )}
+                    {(validatedChickenAccount.description || validatedChickenAccount.notes) && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">รายละเอียด:</Label>
+                        <div className="bg-white p-2 rounded border text-sm mt-1">
+                          {validatedChickenAccount.description || validatedChickenAccount.notes}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-yellow-800 text-xs">
+                    <strong>⚠️ คำเตือน:</strong> กรุณาเก็บข้อมูลบัญชีนี้ไว้อย่างปลอดภัย และเปลี่ยนรหัสผ่านหลังจากเข้าสู่ระบบครั้งแรก
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter className="mt-4">
+              <Button 
+                onClick={() => {
+                  setShowChickenRedeemPopup(false);
+                  setValidatedChickenAccount(null);
+                  setChickenRedeemCode('');
+                }} 
+                className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
+              >
+                🐔 เสร็จสิ้น
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Robux Redemption Dialog */}
         <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
           <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
