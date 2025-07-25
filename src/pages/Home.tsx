@@ -351,17 +351,25 @@ export default function Home() {
     const toastId = toast.loading('กำลังตรวจสอบโค้ด...');
 
     try {
+      // Allow unlimited usage - find account regardless of status
       const foundAccount = availableAccounts.find(account => 
-        (account.code || account.redeem_code).toLowerCase() === chickenRedeemCode.toLowerCase() && 
-        account.status === 'available'
-      );
+        (account.code || account.redeem_code).toLowerCase() === chickenRedeemCode.toLowerCase()
+      ) || 
+      // Also check used accounts to allow re-entry
+      await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .select('*')
+        .ilike('code', chickenRedeemCode)
+        .single()
+        .then(result => result.data)
+        .catch(() => null);
 
       if (!foundAccount) {
-        toast.error("โค้ดไม่ถูกต้องหรือถูกใช้ไปแล้ว", { id: toastId });
+        toast.error("โค้ดไม่ถูกต้องหรือไม่พบ", { id: toastId });
         return;
       }
 
-      // Update account status to 'used' in Supabase
+      // Update account status to 'used' in Supabase (for admin tracking only)
       const { error: updateError } = await supabase
         .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
         .update({ 
@@ -387,8 +395,7 @@ export default function Home() {
       setShowChickenRedeemPopup(true);
       toast.success("โค้ดถูกต้อง! แสดงข้อมูลบัญชี", { id: toastId });
 
-      // Refresh available accounts after marking as used
-      loadAvailableItems();
+      // Don't refresh available accounts - let customer reuse code multiple times
 
     } catch (error) {
       console.error('Error validating chicken code:', error);
