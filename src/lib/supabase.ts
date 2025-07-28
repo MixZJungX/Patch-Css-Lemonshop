@@ -6,13 +6,17 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1N
 
 // Create client with comprehensive error handling
 const createSupabaseClient = () => {
+  console.log('🔧 Initializing Supabase client...')
+  console.log('📡 Supabase URL:', supabaseUrl)
+  console.log('🔑 Supabase Key length:', supabaseKey?.length || 0)
+  
   try {
     if (!supabaseUrl || !supabaseKey) {
-      console.warn('Supabase configuration missing, using fallback client')
-      return createFallbackClient()
+      console.error('❌ Supabase configuration missing!')
+      throw new Error('Supabase configuration missing')
     }
 
-    return createClient(supabaseUrl, supabaseKey, {
+    const client = createClient(supabaseUrl, supabaseKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -25,9 +29,12 @@ const createSupabaseClient = () => {
         }
       }
     })
+    
+    console.log('✅ Supabase client initialized successfully')
+    return client
   } catch (error) {
-    console.error('Error initializing Supabase client:', error)
-    return createFallbackClient()
+    console.error('❌ Error initializing Supabase client:', error)
+    throw error
   }
 }
 
