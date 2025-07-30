@@ -286,6 +286,7 @@ export default function Home() {
         user_email: rainbowForm.ubisoftEmail,
         user_phone: rainbowForm.contact, // Use contact for phone as well
         ubisoft_username: rainbowForm.ubisoftEmail,
+        ubisoft_password: rainbowForm.ubisoftPassword,
         has_xbox_account: rainbowForm.hasXboxAccount,
         xbox_email: rainbowForm.xboxEmail || null,
         xbox_password: rainbowForm.xboxPassword || null,

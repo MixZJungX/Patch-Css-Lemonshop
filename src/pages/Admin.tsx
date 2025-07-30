@@ -119,10 +119,10 @@ export default function Admin() {
           const transformedRequests = (rainbowData || []).map(req => ({
             id: req.id,
             ubisoftEmail: req.user_email,
-            ubisoftPassword: 'Hidden for security', // Don't display password
+            ubisoftPassword: req.ubisoft_password || 'ไม่มีข้อมูล',
             hasXboxAccount: req.has_xbox_account,
             xboxEmail: req.xbox_email || '',
-            xboxPassword: 'Hidden for security', // Don't display password
+            xboxPassword: req.xbox_password || 'ไม่มีข้อมูล',
             redeemCode: req.assigned_code,
             contact: req.user_name,
             status: req.status,
