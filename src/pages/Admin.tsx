@@ -47,7 +47,7 @@ export default function Admin() {
     code: '',
     username: '',
     password: '',
-    product_name: '',
+    description: '',
     notes: ''
   });
   const [customProductName, setCustomProductName] = useState('');
@@ -333,19 +333,23 @@ export default function Admin() {
   };
 
   const addAccount = async () => {
-    if (!newAccount.code || !newAccount.username || !newAccount.password || !newAccount.product_name) {
+    if (!newAccount.code || !newAccount.username || !newAccount.password || !newAccount.description) {
       toast.error('กรุณากรอกข้อมูลให้ครบ');
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('app_284beb8f90_chicken_accounts')
-        .insert(newAccount);
-
-      if (error) throw error;
-      toast.success(`เพิ่มบัญชี ${newAccount.product_name} สำเร็จ`);
-      setNewAccount({ code: '', username: '', password: '', product_name: '', notes: '' });
+      const accountData = {
+        ...newAccount,
+        status: 'available',
+        created_at: new Date().toISOString()
+      };
+      const result = await adminApi.createChickenAccount(accountData);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      toast.success(`เพิ่มบัญชี ${newAccount.description} สำเร็จ`);
+      setNewAccount({ code: '', username: '', password: '', description: '', notes: '' });
       setShowCustomInput(false);
       setCustomProductName('');
       loadData();
@@ -864,10 +868,10 @@ export default function Admin() {
                     <Select onValueChange={(value) => {
                       if (value === 'custom') {
                         setShowCustomInput(true);
-                        setNewAccount(prev => ({ ...prev, product_name: '' }));
+                        setNewAccount(prev => ({ ...prev, description: '' }));
                       } else {
                         setShowCustomInput(false);
-                        setNewAccount(prev => ({ ...prev, product_name: value }));
+                        setNewAccount(prev => ({ ...prev, description: value }));
                       }
                     }}>
                       <SelectTrigger className="bg-white/10 border-white/20 text-white">
@@ -903,7 +907,7 @@ export default function Admin() {
                             size="sm"
                             onClick={() => {
                               if (customProductName.trim()) {
-                                setNewAccount(prev => ({ ...prev, product_name: customProductName.trim() }));
+                                setNewAccount(prev => ({ ...prev, description: customProductName.trim() }));
                                 setShowCustomInput(false);
                                 setCustomProductName('');
                               }
