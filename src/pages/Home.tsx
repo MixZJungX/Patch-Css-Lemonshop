@@ -27,6 +27,8 @@ export default function Home() {
   const [showRainbowRedeemPopup, setShowRainbowRedeemPopup] = useState(false);
   const [isRainbowButtonSubmitting, setIsRainbowButtonSubmitting] = useState(false);
   const [rainbowGameInfo, setRainbowGameInfo] = useState<{ code: string } | null>(null);
+  const [availableRainbowCodes, setAvailableRainbowCodes] = useState<RainbowCode[]>([]);
+  const [totalRainbowCredits, setTotalRainbowCredits] = useState(0);
   
   // Chicken account redemption states
   const [chickenRedeemCode, setChickenRedeemCode] = useState('');
@@ -71,17 +73,32 @@ export default function Home() {
     }
   }, [availableAccounts]);
 
+  useEffect(() => {
+    if (availableRainbowCodes.length > 0) {
+      const totalCredits = availableRainbowCodes.reduce((sum, code) => sum + (code.credits || 0), 0);
+      setTotalRainbowCredits(totalCredits);
+    }
+  }, [availableRainbowCodes]);
+
   const loadAvailableItems = async () => {
     try {
+      // Load Robux codes
       const { data: codes, error: codesError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
-        .select('*')
-        .eq('status', 'active');
-      
-      const { data: accounts, error: accountsError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .from('app_284beb8f90_redemption_codes')
         .select('*')
         .eq('status', 'available');
+      
+      // Load Chicken accounts
+      const { data: accounts, error: accountsError } = await supabase
+        .from('app_284beb8f90_chicken_accounts')
+        .select('*')
+        .eq('status', 'available');
+
+      // Load Rainbow Six codes
+      const { data: rainbowCodes, error: rainbowError } = await supabase
+        .from('app_284beb8f90_rainbow_codes')
+        .select('*')
+        .eq('is_used', false);
 
       if (codesError || accountsError) {
         import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
@@ -93,12 +110,22 @@ export default function Home() {
         setAvailableCodes(codes || []);
         setAvailableAccounts(accounts || []);
       }
+
+      // Set Rainbow Six codes (independent of other data)
+      if (rainbowError) {
+        console.warn('Could not load Rainbow Six codes from Supabase:', rainbowError);
+        setAvailableRainbowCodes([]);
+      } else {
+        setAvailableRainbowCodes(rainbowCodes || []);
+        console.log('✅ Loaded Rainbow Six codes from Supabase:', rainbowCodes?.length || 0, 'codes');
+      }
     } catch (error) {
       console.error('Error loading items:', error);
       import('@/lib/mockData').then(({ mockCodes, mockAccounts }) => {
         setAvailableCodes(mockCodes);
         setAvailableAccounts(mockAccounts);
       });
+      setAvailableRainbowCodes([]);
     }
   };
 
@@ -111,17 +138,20 @@ export default function Home() {
     setIsSubmitting(true);
     
     try {
-      const foundCode = availableCodes.find(code => 
-        code.code.toLowerCase() === redeemCode.toLowerCase() && 
-        code.status === 'active'
-      );
+      // Check in Supabase directly for accurate status
+      const { data: codeData, error: codeError } = await supabase
+        .from('app_284beb8f90_redemption_codes')
+        .select('*')
+        .ilike('code', redeemCode.trim())
+        .eq('status', 'available')
+        .single();
 
-      if (!foundCode) {
-        toast.error("โค้ดไม่ถูกต้องหรือหมดอายุแล้ว");
+      if (codeError || !codeData) {
+        toast.error("โค้ดไม่ถูกต้องหรือถูกใช้แล้ว");
         return;
       }
 
-      setValidatedCode(foundCode);
+      setValidatedCode(codeData);
       setShowRedeemPopup(true);
       toast.success("โค้ดถูกต้อง! กรุณากรอกข้อมูลเพื่อรับ Robux");
 
@@ -132,6 +162,7 @@ export default function Home() {
       setIsSubmitting(false);
     }
   };
+
 
   const handleRobuxSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +178,7 @@ export default function Home() {
     try {
       // First, update the code status to 'used' in Supabase
       const { error: updateError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+        .from('app_284beb8f90_redemption_codes')
         .update({ 
           status: 'used',
           used_by: redeemForm.contact,
@@ -161,7 +192,7 @@ export default function Home() {
         return;
       }
 
-      const requestData: RedemptionRequest = {
+      const requestData = {
         id: crypto.randomUUID(),
         code_id: validatedCode!.id,
         roblox_username: redeemForm.username,
@@ -172,34 +203,25 @@ export default function Home() {
         created_at: new Date().toISOString()
       };
 
-      // Try to save redemption request to Supabase
-      console.log('🔄 กำลังบันทึกคำขอ Robux ไปยัง Supabase:', requestData);
-      
-      try {
-        const { data: insertData, error: requestError } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
-          .insert([requestData])
-          .select();
-        
-        if (requestError) {
-          console.error('❌ Supabase บันทึกคำขอไม่สำเร็จ:', requestError);
-          toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
-          return;
-        } else {
-          console.log('✅ บันทึกคำขอใน Supabase สำเร็จ:', insertData);
-        }
-      } catch (error) {
-        console.error('❌ เกิดข้อผิดพลาดในการบันทึกคำขอ:', error);
-        toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง', { id: toastId });
+      // Save the redemption request
+      const { error: saveError } = await supabase
+        .from('app_284beb8f90_redemption_requests')
+        .insert([requestData]);
+
+      if (saveError) {
+        console.error('❌ ไม่สามารถบันทึกคำขอใน Supabase ได้:', saveError);
+        toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
         return;
       }
 
-      toast.success(`🎉 แลกโค้ดสำเร็จ! คุณจะได้รับ ${validatedCode!.robux_value || validatedCode!.robux_amount} Robux ภายใน 24 ชั่วโมง`, { id: toastId });
+      console.log('✅ บันทึกคำขอใน Supabase สำเร็จ:', requestData);
       
-      setRedeemForm({ username: '', password: '', contact: '' });
-      setRedeemCode('');
-      setValidatedCode(null);
       setShowRedeemPopup(false);
+      setValidatedCode(null);
+      setRedeemCode('');
+      setRedeemForm({ username: '', password: '', contact: '' });
+      toast.success('✅ แลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
+      
       loadAvailableItems();
 
     } catch (error) {
@@ -231,14 +253,13 @@ export default function Home() {
       return;
     }
 
-    // Check if the redeem code exists in the database
+    // Check if the redeem code exists in the Rainbow Six codes table
     try {
       const { data: codeCheck, error: codeError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
-        .select('code, product_name, status')
+        .from('app_284beb8f90_rainbow_codes')
+        .select('*')
         .eq('code', rainbowForm.redeemCode)
-        .eq('product_name', 'Rainbow Six Credits')
-        .eq('status', 'available')
+        .eq('is_used', false)
         .single();
 
       if (codeError || !codeCheck) {
@@ -257,31 +278,33 @@ export default function Home() {
       // Simulate sending request to shop
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Create redemption request data
+      // Create redemption request data matching the table schema
       const requestData = {
-        id: crypto.randomUUID(),
-        redeemCode: rainbowForm.redeemCode,
-        ubisoftEmail: rainbowForm.ubisoftEmail,
-        ubisoftPassword: rainbowForm.ubisoftPassword,
-        hasXboxAccount: rainbowForm.hasXboxAccount,
-        xboxEmail: rainbowForm.xboxEmail || '',
-        xboxPassword: rainbowForm.xboxPassword || '',
-        contact: rainbowForm.contact,
+        user_id: crypto.randomUUID(),
+        discord_username: rainbowForm.contact, // Use contact as discord username
+        user_name: rainbowForm.contact, // Use contact as user name
+        user_email: rainbowForm.ubisoftEmail,
+        user_phone: rainbowForm.contact, // Use contact for phone as well
+        ubisoft_username: rainbowForm.ubisoftEmail,
+        has_xbox_account: rainbowForm.hasXboxAccount,
+        xbox_email: rainbowForm.xboxEmail || null,
+        xbox_password: rainbowForm.xboxPassword || null,
+        credits_requested: 1, // Default to 1 credit
         status: 'pending',
         created_at: new Date().toISOString(),
-        type: 'rainbow_six'
+        updated_at: new Date().toISOString(),
+        assigned_code: rainbowForm.redeemCode
       };
 
       // Update Rainbow Six code status to 'used' in Supabase first
       const { error: updateCodeError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+        .from('app_284beb8f90_rainbow_codes')
         .update({ 
-          status: 'used',
-          used_by: rainbowForm.contact,
+          is_used: true,
+          used_by: null, // Set to null since we don't have actual user authentication
           used_at: new Date().toISOString()
         })
-        .eq('code', rainbowForm.redeemCode)
-        .eq('product_name', 'Rainbow Six Credits');
+        .eq('code', rainbowForm.redeemCode);
 
       if (updateCodeError) {
         console.error('❌ ไม่สามารถอัพเดทสถานะโค้ด Rainbow Six ใน Supabase ได้:', updateCodeError);
@@ -291,7 +314,7 @@ export default function Home() {
 
       // Save to Supabase
       const { error: saveError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+        .from('app_284beb8f90_rainbow_requests')
         .insert([requestData]);
       
       if (saveError) {
@@ -301,7 +324,7 @@ export default function Home() {
       }
 
       setShowRainbowRedeemPopup(true);
-      toast.success('ส่งคำขอแลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
+      toast.success('✅ บันทึกคำขอใน Supabase สำเร็จ! ทางแอดมินจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
 
       // Reset form
       setRainbowForm({
@@ -338,7 +361,7 @@ export default function Home() {
       ) || 
       // Also check used accounts to allow re-entry
       await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .from('app_284beb8f90_chicken_accounts')
         .select('*')
         .ilike('code', chickenRedeemCode)
         .single()
@@ -352,7 +375,7 @@ export default function Home() {
 
       // Update account status to 'used' in Supabase (for admin tracking only)
       const { error: updateError } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .from('app_284beb8f90_chicken_accounts')
         .update({ 
           status: 'used',
           used_by: 'anonymous_user',
@@ -414,7 +437,7 @@ export default function Home() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🎮</div>
-              <div className="text-2xl font-bold text-white">{availableCodes.filter(code => code.status === 'active').length}</div>
+              <div className="text-2xl font-bold text-white">{availableCodes.length}</div>
               <div className="text-purple-200 text-sm">Robux Codes</div>
               <div className="text-xs text-white/60 mt-1">{totalRobuxValue.toLocaleString()} R$</div>
             </CardContent>
@@ -431,10 +454,10 @@ export default function Home() {
           
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
             <CardContent className="p-6">
-              <div className="text-4xl mb-2">⚡</div>
-              <div className="text-2xl font-bold text-yellow-400">24/7</div>
-              <div className="text-purple-200 text-sm">Online Service</div>
-              <div className="text-xs text-white/60 mt-1">บริการตลอดเวลา</div>
+              <div className="text-4xl mb-2">🌈</div>
+              <div className="text-2xl font-bold text-white">{availableRainbowCodes.length}</div>
+              <div className="text-purple-200 text-sm">Rainbow Six Codes</div>
+              <div className="text-xs text-white/60 mt-1">{totalRainbowCredits.toLocaleString()} Credits</div>
             </CardContent>
           </Card>
           
@@ -676,20 +699,21 @@ export default function Home() {
         <Dialog open={showRainbowRedeemPopup} onOpenChange={setShowRainbowRedeemPopup}>
           <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
             <DialogHeader>
-              <DialogTitle className="text-blue-600 text-xl">🎮 แลกรับโค้ด Rainbow Six สำเร็จ!</DialogTitle>
+              <DialogTitle className="text-blue-600 text-xl">🎮 ส่งคำขอ Rainbow Six สำเร็จ!</DialogTitle>
               <DialogDescription className="text-gray-600">
-                โค้ดเกมของคุณ
+                คำขอของคุณถูกบันทึกใน Supabase เรียบร้อยแล้ว
               </DialogDescription>
             </DialogHeader>
             
-            {rainbowGameInfo && (
-              <div className="p-4 border rounded-lg bg-gray-50">
-                <p className="text-sm text-gray-500 font-medium">โค้ดเกม Rainbow Six:</p>
-                <div className="bg-white p-3 rounded border font-mono text-lg mt-1 text-center tracking-wider">
-                  {rainbowGameInfo.code}
+            <div className="p-4 border rounded-lg bg-green-50">
+              <div className="text-center space-y-3">
+                <div className="text-6xl">✅</div>
+                <div className="text-green-700">
+                  <p className="font-semibold">คำขอถูกบันทึกออนไลน์แล้ว!</p>
+                  <p className="text-sm mt-2">ข้อมูลถูกส่งไปยัง Supabase Database<br/>แอดมินจะดำเนินการภายใน 24 ชั่วโมง</p>
                 </div>
               </div>
-            )}
+            </div>
             
             <DialogFooter className="mt-4">
               <Button 
@@ -837,3 +861,5 @@ export default function Home() {
     </div>
   );
 }
+
+

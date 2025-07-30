@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { Link } from 'react-router-dom';
@@ -74,35 +75,65 @@ export default function Admin() {
     try {
       // Try to load from Supabase first
       try {
-        const [requestsRes, codesRes, accountsRes] = await Promise.all([
-          supabase.from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts').select('*').order('created_at', { ascending: false })
+        const [requestsRes, codesRes, accountsRes, rainbowCodesRes] = await Promise.all([
+          supabase.from('app_284beb8f90_redemption_requests').select('*').order('created_at', { ascending: false }),
+          supabase.from('app_284beb8f90_redemption_codes').select('*').order('created_at', { ascending: false }),
+          supabase.from('app_284beb8f90_chicken_accounts').select('*').order('created_at', { ascending: false }),
+          supabase.from('app_284beb8f90_rainbow_codes').select('*').order('created_at', { ascending: false })
         ]);
 
         setRequests(requestsRes.data || []);
-        setCodes(codesRes.data || []);
         setAccounts(accountsRes.data || []);
 
-        // Load Rainbow Six requests
+        // Combine Robux codes and Rainbow Six codes
+        let allCodes = [...(codesRes.data || [])];
+        
+        // Transform Rainbow Six codes to match the codes structure
+        if (rainbowCodesRes.data && !rainbowCodesRes.error) {
+          const transformedRainbowCodes = rainbowCodesRes.data.map(code => ({
+            ...code,
+            product_name: 'Rainbow Six Credits',
+            robux_value: code.credits, // Map credits to robux_value for consistency
+            status: code.is_used ? 'used' : 'available'
+          }));
+          allCodes = [...allCodes, ...transformedRainbowCodes];
+          console.log('✅ Loaded Rainbow Six codes from Supabase:', transformedRainbowCodes.length, 'codes');
+        }
+
+        setCodes(allCodes);
+
+        // Load Rainbow Six requests - ONLY from Supabase
         try {
           const { data: rainbowData, error: rainbowError } = await supabase
-            .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+            .from('app_284beb8f90_rainbow_requests')
             .select('*')
             .order('created_at', { ascending: false });
 
           if (rainbowError) {
-          // Fallback to localStorage
-          const localRainbowRequests = JSON.parse(localStorage.getItem('rainbow_requests') || '[]');
-          setRainbowRequests(localRainbowRequests);
-        } else {
-          setRainbowRequests(rainbowData || []);
+            console.error('Error loading Rainbow Six requests:', rainbowError);
+            setRainbowRequests([]);
+            throw rainbowError;
+          }
+
+          // Transform data to match expected format
+          const transformedRequests = (rainbowData || []).map(req => ({
+            id: req.id,
+            ubisoftEmail: req.user_email,
+            ubisoftPassword: 'Hidden for security', // Don't display password
+            hasXboxAccount: req.has_xbox_account,
+            xboxEmail: req.xbox_email || '',
+            xboxPassword: 'Hidden for security', // Don't display password
+            redeemCode: req.assigned_code,
+            contact: req.user_name,
+            status: req.status,
+            created_at: req.created_at
+          }));
+          setRainbowRequests(transformedRequests);
+          console.log('✅ Loaded Rainbow Six requests from Supabase:', transformedRequests.length, 'requests');
+        } catch (error) {
+          console.error('Error loading Rainbow Six requests:', error);
+          setRainbowRequests([]);
         }
-      } catch (error) {
-        // Fallback to localStorage
-        const localRainbowRequests = JSON.parse(localStorage.getItem('rainbow_requests') || '[]');
-        setRainbowRequests(localRainbowRequests);
-      }
       } catch (supabaseError) {
         // Fallback to localStorage for all data
         console.log('Supabase connection failed, using localStorage fallback');
@@ -126,8 +157,14 @@ export default function Admin() {
 
   const updateRequestStatus = async (id: string, status: string, adminNotes?: string) => {
     try {
+      // Check if this is a Rainbow Six request by finding it in the requests array
+      const request = requests.find(req => req.id === id);
+      const tableName = request?.type === 'rainbow' ? 
+        'app_284beb8f90_rainbow_requests' : 
+        'app_284beb8f90_redemption_requests';
+
       const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+        .from(tableName)
         .update({ status, admin_notes: adminNotes, updated_at: new Date().toISOString() })
         .eq('id', id);
 
@@ -141,24 +178,28 @@ export default function Admin() {
 
   const updateRainbowRequestStatus = async (id: string, status: string) => {
     try {
-      // Try to update in Supabase first
+      console.log('🔄 Updating Rainbow Six request:', id, 'to status:', status);
+      
+      // Try to update in Supabase first - use correct table name
       const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+        .from('app_284beb8f90_rainbow_requests')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (error) {
-        // Fallback to localStorage
-        const localRequests = JSON.parse(localStorage.getItem('rainbow_requests') || '[]');
-        const updatedRequests = localRequests.map((req: { id: string; status: string; [key: string]: unknown }) => 
-          req.id === id ? { ...req, status, updated_at: new Date().toISOString() } : req
-        );
-        localStorage.setItem('rainbow_requests', JSON.stringify(updatedRequests));
+        console.error('❌ Supabase update failed:', error);
+        throw error;
       }
+      
+      console.log('✅ Successfully updated Rainbow Six request in Supabase');
 
       toast.success('อัพเดทสถานะ Rainbow Six สำเร็จ');
-      loadData();
+      
+      // Force reload the data
+      console.log('🔄 Reloading all data after status update...');
+      await loadData();
     } catch (error) {
+      console.error('❌ Error updating Rainbow Six status:', error);
       toast.error('เกิดข้อผิดพลาดในการอัพเดท');
     }
   };
@@ -169,9 +210,9 @@ export default function Admin() {
     }
 
     try {
-      // Try to delete from Supabase first
+      // Try to delete from Supabase first - use correct table name
       const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_rainbow_requests')
+        .from('app_284beb8f90_rainbow_requests')
         .delete()
         .eq('id', id);
 
@@ -206,12 +247,12 @@ export default function Admin() {
     setIsAddingRainbowCode(true);
     try {
       const { data, error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+        .from('app_284beb8f90_rainbow_codes')
         .insert({
           code: newRainbowCode.code.trim().toUpperCase(),
-          robux_value: creditsValue,
-          product_name: 'Rainbow Six Credits',
-          status: 'available'
+          credits: creditsValue,
+          is_used: false,
+          created_at: new Date().toISOString()
         })
         .select();
 
@@ -273,14 +314,16 @@ export default function Admin() {
     }
 
     try {
-      const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
-        .insert({
-          code: newCode.code,
-          robux_value: parseInt(newCode.robux_value)
-        });
+      const { data, error } = await adminApi.createRedemptionCode({
+        id: crypto.randomUUID(),
+        code: newCode.code,
+        robux_value: parseInt(newCode.robux_value),
+        robux_amount: parseInt(newCode.robux_value),
+        status: 'available',
+        created_at: new Date().toISOString()
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error);
       toast.success('เพิ่มโค้ดสำเร็จ');
       setNewCode({ code: '', robux_value: '' });
       loadData();
@@ -297,7 +340,7 @@ export default function Admin() {
 
     try {
       const { error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+        .from('app_284beb8f90_chicken_accounts')
         .insert(newAccount);
 
       if (error) throw error;
@@ -313,12 +356,25 @@ export default function Admin() {
 
   const deleteItem = async (table: string, id: string) => {
     try {
-      const { error } = await supabase.from(table).delete().eq('id', id);
-      if (error) throw error;
+      let result;
+      
+      // Use specific delete functions based on table
+      if (table === 'app_284beb8f90_redemption_codes') {
+        result = await adminApi.deleteRedemptionCode(id);
+      } else if (table === 'app_284beb8f90_chicken_accounts') {
+        result = await adminApi.deleteChickenAccount(id);
+      } else if (table === 'app_284beb8f90_rainbow_codes') {
+        result = await adminApi.deleteRainbowCode(id);
+      } else {
+        throw new Error('ไม่รู้จักตารางนี้');
+      }
+      
+      if (result.error) throw new Error(result.error);
       toast.success('ลบสำเร็จ');
       loadData();
     } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการลบ');
+      console.error('Delete error:', error);
+      toast.error('เกิดข้อผิดพลาดในการลบ: ' + (error instanceof Error ? error.message : 'ไม่ทราบสาเหตุ'));
     }
   };
 
@@ -351,7 +407,7 @@ export default function Admin() {
         });
 
         const { error } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes')
+          .from('app_284beb8f90_redemption_codes')
           .insert(codeData);
 
         if (error) throw error;
@@ -375,7 +431,7 @@ export default function Admin() {
         });
 
         const { error } = await supabase
-          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts')
+          .from('app_284beb8f90_chicken_accounts')
           .insert(accountData);
 
         if (error) throw error;
@@ -462,7 +518,7 @@ export default function Admin() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
             <CardContent className="p-4 text-center">
               <div className="text-2xl mb-1">💎</div>
-              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'active').length}</div>
+              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'available').length}</div>
               <div className="text-xs text-purple-200">โค้ดพร้อมใช้</div>
             </CardContent>
           </Card>
@@ -736,8 +792,8 @@ export default function Admin() {
                           <TableCell className="text-white font-mono">{code.code}</TableCell>
                           <TableCell className="text-white">{code.robux_value}</TableCell>
                           <TableCell>
-                            <Badge className={code.status === 'active' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
-                              {code.status === 'active' ? 'ใช้ได้' : 'ใช้แล้ว'}
+                            <Badge className={code.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                              {code.status === 'available' ? 'ใช้ได้' : 'ใช้แล้ว'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-white text-xs">
@@ -746,7 +802,7 @@ export default function Admin() {
                           <TableCell>
                             <Button
                               size="sm"
-                              onClick={() => deleteItem('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes', code.id)}
+                              onClick={() => deleteItem('app_284beb8f90_redemption_codes', code.id)}
                               className="bg-red-500/20 text-red-300 hover:bg-red-500/30"
                             >
                               ลบ
@@ -950,7 +1006,7 @@ export default function Admin() {
                           <TableCell>
                             <Button
                               size="sm"
-                              onClick={() => deleteItem('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts', account.id)}
+                              onClick={() => deleteItem('app_284beb8f90_chicken_accounts', account.id)}
                               className="bg-red-500/20 text-red-300 hover:bg-red-500/30"
                             >
                               ลบ
@@ -1195,7 +1251,7 @@ export default function Admin() {
                         <TableCell>
                           <Button
                             size="sm"
-                            onClick={() => deleteItem('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_codes', code.id)}
+                            onClick={() => deleteItem('app_284beb8f90_rainbow_codes', code.id)}
                             className="bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30"
                           >
                             🗑️ ลบ
