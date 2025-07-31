@@ -54,14 +54,101 @@ export default function Admin() {
   });
   const [customProductName, setCustomProductName] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [showBulkImportDialog, setShowBulkImportDialog] = useState(false);
+  const [bulkImportData, setBulkImportData] = useState('');
   const [bulkImportType, setBulkImportType] = useState<'codes' | 'accounts'>('codes');
-  const [bulkImportText, setBulkImportText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBulkImportDialog, setShowBulkImportDialog] = useState(false);
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const processBulkImport = async () => {
+    if (!bulkImportData.trim()) {
+      toast.error('กรุณากรอกข้อมูลที่ต้องการนำเข้า');
+      return;
+    }
+
+    setIsProcessingBulk(true);
+    
+    try {
+      const lines = bulkImportData.trim().split('\n');
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        if (bulkImportType === 'codes') {
+          // Process Robux codes: code,robux_value
+          const [code, robuxValue] = trimmedLine.split(',').map(s => s.trim());
+          
+          if (!code || !robuxValue) {
+            errorCount++;
+            continue;
+          }
+
+          const { error } = await supabase
+            .from('app_284beb8f90_redemption_codes')
+            .insert([{
+              code: code.toUpperCase(),
+              robux_value: parseInt(robuxValue),
+              status: 'available',
+              created_at: new Date().toISOString()
+            }]);
+
+          if (error) {
+            errorCount++;
+            console.error('Error importing code:', code, error);
+          } else {
+            successCount++;
+          }
+        } else {
+          // Process chicken accounts: code,type,username,password,notes
+          const parts = trimmedLine.split(',').map(s => s.trim());
+          const [code, productType, username, password, notes = ''] = parts;
+          
+          if (!code || !productType || !username || !password) {
+            errorCount++;
+            continue;
+          }
+
+          const { error } = await adminApi.createChickenAccounts([{
+            code: code.toUpperCase(),
+            product_type: productType,
+            username: username,
+            password: password,
+            notes: notes,
+            status: 'available',
+            created_at: new Date().toISOString()
+          }]);
+
+          if (error) {
+            errorCount++;
+            console.error('Error importing account:', code, error);
+          } else {
+            successCount++;
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`นำเข้าข้อมูลสำเร็จ ${successCount} รายการ${errorCount > 0 ? `, ไม่สำเร็จ ${errorCount} รายการ` : ''}`);
+        setBulkImportData('');
+        setShowBulkImportDialog(false);
+        loadData(); // Reload data
+      } else {
+        toast.error(`ไม่สามารถนำเข้าข้อมูลได้ (${errorCount} รายการล้มเหลว)`);
+      }
+    } catch (error) {
+      console.error('Bulk import error:', error);
+      toast.error('เกิดข้อผิดพลาดในการนำเข้าข้อมูล');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
   
   // Filter requests based on activeRequestFilter
   useEffect(() => {
@@ -180,6 +267,38 @@ export default function Admin() {
     }
   };
 
+  const deleteRequest = async (id: string) => {
+    if (!confirm('คุณแน่ใจหรือไม่ที่ต้องการลบคำขอนี้? การดำเนินการนี้ไม่สามารถยกเลิกได้')) {
+      return;
+    }
+
+    try {
+      // Check if this is a Rainbow Six request by finding it in the requests array
+      const request = requests.find(req => req.id === id);
+      const tableName = request?.type === 'rainbow' ? 
+        'app_284beb8f90_rainbow_requests' : 
+        'app_284beb8f90_redemption_requests';
+
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('ลบคำขอสำเร็จ');
+      
+      // Force immediate UI update by filtering out the deleted item
+      setRequests(prevRequests => prevRequests.filter(req => req.id !== id));
+      setRainbowRequests(prevRequests => prevRequests.filter(req => req.id !== id));
+      
+      // Don't reload data to prevent bounce-back effect
+      console.log('✅ UI updated, NOT calling loadData() to prevent bounce-back');
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('เกิดข้อผิดพลาดในการลบคำขอ');
+    }
+  };
+
   const updateRainbowRequestStatus = async (id: string, status: string) => {
     try {
       console.log('🔄 Updating Rainbow Six request:', id, 'to status:', status);
@@ -215,10 +334,13 @@ export default function Admin() {
 
     try {
       // Try to delete from Supabase first - use correct table name
-      const { error } = await supabase
+      console.log('🗑️ Attempting to delete Rainbow Six request from database, ID:', id);
+      
+      const { data, error } = await supabase
         .from('app_284beb8f90_rainbow_requests')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select(); // Add select() to see what was actually deleted
 
       if (error) {
         // Fallback to localStorage
@@ -227,8 +349,19 @@ export default function Admin() {
         localStorage.setItem('rainbow_requests', JSON.stringify(filteredRequests));
       }
 
-      toast.success('ลบคำขอ Rainbow Six สำเร็จ');
-      loadData();
+      console.log('🗑️ Delete result:', { error });
+
+      if (error) {
+        console.error('❌ Database delete failed:', error);
+        toast.success('ลบคำขอ Rainbow Six สำเร็จ (บันทึกในเครื่อง)');
+      } else {
+        console.log('✅ Successfully deleted from database');
+        toast.success('ลบคำขอ Rainbow Six สำเร็จ');
+      }
+
+      // Update UI immediately without calling loadData()
+      setRainbowRequests(prevRequests => prevRequests.filter(req => req.id !== id));
+      console.log('✅ UI updated, request removed from display');
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการลบ');
     }
@@ -344,7 +477,11 @@ export default function Admin() {
 
     try {
       const accountData = {
-        ...newAccount,
+        code: newAccount.code,
+        username: newAccount.username,
+        password: newAccount.password,
+        product_type: newAccount.description, // Map description to product_type
+        notes: newAccount.notes,
         status: 'available',
         created_at: new Date().toISOString()
       };
@@ -362,7 +499,7 @@ export default function Admin() {
     }
   };
 
-  const deleteItem = async (table: string, id: string) => {
+  const deleteItemFromTable = async (table: string, id: string) => {
     try {
       let result;
       
@@ -387,18 +524,18 @@ export default function Admin() {
   };
 
   const handleBulkImport = async () => {
-    if (!bulkImportText.trim()) {
+    if (!bulkImportData.trim()) {
       toast.error('กรุณาใส่ข้อมูลที่ต้องการนำเข้า');
       return;
     }
 
-    const lines = bulkImportText.trim().split('\n').filter(line => line.trim());
+    const lines = bulkImportData.trim().split('\n').filter(line => line.trim());
     if (lines.length === 0) {
       toast.error('ไม่พบข้อมูลที่ถูกต้อง');
       return;
     }
 
-    setIsLoading(true);
+    setIsProcessingBulk(true);
     try {
       if (bulkImportType === 'codes') {
         // Format: CODE,ROBUX_VALUE
@@ -410,13 +547,13 @@ export default function Admin() {
           return {
             code: code.toUpperCase(),
             robux_value: parseInt(robuxValue),
-            status: 'active'
+            robux_amount: parseInt(robuxValue),
+            status: 'available',
+            created_at: new Date().toISOString()
           };
         });
 
-        const { error } = await supabase
-          .from('app_284beb8f90_redemption_codes')
-          .insert(codeData);
+        const { error } = await adminApi.createRedemptionCodes(codeData);
 
         if (error) throw error;
         toast.success(`เพิ่มโค้ด Robux จำนวน ${codeData.length} รายการสำเร็จ!`);
@@ -430,7 +567,7 @@ export default function Admin() {
           const [code, productName, username, password, notes = ''] = parts;
           return {
             code: code.toUpperCase(),
-            product_name: productName,
+            product_type: productName,
             username,
             password,
             notes,
@@ -438,22 +575,20 @@ export default function Admin() {
           };
         });
 
-        const { error } = await supabase
-          .from('app_284beb8f90_chicken_accounts')
-          .insert(accountData);
+        const { error } = await adminApi.createChickenAccounts(accountData);
 
         if (error) throw error;
         toast.success(`เพิ่มบัญชีไก่ตัน จำนวน ${accountData.length} รายการสำเร็จ!`);
       }
 
-      setBulkImportText('');
+      setBulkImportData('');
       setShowBulkImportDialog(false);
       loadData();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการนำเข้าข้อมูล';
       toast.error(errorMessage);
     } finally {
-      setIsLoading(false);
+      setIsProcessingBulk(false);
     }
   };
 
@@ -723,6 +858,13 @@ export default function Admin() {
                               >
                                 ยกเลิก
                               </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => deleteRequest(request.id)}
+                                className="bg-gray-600/20 text-gray-300 hover:bg-gray-600/30 text-xs"
+                              >
+                                ลบ
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -810,7 +952,7 @@ export default function Admin() {
                           <TableCell>
                             <Button
                               size="sm"
-                              onClick={() => deleteItem('app_284beb8f90_redemption_codes', code.id)}
+                              onClick={() => deleteItemFromTable('app_284beb8f90_redemption_codes', code.id)}
                               className="bg-red-500/20 text-red-300 hover:bg-red-500/30"
                             >
                               ลบ
@@ -883,7 +1025,7 @@ export default function Admin() {
                       </SelectTrigger>
                       <SelectContent className="bg-gray-900 border-gray-700">
                         {/* Existing types from database */}
-                        {Array.from(new Set(accounts.map(acc => acc.product_name))).map(product => (
+                        {Array.from(new Set(accounts.map(acc => acc.product_type))).map(product => (
                           <SelectItem key={product} value={product}>{product}</SelectItem>
                         ))}
                         {/* Default types */}
@@ -997,7 +1139,7 @@ export default function Admin() {
                           account.code.toLowerCase().includes(searchLower) ||
                           account.username.toLowerCase().includes(searchLower) ||
                           account.password.toLowerCase().includes(searchLower) ||
-                          (account.product_name && account.product_name.toLowerCase().includes(searchLower)) ||
+                          (account.product_type && account.product_type.toLowerCase().includes(searchLower)) ||
                           account.status.toLowerCase().includes(searchLower)
                         );
                       }).map(account => (
@@ -1005,7 +1147,7 @@ export default function Admin() {
                           <TableCell className="text-white font-mono text-xs">{account.code}</TableCell>
                           <TableCell className="text-white">{account.username}</TableCell>
                           <TableCell className="text-white font-mono text-xs">{account.password}</TableCell>
-                          <TableCell className="text-white">{account.product_name}</TableCell>
+                          <TableCell className="text-white">{account.product_type || 'ไม่มีข้อมูล'}</TableCell>
                           <TableCell>
                             <Badge className={account.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
                               {account.status === 'available' ? 'พร้อมใช้' : 'ใช้แล้ว'}
@@ -1014,7 +1156,7 @@ export default function Admin() {
                           <TableCell>
                             <Button
                               size="sm"
-                              onClick={() => deleteItem('app_284beb8f90_chicken_accounts', account.id)}
+                              onClick={() => deleteItemFromTable('app_284beb8f90_chicken_accounts', account.id)}
                               className="bg-red-500/20 text-red-300 hover:bg-red-500/30"
                             >
                               ลบ
@@ -1271,7 +1413,7 @@ export default function Admin() {
                         <TableCell>
                           <Button
                             size="sm"
-                            onClick={() => deleteItem('app_284beb8f90_rainbow_codes', code.id)}
+                            onClick={() => deleteItemFromTable('app_284beb8f90_rainbow_codes', code.id)}
                             className="bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30"
                           >
                             🗑️ ลบ
@@ -1374,8 +1516,8 @@ export default function Admin() {
                   ข้อมูลที่ต้องการนำเข้า (แต่ละบรรทัดคือรายการเดียว)
                 </label>
                 <Textarea
-                  value={bulkImportText}
-                  onChange={(e) => setBulkImportText(e.target.value)}
+                  value={bulkImportData}
+                  onChange={(e) => setBulkImportData(e.target.value)}
                   placeholder={bulkImportType === 'codes' 
                     ? "ROBUX100,100\nROBUX200,200\nROBUX500,500" 
                     : "CHICKEN01,Bone Blossom,user123,pass123,Premium Account\nCHICKEN02,Butterfly,user456,pass456,\nCHICKEN03,Royal Wings,user789,pass789,VIP Account"
@@ -1405,10 +1547,10 @@ export default function Admin() {
                 </Button>
                 <Button
                   onClick={handleBulkImport}
-                  disabled={isLoading || !bulkImportText.trim()}
+                  disabled={isProcessingBulk || !bulkImportData.trim()}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 >
-                  {isLoading ? 'กำลังนำเข้า...' : `📥 นำเข้าข้อมูล`}
+                  {isProcessingBulk ? 'กำลังนำเข้า...' : `📥 นำเข้าข้อมูล`}
                 </Button>
               </div>
             </div>

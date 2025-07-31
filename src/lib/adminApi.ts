@@ -49,6 +49,13 @@ export const adminApi = {
       data: codeData
     }),
 
+  createRedemptionCodes: (codesData: any[]) =>
+    executeAdminOperation({
+      operation: 'insert',
+      table: 'app_284beb8f90_redemption_codes',
+      data: codesData
+    }),
+
   updateRedemptionCode: (id: string, data: any) =>
     executeAdminOperation({
       operation: 'update',
@@ -70,6 +77,13 @@ export const adminApi = {
       operation: 'insert',
       table: 'app_284beb8f90_chicken_accounts',
       data: accountData
+    }),
+
+  createChickenAccounts: (accountsData: any[]) =>
+    executeAdminOperation({
+      operation: 'insert',
+      table: 'app_284beb8f90_chicken_accounts',
+      data: accountsData
     }),
 
   updateChickenAccount: (id: string, data: any) =>
