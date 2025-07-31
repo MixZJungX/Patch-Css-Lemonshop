@@ -34,7 +34,9 @@ export default function Admin() {
     xboxPassword: string;
     redeemCode: string;
     contact: string;
+    phoneNumber: string;
     status: string;
+    credits: number;
     created_at: string;
   }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +127,9 @@ export default function Admin() {
             xboxPassword: req.xbox_password || 'ไม่มีข้อมูล',
             redeemCode: req.assigned_code,
             contact: req.user_name,
+            phoneNumber: req.user_phone || 'ไม่มีข้อมูล',
             status: req.status,
+            credits: req.credits_requested || 1200,
             created_at: req.created_at
           }));
           setRainbowRequests(transformedRequests);
@@ -1059,8 +1063,20 @@ export default function Admin() {
                           </p>
                         </div>
                         <div>
+                          <p className="text-white/60 text-sm">จำนวน R6 Credits</p>
+                          <p className="text-yellow-400 font-bold text-lg">
+                            {request.credits?.toLocaleString()} Credits
+                          </p>
+                        </div>
+                        <div>
                           <p className="text-white/60 text-sm">ข้อมูลติดต่อ</p>
                           <p className="text-white font-medium">{request.contact}</p>
+                        </div>
+                        <div>
+                          <p className="text-white/60 text-sm">เบอร์โทรศัพท์</p>
+                          <p className="text-white font-medium font-mono bg-white/10 px-2 py-1 rounded">
+                            {request.phoneNumber || 'ไม่มีข้อมูล'}
+                          </p>
                         </div>
                         {request.hasXboxAccount && (
                           <>

@@ -22,7 +22,8 @@ export default function Home() {
     xboxEmail: '',
     xboxPassword: '',
     redeemCode: '',
-    contact: ''
+    contact: '',
+    phoneNumber: ''
   });
   const [showRainbowRedeemPopup, setShowRainbowRedeemPopup] = useState(false);
   const [isRainbowButtonSubmitting, setIsRainbowButtonSubmitting] = useState(false);
@@ -253,7 +254,13 @@ export default function Home() {
       return;
     }
 
-    // Check if the redeem code exists in the Rainbow Six codes table
+    if (!rainbowForm.phoneNumber.trim()) {
+      toast.error("กรุณากรอกเบอร์โทรศัพท์");
+      return;
+    }
+
+    // Check if the redeem code exists in the Rainbow Six codes table and get credits info
+    let codeData = null;
     try {
       const { data: codeCheck, error: codeError } = await supabase
         .from('app_284beb8f90_rainbow_codes')
@@ -266,6 +273,7 @@ export default function Home() {
         toast.error('โค้ดที่กรอกไม่ถูกต้องหรือไม่พร้อมใช้งาน กรุณาตรวจสอบโค้ด Rainbow Six อีกครั้ง');
         return;
       }
+      codeData = codeCheck;
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการตรวจสอบโค้ด กรุณาลองใหม่อีกครั้ง');
       return;
@@ -284,13 +292,13 @@ export default function Home() {
         discord_username: rainbowForm.contact, // Use contact as discord username
         user_name: rainbowForm.contact, // Use contact as user name
         user_email: rainbowForm.ubisoftEmail,
-        user_phone: rainbowForm.contact, // Use contact for phone as well
+        user_phone: rainbowForm.phoneNumber,
         ubisoft_username: rainbowForm.ubisoftEmail,
         ubisoft_password: rainbowForm.ubisoftPassword,
         has_xbox_account: rainbowForm.hasXboxAccount,
         xbox_email: rainbowForm.xboxEmail || null,
         xbox_password: rainbowForm.xboxPassword || null,
-        credits_requested: 1, // Default to 1 credit
+        credits_requested: codeData?.credits || 1200, // Use actual credits from code or default to 1200
         status: 'pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -335,7 +343,8 @@ export default function Home() {
         xboxEmail: '',
         xboxPassword: '',
         redeemCode: '',
-        contact: ''
+        contact: '',
+        phoneNumber: ''
       });
 
     } catch (error) {
@@ -650,15 +659,42 @@ export default function Home() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="contact" className="text-white/80">ข้อมูลติดต่อ</Label>
-                    <Input
-                      id="contact"
-                      value={rainbowForm.contact}
-                      onChange={(e) => setRainbowForm(prev => ({ ...prev, contact: e.target.value }))}
-                      placeholder="Discord หรือ LINE ID สำหรับติดต่อกลับ"
-                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
-                    />
+                  <div className="space-y-4">
+                    <div className="bg-orange-900/30 border border-orange-500/30 rounded-lg p-4">
+                      <h4 className="text-orange-200 font-medium mb-2 flex items-center">
+                        <span className="text-xl mr-2">⚠️</span>
+                        ข้อมูลติดต่อ (สำคัญมาก!)
+                      </h4>
+                      <p className="text-orange-100 text-sm">
+                        กรุณากรอกข้อมูลติดต่อให้ครบถ้วนและถูกต้อง เพื่อให้แอดมินสามารถติดต่อกลับได้
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="contact" className="text-white/80 font-medium">
+                        Discord / LINE ID *
+                      </Label>
+                      <Input
+                        id="contact"
+                        value={rainbowForm.contact}
+                        onChange={(e) => setRainbowForm(prev => ({ ...prev, contact: e.target.value }))}
+                        placeholder="กรอก Discord หรือ LINE ID ของคุณ"
+                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="phone-number" className="text-white/80 font-medium">
+                        เบอร์โทรศัพท์ *
+                      </Label>
+                      <Input
+                        id="phone-number"
+                        value={rainbowForm.phoneNumber}
+                        onChange={(e) => setRainbowForm(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                        placeholder="กรอกเบอร์โทรศัพท์ของคุณ (เช่น 08X-XXX-XXXX)"
+                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                      />
+                    </div>
                   </div>
                 </div>
                 
@@ -686,7 +722,8 @@ export default function Home() {
                     • กรอกข้อมูลบัญชี Ubisoft ของคุณให้ครบถ้วน<br/>
                     • หากมีบัญชี Xbox เชื่อมต่อ กรุณาติ๊กและกรอกข้อมูล Xbox ด้วย<br/>
                     • ทางร้านจะดำเนินการรีดีมโค้ดให้ภายใน 24 ชั่วโมง<br/>
-                    • กรุณาให้ข้อมูลติดต่อที่ถูกต้องเพื่อการติดตามสถานะ
+                    • กรุณาให้ข้อมูลติดต่อที่ถูกต้องเพื่อการติดตามสถานะ<br/>
+                    • ระบุทั้ง Discord/LINE และเบอร์โทรศัพท์เพื่อให้แอดมินติดต่อได้สะดวก
                   </p>
                 </div>
               </CardContent>
