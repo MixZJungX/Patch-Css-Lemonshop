@@ -672,13 +672,13 @@ export default function Home() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="contact" className="text-white/80 font-medium">
-                        Discord / LINE ID *
+                        Discord / LINE ID / Facebook *
                       </Label>
                       <Input
                         id="contact"
                         value={rainbowForm.contact}
                         onChange={(e) => setRainbowForm(prev => ({ ...prev, contact: e.target.value }))}
-                        placeholder="กรอก Discord หรือ LINE ID ของคุณ"
+                        placeholder="กรอก Discord, LINE ID หรือ Facebook ของคุณ"
                         className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
                       />
                     </div>
@@ -723,7 +723,7 @@ export default function Home() {
                     • หากมีบัญชี Xbox เชื่อมต่อ กรุณาติ๊กและกรอกข้อมูล Xbox ด้วย<br/>
                     • ทางร้านจะดำเนินการรีดีมโค้ดให้ภายใน 24 ชั่วโมง<br/>
                     • กรุณาให้ข้อมูลติดต่อที่ถูกต้องเพื่อการติดตามสถานะ<br/>
-                    • ระบุทั้ง Discord/LINE และเบอร์โทรศัพท์เพื่อให้แอดมินติดต่อได้สะดวก
+                    • ระบุทั้ง Discord/LINE/Facebook และเบอร์โทรศัพท์เพื่อให้แอดมินติดต่อได้สะดวก
                   </p>
                 </div>
               </CardContent>
@@ -879,7 +879,7 @@ export default function Home() {
                   id="contact"
                   value={redeemForm.contact}
                   onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
-                  placeholder="Discord หรือ LINE ID"
+                  placeholder="Discord, LINE ID หรือ Facebook"
                 />
               </div>
               
