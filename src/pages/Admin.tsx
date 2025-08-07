@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { adminApi } from '@/lib/adminApi';
@@ -44,6 +44,8 @@ export default function Admin() {
   // Form states
   const [newCode, setNewCode] = useState({ code: '', robux_value: '' });
   const [newRainbowCode, setNewRainbowCode] = useState({ code: '', credits: '' });
+  const [bulkRainbowCodes, setBulkRainbowCodes] = useState('');
+  const [showBulkRainbowModal, setShowBulkRainbowModal] = useState(false);
   const [isAddingRainbowCode, setIsAddingRainbowCode] = useState(false);
   const [newAccount, setNewAccount] = useState({
     code: '',
@@ -439,6 +441,97 @@ export default function Admin() {
       } catch (localError) {
         toast.error(`เกิดข้อผิดพลาด: ${error instanceof Error ? error.message : 'ไม่ทราบสาเหตุ'}`);
       }
+    } finally {
+      setIsAddingRainbowCode(false);
+    }
+  };
+
+  const handleBulkAddRainbowCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!bulkRainbowCodes.trim()) {
+      toast.error('กรุณากรอกข้อมูลโค้ด');
+      return;
+    }
+
+    setIsAddingRainbowCode(true);
+    try {
+      const lines = bulkRainbowCodes.split('\n').filter(line => line.trim());
+      const codesToAdd = [];
+      const failedLines = [];
+
+      for (const line of lines) {
+        const parts = line.trim().split(',');
+        if (parts.length !== 2) {
+          failedLines.push(line);
+          continue;
+        }
+
+        const [code, creditsStr] = parts.map(part => part.trim());
+        const credits = parseInt(creditsStr);
+
+        if (!code || isNaN(credits) || credits <= 0) {
+          failedLines.push(line);
+          continue;
+        }
+
+        codesToAdd.push({
+          code: code.toUpperCase(),
+          credits,
+          is_used: false,
+          created_at: new Date().toISOString()
+        });
+      }
+
+      if (codesToAdd.length === 0) {
+        toast.error('ไม่พบข้อมูลที่ถูกต้อง กรุณาใช้รูปแบบ: โค้ด,เครดิต');
+        return;
+      }
+
+      // Try to save to Supabase first
+      const { data, error: supabaseError } = await supabase
+        .from('app_284beb8f90_rainbow_codes')
+        .insert(codesToAdd)
+        .select();
+
+      if (supabaseError) {
+        console.error('Supabase bulk insert failed:', supabaseError);
+        // Fallback to localStorage if Supabase fails
+        const existingCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]');
+        const newCodes = codesToAdd.map((codeData, index) => ({
+          id: (Date.now() + index).toString(),
+          code: codeData.code,
+          robux_value: codeData.credits,
+          product_name: 'Rainbow Six Credits',
+          status: 'available',
+          created_at: codeData.created_at
+        }));
+        
+        existingCodes.push(...newCodes);
+        localStorage.setItem('redemption_codes', JSON.stringify(existingCodes));
+        console.log('⚠️ Supabase failed, saved to localStorage');
+      }
+
+      let successMessage = `เพิ่มโค้ด Rainbow Six สำเร็จ ${codesToAdd.length} โค้ด`;
+      if (failedLines.length > 0) {
+        successMessage += ` (มีข้อมูลผิดพลาด ${failedLines.length} บรรทัด)`;
+      }
+      
+      toast.success(successMessage);
+      setBulkRainbowCodes('');
+      setShowBulkRainbowModal(false);
+      await loadData();
+      
+      // Auto-scroll to Rainbow Six codes list
+      setTimeout(() => {
+        const element = document.getElementById('rainbow-six-codes-list');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error bulk adding Rainbow Six codes:', error);
+      toast.error('เกิดข้อผิดพลาดในการเพิ่มโค้ด');
     } finally {
       setIsAddingRainbowCode(false);
     }
@@ -1333,23 +1426,37 @@ export default function Admin() {
                   </div>
                 </div>
                 
-                <Button 
-                  type="submit"
-                  disabled={isAddingRainbowCode}
-                  className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold py-3"
-                >
-                  {isAddingRainbowCode ? (
+                <div className="flex gap-2">
+                  <Button 
+                    type="submit"
+                    disabled={isAddingRainbowCode}
+                    className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-bold py-3"
+                  >
+                    {isAddingRainbowCode ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>กำลังเพิ่มโค้ด...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <span>➕</span>
+                        <span>เพิ่มโค้ดเดี่ยว</span>
+                      </div>
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    type="button"
+                    onClick={() => setShowBulkRainbowModal(true)}
+                    disabled={isAddingRainbowCode}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-3"
+                  >
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      <span>กำลังเพิ่มโค้ด...</span>
+                      <span>📦</span>
+                      <span>เพิ่มโค้ด Bulk</span>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2">
-                      <span>➕</span>
-                      <span>เพิ่มโค้ด Rainbow Six</span>
-                    </div>
-                  )}
-                </Button>
+                  </Button>
+                </div>
               </form>
               
               <div className="mt-6 bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
@@ -1557,6 +1664,68 @@ export default function Admin() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Bulk Rainbow Six Codes Modal */}
+      <Dialog open={showBulkRainbowModal} onOpenChange={setShowBulkRainbowModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-2xl">📦</span>
+              เพิ่มโค้ด Rainbow Six แบบ Bulk
+            </DialogTitle>
+            <DialogDescription>
+              กรอกโค้ดและเครดิตในรูปแบบ: <code className="bg-gray-100 px-1 rounded">โค้ด,เครดิต</code> (หนึ่งบรรทัดต่อหนึ่งโค้ด)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleBulkAddRainbowCodes} className="space-y-4">
+            <div>
+              <Label htmlFor="bulk-codes" className="text-sm font-medium">โค้ด Rainbow Six (รูปแบบ: โค้ด,เครดิต)</Label>
+              <textarea
+                id="bulk-codes"
+                value={bulkRainbowCodes}
+                onChange={(e) => setBulkRainbowCodes(e.target.value)}
+                placeholder={`ตัวอย่าง:\nRBX123,1800\nRBX456,1800\nRBX789,2400\nRBX999,1200`}
+                className="w-full h-48 p-3 border border-gray-300 rounded-md resize-none font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={10}
+              />
+              <div className="mt-2 text-xs text-gray-600 space-y-1">
+                <p>💡 <strong>รูปแบบ:</strong> โค้ด,จำนวนเครดิต (แต่ละบรรทัด)</p>
+                <p>📝 <strong>ตัวอย่าง:</strong> RBX123,1800</p>
+                <p>⚠️ <strong>หมายเหตุ:</strong> ระบบจะข้ามบรรทัดที่รูปแบบผิด</p>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowBulkRainbowModal(false)}
+                disabled={isAddingRainbowCode}
+              >
+                ยกเลิก
+              </Button>
+              <Button 
+                type="submit" 
+                className="bg-green-600 hover:bg-green-700"
+                disabled={isAddingRainbowCode}
+              >
+                {isAddingRainbowCode ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>กำลังเพิ่ม...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📦</span>
+                    <span>เพิ่มโค้ดทั้งหมด</span>
+                  </div>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
