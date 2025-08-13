@@ -47,6 +47,7 @@ export default function Admin() {
   const [bulkRainbowCodes, setBulkRainbowCodes] = useState('');
   const [showBulkRainbowModal, setShowBulkRainbowModal] = useState(false);
   const [isAddingRainbowCode, setIsAddingRainbowCode] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<{ valid: any[], invalid: string[] }>({ valid: [], invalid: [] });
   const [newAccount, setNewAccount] = useState({
     code: '',
     username: '',
@@ -65,6 +66,42 @@ export default function Admin() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Real-time validation for bulk Rainbow Six codes
+  useEffect(() => {
+    if (!bulkRainbowCodes.trim()) {
+      setBulkPreview({ valid: [], invalid: [] });
+      return;
+    }
+
+    const lines = bulkRainbowCodes.split('\n').filter(line => line.trim());
+    const validCodes = [];
+    const invalidLines = [];
+
+    for (const line of lines) {
+      const parts = line.trim().split(',');
+      if (parts.length !== 2) {
+        invalidLines.push(line);
+        continue;
+      }
+
+      const [code, creditsStr] = parts.map(part => part.trim());
+      const credits = parseInt(creditsStr);
+
+      if (!code || isNaN(credits) || credits <= 0) {
+        invalidLines.push(line);
+        continue;
+      }
+
+      validCodes.push({
+        code: code.toUpperCase(),
+        credits,
+        originalLine: line
+      });
+    }
+
+    setBulkPreview({ valid: validCodes, invalid: invalidLines });
+  }, [bulkRainbowCodes]);
 
   const processBulkImport = async () => {
     if (!bulkImportData.trim()) {
@@ -1667,62 +1704,211 @@ export default function Admin() {
 
       {/* Bulk Rainbow Six Codes Modal */}
       <Dialog open={showBulkRainbowModal} onOpenChange={setShowBulkRainbowModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="text-2xl">📦</span>
+            <DialogTitle className="flex items-center gap-2 text-xl text-white">
+              <span className="text-3xl">🎮</span>
               เพิ่มโค้ด Rainbow Six แบบ Bulk
             </DialogTitle>
-            <DialogDescription>
-              กรอกโค้ดและเครดิตในรูปแบบ: <code className="bg-gray-100 px-1 rounded">โค้ด,เครดิต</code> (หนึ่งบรรทัดต่อหนึ่งโค้ด)
+            <DialogDescription className="text-base text-gray-200">
+              กรอกโค้ดและเครดิตในรูปแบบ: <code className="bg-blue-500/30 px-2 py-1 rounded font-mono text-blue-200 border border-blue-400/50">โค้ด,เครดิต</code> (หนึ่งบรรทัดต่อหนึ่งโค้ด)
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleBulkAddRainbowCodes} className="space-y-4">
-            <div>
-              <Label htmlFor="bulk-codes" className="text-sm font-medium">โค้ด Rainbow Six (รูปแบบ: โค้ด,เครดิต)</Label>
-              <textarea
-                id="bulk-codes"
-                value={bulkRainbowCodes}
-                onChange={(e) => setBulkRainbowCodes(e.target.value)}
-                placeholder={`ตัวอย่าง:\nRBX123,1800\nRBX456,1800\nRBX789,2400\nRBX999,1200`}
-                className="w-full h-48 p-3 border border-gray-300 rounded-md resize-none font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                rows={10}
-              />
-              <div className="mt-2 text-xs text-gray-600 space-y-1">
-                <p>💡 <strong>รูปแบบ:</strong> โค้ด,จำนวนเครดิต (แต่ละบรรทัด)</p>
-                <p>📝 <strong>ตัวอย่าง:</strong> RBX123,1800</p>
-                <p>⚠️ <strong>หมายเหตุ:</strong> ระบบจะข้ามบรรทัดที่รูปแบบผิด</p>
+          <form onSubmit={handleBulkAddRainbowCodes} className="space-y-6">
+            {/* Input Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Input */}
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="bulk-codes" className="text-base font-semibold text-white mb-2 block">
+                    📝 โค้ด Rainbow Six
+                  </Label>
+                  <textarea
+                    id="bulk-codes"
+                    value={bulkRainbowCodes}
+                    onChange={(e) => setBulkRainbowCodes(e.target.value)}
+                    placeholder={`RBX123,1800
+RBX456,1800
+RBX789,2400
+RBX999,1200
+RBX888,3600`}
+                    className="w-full h-64 p-4 border-2 border-white/30 rounded-lg resize-none font-mono text-base bg-black/20 text-white placeholder:text-white/50 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 shadow-sm"
+                    rows={12}
+                  />
+                </div>
+                
+                {/* Quick Actions */}
+                <div className="flex gap-2">
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => setBulkRainbowCodes('')}
+                    className="flex-1 bg-red-500/20 border-red-400/50 text-red-300 hover:bg-red-500/30 hover:border-red-400 hover:text-red-200"
+                  >
+                    🗑️ ล้างข้อมูล
+                  </Button>
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const sampleCodes = `RBX001,1800
+RBX002,1800
+RBX003,2400
+RBX004,1200
+RBX005,3600`;
+                      setBulkRainbowCodes(sampleCodes);
+                    }}
+                    className="flex-1 bg-blue-500/20 border-blue-400/50 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400 hover:text-blue-200"
+                  >
+                    📋 ตัวอย่าง
+                  </Button>
+                </div>
+              </div>
+
+              {/* Right Column - Preview & Info */}
+              <div className="space-y-4">
+                {/* Preview Section */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                  <h4 className="font-bold text-white mb-3 flex items-center gap-2">
+                    <span className="text-lg">👁️</span>
+                    ตัวอย่างข้อมูล
+                  </h4>
+                  <div className="bg-black/20 rounded border border-white/10 p-3 font-mono text-sm space-y-1">
+                    <div className="text-white font-semibold mb-2">รูปแบบที่ถูกต้อง:</div>
+                    <div className="text-green-400 font-medium">RBX123,1800 ✓</div>
+                    <div className="text-green-400 font-medium">RBX456,2400 ✓</div>
+                    <div className="text-red-400 font-medium">RBX789 (ไม่มีเครดิต) ✗</div>
+                    <div className="text-red-400 font-medium">RBX999,abc (เครดิตไม่ใช่ตัวเลข) ✗</div>
+                  </div>
+                </div>
+
+                {/* Real-time Preview */}
+                {bulkRainbowCodes.trim() && (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                    <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                      <span className="text-lg">📊</span>
+                      ข้อมูลที่จะนำเข้า
+                    </h4>
+                    
+                    {/* Summary */}
+                    <div className="mb-3 p-2 bg-blue-500/20 rounded text-sm border border-blue-400/30">
+                      <div className="flex justify-between items-center text-white">
+                        <span>✅ ถูกต้อง: <strong className="text-green-400">{bulkPreview.valid.length}</strong> โค้ด</span>
+                        <span>❌ ผิดพลาด: <strong className="text-red-400">{bulkPreview.invalid.length}</strong> บรรทัด</span>
+                      </div>
+                    </div>
+
+                    {/* Valid Codes Preview */}
+                    {bulkPreview.valid.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-sm font-medium text-green-400 mb-2">✅ โค้ดที่ถูกต้อง:</div>
+                        <div className="max-h-32 overflow-y-auto bg-green-500/10 rounded p-2 space-y-1 border border-green-400/20">
+                          {bulkPreview.valid.slice(0, 5).map((code, index) => (
+                            <div key={index} className="text-xs text-green-300 font-mono">
+                              {code.code} → {code.credits} Credits
+                            </div>
+                          ))}
+                          {bulkPreview.valid.length > 5 && (
+                            <div className="text-xs text-green-400 italic">
+                              ... และอีก {bulkPreview.valid.length - 5} โค้ด
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Invalid Lines Preview */}
+                    {bulkPreview.invalid.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-red-400 mb-2">❌ บรรทัดที่ผิดพลาด:</div>
+                        <div className="max-h-24 overflow-y-auto bg-red-500/10 rounded p-2 space-y-1 border border-red-400/20">
+                          {bulkPreview.invalid.slice(0, 3).map((line, index) => (
+                            <div key={index} className="text-xs text-red-300 font-mono">
+                              "{line}"
+                            </div>
+                          ))}
+                          {bulkPreview.invalid.length > 3 && (
+                            <div className="text-xs text-red-400 italic">
+                              ... และอีก {bulkPreview.invalid.length - 3} บรรทัด
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Instructions */}
+                <div className="bg-blue-500/10 backdrop-blur-sm rounded-lg p-4 border border-blue-400/30">
+                  <h4 className="font-semibold text-blue-300 mb-3 flex items-center gap-2">
+                    <span className="text-lg">💡</span>
+                    คำแนะนำ
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-200">
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-400">•</span>
+                      <span>ใส่ข้อมูลทีละบรรทัด</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-400">•</span>
+                      <span>ใช้เครื่องหมายคอมมา (,) คั่นระหว่างโค้ดและเครดิต</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-400">•</span>
+                      <span>โค้ดจะถูกแปลงเป็นตัวพิมพ์ใหญ่อัตโนมัติ</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-400">•</span>
+                      <span>จำนวนเครดิตต้องเป็นตัวเลขบวกเท่านั้น</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Validation Info */}
+                <div className="bg-yellow-500/10 backdrop-blur-sm rounded-lg p-4 border border-yellow-400/30">
+                  <h4 className="font-semibold text-yellow-300 mb-3 flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    หมายเหตุ
+                  </h4>
+                  <div className="text-sm text-yellow-200">
+                    <p>• ระบบจะข้ามบรรทัดที่รูปแบบผิด</p>
+                    <p>• บรรทัดว่างจะถูกละเว้น</p>
+                    <p>• สามารถนำเข้าข้อมูลได้ไม่จำกัดจำนวน</p>
+                  </div>
+                </div>
               </div>
             </div>
             
-            <DialogFooter>
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-white/20">
               <Button 
                 type="button" 
                 variant="outline" 
                 onClick={() => setShowBulkRainbowModal(false)}
                 disabled={isAddingRainbowCode}
+                className="flex-1 h-12 text-base bg-gray-500/20 border-gray-400/50 text-gray-300 hover:bg-gray-500/30 hover:border-gray-400 hover:text-gray-200"
               >
-                ยกเลิก
+                ❌ ยกเลิก
               </Button>
               <Button 
                 type="submit" 
-                className="bg-green-600 hover:bg-green-700"
-                disabled={isAddingRainbowCode}
+                className="flex-1 h-12 text-base bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-lg"
+                disabled={isAddingRainbowCode || !bulkRainbowCodes.trim()}
               >
                 {isAddingRainbowCode ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     <span>กำลังเพิ่ม...</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">📦</span>
+                    <span className="text-xl">📦</span>
                     <span>เพิ่มโค้ดทั้งหมด</span>
                   </div>
                 )}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
