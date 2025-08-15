@@ -900,10 +900,10 @@ export default function Admin() {
                   <TableHeader>
                     <TableRow className="border-white/10">
                       <TableHead className="text-white">โค้ด</TableHead>
-                      <TableHead className="text-white">ชื่อ</TableHead>
-                      <TableHead className="text-white">รหัส</TableHead>
+                      <TableHead className="text-white">ชื่อผู้ใช้</TableHead>
+                      <TableHead className="text-white">รหัสผ่าน</TableHead>
                       <TableHead className="text-white">ประเภท</TableHead>
-                      <TableHead className="text-white">Contact</TableHead>
+                      <TableHead className="text-white">เบอร์โทรศัพท์</TableHead>
                       <TableHead className="text-white">สถานะ</TableHead>
                       <TableHead className="text-white">วันที่</TableHead>
                       <TableHead className="text-white">จัดการ</TableHead>
@@ -934,19 +934,35 @@ export default function Admin() {
                       const passwordMatch = request.contact_info.match(/Password: ([^|]+)/);
                       const password = passwordMatch ? passwordMatch[1].trim() : '-';
                       
-                      // Extract contact (phone number) from contact_info
+                      // Extract contact (phone number) from contact_info - support both old and new format
+                      let contact = '-';
                       const contactMatch = request.contact_info.match(/Contact: ([^|]+)/);
-                      const contact = contactMatch ? contactMatch[1].trim() : '-';
+                      const phoneMatch = request.contact_info.match(/Phone: ([^|]+)/);
+                      
+                      if (phoneMatch) {
+                        contact = phoneMatch[1].trim();
+                      } else if (contactMatch) {
+                        contact = contactMatch[1].trim();
+                      }
                       
                       return (
                         <TableRow key={request.id} className="border-white/10">
-                          <TableCell className="text-white font-mono text-sm font-bold">{code}</TableCell>
-                          <TableCell className="text-white">{request.roblox_username}</TableCell>
-                          <TableCell className="text-white font-mono text-xs">{password}</TableCell>
-                          <TableCell className="text-white">
-                            {request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
-                          </TableCell>
-                          <TableCell className="text-white text-sm">{contact}</TableCell>
+                                                  <TableCell className="text-white font-mono text-sm font-bold">{code}</TableCell>
+                        <TableCell className="text-white">{request.roblox_username}</TableCell>
+                        <TableCell className="text-white font-mono text-xs">{password}</TableCell>
+                        <TableCell className="text-white">
+                          {request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
+                        </TableCell>
+                        <TableCell className="text-white text-sm font-semibold">
+                          {contact !== '-' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-400">📱</span>
+                              <span>{contact}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">ไม่มีข้อมูล</span>
+                          )}
+                        </TableCell>
                           <TableCell>
                             <Badge className={
                               request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
@@ -987,6 +1003,25 @@ export default function Admin() {
                                 disabled={request.status === 'rejected'}
                               >
                                 ยกเลิก
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  // Show detailed info in a toast or alert
+                                  const details = `
+โค้ด: ${code}
+ชื่อผู้ใช้: ${request.roblox_username}
+รหัสผ่าน: ${password}
+เบอร์โทรศัพท์: ${contact}
+ประเภท: ${request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
+สถานะ: ${request.status}
+วันที่: ${new Date(request.created_at).toLocaleDateString('th-TH')}
+                                  `.trim();
+                                  alert(details);
+                                }}
+                                className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs"
+                              >
+                                📋 รายละเอียด
                               </Button>
                               <Button
                                 size="sm"
