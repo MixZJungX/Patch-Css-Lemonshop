@@ -951,7 +951,7 @@ export default function Home() {
                   setValidatedChickenAccount(null);
                   setChickenRedeemCode('');
                 }} 
-                className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
+                className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 rounded-full"
               >
                 🐔 เสร็จสิ้น
               </Button>
@@ -961,7 +961,7 @@ export default function Home() {
 
         {/* Robux Redemption Dialog */}
         <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
-          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl">
+          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl">
             <DialogHeader className="text-center pb-6">
               <div className="relative mb-4">
                 {/* Glowing Background */}
@@ -991,7 +991,7 @@ export default function Home() {
                     value={redeemForm.username}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
                 
@@ -1006,7 +1006,7 @@ export default function Home() {
                     value={redeemForm.password}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
                     placeholder="รหัสผ่านของคุณ"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
                 
@@ -1020,13 +1020,13 @@ export default function Home() {
                     value={redeemForm.contact}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
                     placeholder="กรอกเบอร์โทรศัพท์ (เช่น 08X-XXX-XXXX)"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
               </div>
               
               {/* Info Box */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
                 <div className="flex items-start gap-3">
                   <div className="text-green-600 text-lg">💡</div>
                   <div>
@@ -1042,7 +1042,7 @@ export default function Home() {
                 <Button 
                   type="submit"
                   disabled={isRobuxButtonSubmitting}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105"
+                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105 rounded-full"
                 >
                   {isRobuxButtonSubmitting ? (
                     <div className="flex items-center gap-3">
@@ -1063,22 +1063,22 @@ export default function Home() {
 
         {/* Additional Products Section */}
         <div className="mt-16 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
             <h3 className="text-2xl font-bold text-white mb-4">🛒 สินค้าเพิ่มเติม</h3>
             <p className="text-purple-200 mb-6">เยี่ยมชมร้านค้าออนไลน์ของเราเพื่อดูสินค้าอื่นๆ เพิ่มเติม ไก่ตัน Robux โค้ด Rainbow Six</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">🐔</div>
                 <h4 className="text-white font-semibold mb-2">ไก่ตัน</h4>
                 <p className="text-purple-200 text-sm">บัญชีเกมไก่ตัน</p>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">💎</div>
                 <h4 className="text-white font-semibold mb-2">Robux</h4>
                 <p className="text-purple-200 text-sm">โค้ดแลก Robux</p>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">🌈</div>
                 <h4 className="text-white font-semibold mb-2">Rainbow Six</h4>
                 <p className="text-purple-200 text-sm">โค้ดเกม Rainbow Six</p>
@@ -1087,7 +1087,7 @@ export default function Home() {
             
             <Button 
               onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
-              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105 mb-8"
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105 mb-8"
             >
               🛒 ไปยังร้านค้าออนไลน์
             </Button>
@@ -1096,14 +1096,14 @@ export default function Home() {
 
         {/* Contact Section */}
         <div className="mt-8 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
             <h3 className="text-2xl font-bold text-white mb-4">📞 ต้องการความช่วยเหลือ?</h3>
             <p className="text-purple-200 mb-6">ติดต่อเราได้ผ่าน Facebook เพื่อรับบริการและคำแนะนำ</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
                 onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
               >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
