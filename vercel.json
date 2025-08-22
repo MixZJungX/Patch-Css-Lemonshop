@@ -2,9 +2,15 @@
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
   "installCommand": "pnpm install",
-  "headers": [
+  "rewrites": [
     {
       "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/",
       "headers": [
         {
           "key": "Cache-Control",
