@@ -135,5 +135,52 @@ export const adminApi = {
         updated_at: new Date().toISOString(),
         ...additionalData
       }
+    }),
+
+  // Delete request
+  deleteRequest: (id: string, requestType: string) => {
+    const table = requestType === 'rainbow' 
+      ? 'app_284beb8f90_rainbow_requests' 
+      : 'app_284beb8f90_redemption_requests';
+    
+    return executeAdminOperation({
+      operation: 'delete',
+      table,
+      id
+    });
+  },
+
+  // Announcements
+  createAnnouncement: (announcementData: any) =>
+    executeAdminOperation({
+      operation: 'insert',
+      table: 'app_284beb8f90_announcements',
+      data: announcementData
+    }),
+
+  updateAnnouncement: (id: string, data: any) =>
+    executeAdminOperation({
+      operation: 'update',
+      table: 'app_284beb8f90_announcements',
+      id,
+      data
+    }),
+
+  deleteAnnouncement: (id: string) =>
+    executeAdminOperation({
+      operation: 'delete',
+      table: 'app_284beb8f90_announcements',
+      id
+    }),
+
+  getAnnouncements: (onlyActive = false, limit = 50) =>
+    executeAdminOperation({
+      operation: 'select',
+      table: 'app_284beb8f90_announcements',
+      data: {
+        filters: onlyActive ? { is_active: true } : undefined,
+        orderBy: { column: 'created_at', ascending: false },
+        limit
+      }
     })
 };
