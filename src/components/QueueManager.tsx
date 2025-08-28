@@ -11,6 +11,7 @@ import { QueueItem } from '@/types';
 import { getAllQueueItems, updateQueueStatus } from '@/lib/queueApi';
 import { toast } from 'sonner';
 import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
@@ -20,12 +21,67 @@ export default function QueueManager() {
   const [updateStatus, setUpdateStatus] = useState<'processing' | 'completed' | 'cancelled'>('processing');
   const [adminNotes, setAdminNotes] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [codesData, setCodesData] = useState<{[key: string]: any}>({});
 
   const loadQueueItems = async () => {
     try {
       setLoading(true);
       const items = await getAllQueueItems();
       setQueueItems(items);
+      
+      // ดึงข้อมูลรหัสและโค้ดสำหรับแต่ละคิว
+      const codesDataTemp: {[key: string]: any} = {};
+      
+      for (const item of items) {
+        if (item.redemption_request_id) {
+          try {
+            // ดึงข้อมูล redemption request
+            const { data: requestData } = await supabase
+              .from('redemption_requests')
+              .select('*')
+              .eq('id', item.redemption_request_id)
+              .single();
+            
+            if (requestData) {
+              codesDataTemp[item.id] = {
+                request: requestData,
+                codes: [],
+                accounts: []
+              };
+              
+              // ดึงข้อมูลโค้ด Robux
+              if (requestData.assigned_code) {
+                const { data: codeData } = await supabase
+                  .from('redemption_codes')
+                  .select('*')
+                  .eq('code', requestData.assigned_code)
+                  .single();
+                
+                if (codeData) {
+                  codesDataTemp[item.id].codes.push(codeData);
+                }
+              }
+              
+              // ดึงข้อมูลบัญชี Chicken
+              if (requestData.assigned_account_code) {
+                const { data: accountData } = await supabase
+                  .from('chicken_accounts')
+                  .select('*')
+                  .eq('code', requestData.assigned_account_code)
+                  .single();
+                
+                if (accountData) {
+                  codesDataTemp[item.id].accounts.push(accountData);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error loading codes for queue item:', item.id, error);
+          }
+        }
+      }
+      
+      setCodesData(codesDataTemp);
     } catch (error) {
       console.error('Error loading queue items:', error);
       toast.error('ไม่สามารถโหลดข้อมูลคิวได้');
@@ -154,6 +210,7 @@ export default function QueueManager() {
                     <TableHead className="text-white font-semibold">หมายเลขคิว</TableHead>
                     <TableHead className="text-white font-semibold">ลูกค้า</TableHead>
                     <TableHead className="text-white font-semibold">ประเภท</TableHead>
+                    <TableHead className="text-white font-semibold">รหัส/โค้ด</TableHead>
                     <TableHead className="text-white font-semibold">สถานะ</TableHead>
                     <TableHead className="text-white font-semibold">วันที่สร้าง</TableHead>
                     <TableHead className="text-white font-semibold">จัดการ</TableHead>
@@ -179,6 +236,26 @@ export default function QueueManager() {
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{productInfo.icon}</span>
                             <span className="text-white">{productInfo.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-white">
+                          <div className="space-y-1 text-xs">
+                            {codesData[item.id]?.codes?.map((code: any, index: number) => (
+                              <div key={index} className="bg-yellow-500/20 p-1 rounded">
+                                <div className="text-yellow-300 font-mono">💎 {code.code}</div>
+                                <div className="text-yellow-200">{code.robux_value} Robux</div>
+                              </div>
+                            ))}
+                            {codesData[item.id]?.accounts?.map((account: any, index: number) => (
+                              <div key={index} className="bg-purple-500/20 p-1 rounded">
+                                <div className="text-purple-300 font-mono">🐔 {account.code}</div>
+                                <div className="text-purple-200">User: {account.username}</div>
+                                <div className="text-purple-200">Pass: {account.password}</div>
+                              </div>
+                            ))}
+                            {!codesData[item.id]?.codes?.length && !codesData[item.id]?.accounts?.length && (
+                              <div className="text-gray-400">ไม่มีข้อมูล</div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-white">
