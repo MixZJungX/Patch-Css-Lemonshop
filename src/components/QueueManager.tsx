@@ -208,11 +208,13 @@ export default function QueueManager() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-white font-semibold">หมายเลขคิว</TableHead>
-                    <TableHead className="text-white font-semibold">ลูกค้า</TableHead>
+                    <TableHead className="text-white font-semibold">โค้ด</TableHead>
+                    <TableHead className="text-white font-semibold">ชื่อผู้ใช้</TableHead>
+                    <TableHead className="text-white font-semibold">รหัสผ่าน</TableHead>
                     <TableHead className="text-white font-semibold">ประเภท</TableHead>
-                    <TableHead className="text-white font-semibold">รหัส/โค้ด</TableHead>
+                    <TableHead className="text-white font-semibold">เบอร์โทรศัพท์</TableHead>
                     <TableHead className="text-white font-semibold">สถานะ</TableHead>
-                    <TableHead className="text-white font-semibold">วันที่สร้าง</TableHead>
+                    <TableHead className="text-white font-semibold">วันที่</TableHead>
                     <TableHead className="text-white font-semibold">จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -226,37 +228,57 @@ export default function QueueManager() {
                         <TableCell className="text-white">
                           <div className="text-xl font-bold text-blue-300">#{item.queue_number}</div>
                         </TableCell>
-                        <TableCell className="text-white">
-                          <div>
-                            <div className="font-medium text-white">{item.customer_name || 'ไม่ระบุ'}</div>
-                            <div className="text-sm text-gray-300">{item.contact_info}</div>
-                          </div>
+                        <TableCell className="text-white font-mono text-sm font-bold">
+                          {(() => {
+                            const contactInfo = item.contact_info || '';
+                            const codeMatch = contactInfo.match(/Code: ([A-Z0-9]+)/);
+                            return codeMatch ? codeMatch[1] : '-';
+                          })()}
                         </TableCell>
                         <TableCell className="text-white">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{productInfo.icon}</span>
-                            <span className="text-white">{productInfo.name}</span>
-                          </div>
+                          {codesData[item.id]?.request?.roblox_username || item.customer_name || 'ไม่ระบุ'}
+                        </TableCell>
+                        <TableCell className="text-white font-mono text-xs">
+                          {(() => {
+                            const contactInfo = item.contact_info || '';
+                            const passwordMatch = contactInfo.match(/Password: ([^|]+)/);
+                            return passwordMatch ? passwordMatch[1].trim() : '-';
+                          })()}
                         </TableCell>
                         <TableCell className="text-white">
-                          <div className="space-y-1 text-xs">
-                            {codesData[item.id]?.codes?.map((code: any, index: number) => (
-                              <div key={index} className="bg-yellow-500/20 p-1 rounded">
-                                <div className="text-yellow-300 font-mono">💎 {code.code}</div>
-                                <div className="text-yellow-200">{code.robux_value} Robux</div>
+                          {(() => {
+                            const contactInfo = item.contact_info || '';
+                            // ตรวจสอบว่าเป็น Robux หรือ Chicken จาก contact_info
+                            if (contactInfo.includes('Robux') || contactInfo.includes('robux')) {
+                              const robuxMatch = contactInfo.match(/(\d+)\s*Robux/);
+                              return robuxMatch ? `${robuxMatch[1]} Robux` : 'Robux';
+                            } else {
+                              return 'ไก่ตัน';
+                            }
+                          })()}
+                        </TableCell>
+                        <TableCell className="text-white text-sm font-semibold">
+                          {(() => {
+                            const contactInfo = item.contact_info || '';
+                            const phoneMatch = contactInfo.match(/Phone: ([^|]+)/);
+                            const contactMatch = contactInfo.match(/Contact: ([^|]+)/);
+                            
+                            let contact = '-';
+                            if (phoneMatch) {
+                              contact = phoneMatch[1].trim();
+                            } else if (contactMatch) {
+                              contact = contactMatch[1].trim();
+                            }
+                            
+                            return contact !== '-' ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-400">📱</span>
+                                <span>{contact}</span>
                               </div>
-                            ))}
-                            {codesData[item.id]?.accounts?.map((account: any, index: number) => (
-                              <div key={index} className="bg-purple-500/20 p-1 rounded">
-                                <div className="text-purple-300 font-mono">🐔 {account.code}</div>
-                                <div className="text-purple-200">User: {account.username}</div>
-                                <div className="text-purple-200">Pass: {account.password}</div>
-                              </div>
-                            ))}
-                            {!codesData[item.id]?.codes?.length && !codesData[item.id]?.accounts?.length && (
-                              <div className="text-gray-400">ไม่มีข้อมูล</div>
-                            )}
-                          </div>
+                            ) : (
+                              <span className="text-gray-400">ไม่มีข้อมูล</span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-white">
                           <Badge className={`${statusInfo.color} text-white`}>
@@ -266,10 +288,8 @@ export default function QueueManager() {
                             </div>
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-white">
-                          <div className="text-sm text-gray-300">
-                            {formatDate(item.created_at)}
-                          </div>
+                        <TableCell className="text-white text-xs">
+                          {new Date(item.created_at).toLocaleDateString('th-TH')}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
