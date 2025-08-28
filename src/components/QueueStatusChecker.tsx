@@ -226,13 +226,6 @@ export default function QueueStatusChecker() {
                           <span className="text-white font-semibold">{queueItem.estimated_wait_time} นาที</span>
                         </div>
                       )}
-
-                      {queueItem.admin_notes && (
-                        <div className="flex items-center justify-between bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-2xl p-4 border border-orange-400/30">
-                          <span className="font-medium text-orange-200">หมายเหตุจากแอดมิน:</span>
-                          <span className="text-white text-sm">{queueItem.admin_notes}</span>
-                        </div>
-                      )}
                     </div>
 
                     <div className="mt-6 bg-blue-500/20 backdrop-blur-sm rounded-2xl p-4 border border-blue-400/30">

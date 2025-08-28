@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem, RainbowCode } from '@/types';
+import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem } from '@/types';
 import { GamepadIcon, Settings, Megaphone } from 'lucide-react';
 import { addToQueue, testQueueConnection } from '@/lib/queueApi';
 import '@/styles/notifications.css';
@@ -88,14 +88,14 @@ export default function Home() {
   // Calculate statistics when data changes
   useEffect(() => {
     if (availableCodes.length > 0) {
-      const totalValue = availableCodes.reduce((sum, code) => sum + (code.robux_value || 0), 0);
+      const totalValue = availableCodes.reduce((sum, code) => sum + (code.robux_value || code.robux_amount || 0), 0);
       setTotalRobuxValue(totalValue);
     }
   }, [availableCodes]);
 
   useEffect(() => {
     if (availableAccounts.length > 0) {
-      const activeAccounts = availableAccounts.filter(account => account.status === 'available').length;
+      const activeAccounts = availableAccounts.filter(account => !account.is_redeemed).length;
       setTotalActiveAccounts(activeAccounts);
     }
   }, [availableAccounts]);
@@ -264,7 +264,7 @@ export default function Home() {
         roblox_username: redeemForm.username,
         roblox_password: redeemForm.password,
         contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Phone: ${redeemForm.contact}`,
-        robux_amount: validatedCode!.robux_value || 0,
+        robux_amount: validatedCode!.robux_value || validatedCode!.robux_amount || 0,
         status: 'pending',
         created_at: new Date().toISOString()
       };
@@ -455,23 +455,17 @@ export default function Home() {
 
     try {
       // Allow unlimited usage - find account regardless of status
-      let foundAccount = availableAccounts.find(account => 
-        account.code.toLowerCase() === chickenRedeemCode.toLowerCase()
-      );
-      
-      if (!foundAccount) {
-        // Also check used accounts to allow re-entry
-        try {
-          const { data } = await supabase
-            .from('app_284beb8f90_chicken_accounts')
-            .select('*')
-            .ilike('code', chickenRedeemCode)
-            .single();
-          foundAccount = data;
-        } catch (error) {
-          // Account not found
-        }
-      }
+      const foundAccount = availableAccounts.find(account => 
+        (account.code || account.redeem_code).toLowerCase() === chickenRedeemCode.toLowerCase()
+      ) || 
+      // Also check used accounts to allow re-entry
+      await supabase
+        .from('app_284beb8f90_chicken_accounts')
+        .select('*')
+        .ilike('code', chickenRedeemCode)
+        .single()
+        .then(result => result.data)
+        .catch(() => null);
 
       if (!foundAccount) {
         toast.error("โค้ดไม่ถูกต้องหรือไม่พบ", { id: toastId });
@@ -943,28 +937,36 @@ export default function Home() {
                     <div>
                       <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
                       <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.username || 'ไม่มีข้อมูล'}
+                        {validatedChickenAccount.username || validatedChickenAccount.account_username || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
                       <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.password || 'ไม่มีข้อมูล'}
+                        {validatedChickenAccount.password || validatedChickenAccount.account_password || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
-                    {validatedChickenAccount.notes && (
+                    {(validatedChickenAccount.email || validatedChickenAccount.account_email) && (
                       <div>
-                        <Label className="text-sm font-medium text-gray-700">หมายเหตุ:</Label>
+                        <Label className="text-sm font-medium text-gray-700">อีเมล:</Label>
                         <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                          {validatedChickenAccount.notes}
+                          {validatedChickenAccount.email || validatedChickenAccount.account_email}
                         </div>
                       </div>
                     )}
-                    {validatedChickenAccount.notes && (
+                    {(validatedChickenAccount.level || validatedChickenAccount.account_level) && (
                       <div>
-                        <Label className="text-sm font-medium text-gray-700">หมายเหตุ:</Label>
+                        <Label className="text-sm font-medium text-gray-700">เลเวล:</Label>
+                        <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
+                          {validatedChickenAccount.level || validatedChickenAccount.account_level}
+                        </div>
+                      </div>
+                    )}
+                    {(validatedChickenAccount.description || validatedChickenAccount.notes) && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">รายละเอียด:</Label>
                         <div className="bg-white p-2 rounded-2xl border text-sm mt-1">
-                          {validatedChickenAccount.notes}
+                          {validatedChickenAccount.description || validatedChickenAccount.notes}
                         </div>
                       </div>
                     )}
@@ -1010,7 +1012,7 @@ export default function Home() {
                 แลกโค้ดรับ Robux
               </DialogTitle>
               <DialogDescription className="text-gray-600 text-base mt-2">
-                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value} Robux</span>
+                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value || validatedCode?.robux_amount} Robux</span>
               </DialogDescription>
             </DialogHeader>
             
@@ -1144,6 +1146,29 @@ export default function Home() {
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                 </svg>
                 📱 ติดต่อ Lemon Shop
+              </Button>
+              
+
+              
+              <Button 
+                onClick={() => window.open('/queue-status', '_blank')}
+                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
+              >
+                🔍 เช็คสถานะคิว
+              </Button>
+              
+              <Button 
+                onClick={async () => {
+                  const isConnected = await testQueueConnection();
+                  if (isConnected) {
+                    toast.success('✅ ระบบคิวพร้อมใช้งาน');
+                  } else {
+                    toast.error('❌ ระบบคิวไม่พร้อมใช้งาน');
+                  }
+                }}
+                className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
+              >
+                🔧 ทดสอบระบบคิว
               </Button>
               
               <div className="text-purple-200 text-sm">

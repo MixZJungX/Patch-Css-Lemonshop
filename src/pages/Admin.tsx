@@ -353,8 +353,9 @@ export default function Admin() {
     try {
       // Check if this is a Rainbow Six request by finding it in the requests array
       const request = requests.find(req => req.id === id);
-      // Since RedemptionRequest doesn't have 'type' property, we'll use a different approach
-      const tableName = 'app_284beb8f90_redemption_requests';
+      const tableName = request?.type === 'rainbow' ? 
+        'app_284beb8f90_rainbow_requests' : 
+        'app_284beb8f90_redemption_requests';
 
       const { error } = await supabase
         .from(tableName)
@@ -362,31 +363,6 @@ export default function Admin() {
         .eq('id', id);
 
       if (error) throw error;
-
-      // ถ้าสถานะเป็น 'rejected' หรือ 'cancelled' ให้อัปเดตคิวด้วย
-      if (status === 'rejected' || status === 'cancelled') {
-        try {
-          // หาคิวที่เกี่ยวข้องกับคำขอนี้
-          const { data: queueItems } = await supabase
-            .from('queue_items')
-            .select('*')
-            .eq('redemption_request_id', id);
-
-          if (queueItems && queueItems.length > 0) {
-            // อัปเดตสถานะคิวเป็น 'cancelled'
-            await supabase
-              .from('queue_items')
-              .update({ 
-                status: 'cancelled',
-                admin_notes: adminNotes || `คำขอถูก${status === 'rejected' ? 'ปฏิเสธ' : 'ยกเลิก'} โดยแอดมิน`
-              })
-              .eq('redemption_request_id', id);
-          }
-        } catch (queueError) {
-          console.warn('ไม่สามารถอัปเดตคิวได้:', queueError);
-        }
-      }
-
       toast.success('อัพเดทสถานะสำเร็จ');
       loadData();
     } catch (error) {
@@ -1078,7 +1054,7 @@ export default function Admin() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
             <CardContent className="p-4 text-center">
               <div className="text-2xl mb-1">💎</div>
-              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'active').length}</div>
+              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'available').length}</div>
               <div className="text-xs text-purple-200">โค้ดพร้อมใช้</div>
             </CardContent>
           </Card>
@@ -1346,7 +1322,8 @@ export default function Admin() {
                       setBulkImportType('codes');
                       setShowBulkImportDialog(true);
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    variant="outline"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     นำเข้าหลายรายการ
@@ -1393,13 +1370,13 @@ export default function Admin() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {codes.map(code => (
+                      {codes.filter(code => !code.product_name || code.product_name !== 'Rainbow Six Credits').map(code => (
                         <TableRow key={code.id} className="border-white/10">
                           <TableCell className="text-white font-mono">{code.code}</TableCell>
                           <TableCell className="text-white">{code.robux_value}</TableCell>
                           <TableCell>
-                            <Badge className={code.status === 'active' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
-                              {code.status === 'active' ? 'ใช้ได้' : 'ใช้แล้ว'}
+                            <Badge className={code.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                              {code.status === 'available' ? 'ใช้ได้' : 'ใช้แล้ว'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-white text-xs">
@@ -1438,7 +1415,8 @@ export default function Admin() {
                       setBulkImportType('accounts');
                       setShowBulkImportDialog(true);
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    variant="outline"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     นำเข้าหลายรายการ
@@ -1480,7 +1458,7 @@ export default function Admin() {
                       </SelectTrigger>
                       <SelectContent className="bg-gray-900 border-gray-700">
                         {/* Existing types from database */}
-                        {Array.from(new Set(accounts.map(acc => acc.product_name))).map(product => (
+                        {Array.from(new Set(accounts.map(acc => acc.product_type))).map(product => (
                           <SelectItem key={product} value={product}>{product}</SelectItem>
                         ))}
                         {/* Default types */}
@@ -1520,11 +1498,12 @@ export default function Admin() {
                           <Button
                             type="button"
                             size="sm"
+                            variant="outline"
                             onClick={() => {
                               setShowCustomInput(false);
                               setCustomProductName('');
                             }}
-                            className="bg-gray-600 hover:bg-gray-700 text-white"
+                            className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                           >
                             ยกเลิก
                           </Button>
@@ -1565,8 +1544,9 @@ export default function Admin() {
                   {searchTerm && (
                     <Button
                       onClick={() => setSearchTerm('')}
+                      variant="outline"
                       size="sm"
-                      className="bg-gray-600 hover:bg-gray-700 text-white"
+                      className="border-white/20 text-white hover:bg-white/10"
                     >
                       ล้างการค้นหา
                     </Button>
@@ -1592,7 +1572,7 @@ export default function Admin() {
                           account.code.toLowerCase().includes(searchLower) ||
                           account.username.toLowerCase().includes(searchLower) ||
                           account.password.toLowerCase().includes(searchLower) ||
-                          (account.product_name && account.product_name.toLowerCase().includes(searchLower)) ||
+                          (account.product_type && account.product_type.toLowerCase().includes(searchLower)) ||
                           account.status.toLowerCase().includes(searchLower)
                         );
                       }).map(account => (
@@ -1600,7 +1580,7 @@ export default function Admin() {
                           <TableCell className="text-white font-mono text-xs">{account.code}</TableCell>
                           <TableCell className="text-white">{account.username}</TableCell>
                           <TableCell className="text-white font-mono text-xs">{account.password}</TableCell>
-                          <TableCell className="text-white">{account.product_name || 'ไม่มีข้อมูล'}</TableCell>
+                          <TableCell className="text-white">{account.product_type || 'ไม่มีข้อมูล'}</TableCell>
                           <TableCell>
                             <Badge className={account.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
                               {account.status === 'available' ? 'พร้อมใช้' : 'ใช้แล้ว'}
@@ -1943,7 +1923,7 @@ export default function Admin() {
                 <span className="text-2xl">🎮</span>
                 <span>รายการโค้ด Rainbow Six Credits</span>
                 <Badge className="bg-cyan-500/20 text-cyan-300 ml-auto">
-                  {codes.filter(code => code.status === 'active').length} โค้ด
+                  {codes.filter(code => code.product_name === 'Rainbow Six Credits').length} โค้ด
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -1960,17 +1940,17 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {codes.map((code) => (
+                    {codes.filter(code => code.product_name === 'Rainbow Six Credits').map((code) => (
                       <TableRow key={code.id} className="border-white/10 hover:bg-white/5">
                         <TableCell className="text-white font-mono text-sm bg-gray-800/50 rounded px-2 py-1">
                           {code.code}
                         </TableCell>
                         <TableCell className="text-cyan-300 font-bold text-lg">
-                          {code.robux_value.toString()} Credits
+                          {parseInt(code.robux_value).toLocaleString()} Credits
                         </TableCell>
                         <TableCell>
-                          <Badge className={code.status === 'active' ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
-                            {code.status === 'active' ? '✅ พร้อมใช้' : '❌ ใช้แล้ว'}
+                          <Badge className={code.status === 'available' || code.status === 'active' || !code.status ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
+                            {code.status === 'available' || code.status === 'active' || !code.status ? '✅ พร้อมใช้' : '❌ ใช้แล้ว'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-white/70 text-sm">
@@ -1996,9 +1976,9 @@ export default function Admin() {
                   </TableBody>
                 </Table>
                 {(() => {
-                  const supabaseCodes = codes.filter(code => code.status === 'active');
+                  const supabaseCodes = codes.filter(code => code.product_name === 'Rainbow Six Credits');
                   const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]')
-                    .filter(code => code.status === 'active');
+                    .filter(code => code.product_name === 'Rainbow Six Credits');
                   const totalCodes = supabaseCodes.length + localCodes.length;
                   
                   if (totalCodes === 0) {
@@ -2112,7 +2092,8 @@ export default function Admin() {
               <div className="flex space-x-3">
                 <Button
                   onClick={() => setShowBulkImportDialog(false)}
-                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white"
+                  variant="outline"
+                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
                   ยกเลิก
                 </Button>
@@ -2169,13 +2150,15 @@ RBX888,3600`}
                 <div className="flex gap-2">
                   <Button 
                     type="button"
+                    variant="outline"
                     onClick={() => setBulkRainbowCodes('')}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                    className="flex-1 bg-red-500/20 border-red-400/50 text-red-300 hover:bg-red-500/30 hover:border-red-400 hover:text-red-200"
                   >
                     🗑️ ล้างข้อมูล
                   </Button>
                   <Button 
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       const sampleCodes = `RBX001,1800
 RBX002,1800
@@ -2184,7 +2167,7 @@ RBX004,1200
 RBX005,3600`;
                       setBulkRainbowCodes(sampleCodes);
                     }}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    className="flex-1 bg-blue-500/20 border-blue-400/50 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400 hover:text-blue-200"
                   >
                     📋 ตัวอย่าง
                   </Button>
@@ -2309,9 +2292,10 @@ RBX005,3600`;
             <div className="flex gap-3 pt-4 border-t border-white/20">
               <Button 
                 type="button" 
+                variant="outline" 
                 onClick={() => setShowBulkRainbowModal(false)}
                 disabled={isAddingRainbowCode}
-                className="flex-1 h-12 text-base bg-gray-600 hover:bg-gray-700 text-white"
+                className="flex-1 h-12 text-base bg-gray-500/20 border-gray-400/50 text-gray-300 hover:bg-gray-500/30 hover:border-gray-400 hover:text-gray-200"
               >
                 ❌ ยกเลิก
               </Button>

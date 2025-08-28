@@ -34,16 +34,6 @@ export interface RedemptionRequest {
   updated_at: string;
 }
 
-export interface RainbowCode {
-  id: string;
-  code: string;
-  credits: number;
-  is_used: boolean;
-  created_at: string;
-  used_at?: string;
-  used_by?: string;
-}
-
 // ระบบคิวใหม่
 export interface QueueItem {
   id: string;
@@ -59,16 +49,6 @@ export interface QueueItem {
   updated_at: string;
   estimated_wait_time?: number; // เวลารอโดยประมาณ (นาที)
   admin_notes?: string; // หมายเหตุจากแอดมิน
-  redemption_requests?: {
-    id: string;
-    roblox_username: string;
-    robux_amount: number;
-    contact_info: string;
-    phone?: string;
-    assigned_code?: string;
-    assigned_account_code?: string;
-    admin_notes?: string;
-  };
 }
 
 export interface QueueDisplay {
