@@ -207,8 +207,7 @@ export default function QueueManager() {
                             {item.admin_notes && (
                               <Button
                                 size="sm"
-                                variant="ghost"
-                                className="h-8 px-2"
+                                className="h-8 px-2 bg-green-600 hover:bg-green-700 text-white"
                                 title={item.admin_notes}
                               >
                                 <MessageSquare className="w-3 h-3" />
@@ -228,46 +227,55 @@ export default function QueueManager() {
 
       {/* Dialog สำหรับอัปเดตสถานะคิว */}
       <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-gray-900 border-gray-700">
           <DialogHeader>
-            <DialogTitle>อัปเดตสถานะคิว #{selectedItem?.queue_number}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-white">อัปเดตสถานะคิว #{selectedItem?.queue_number}</DialogTitle>
+            <DialogDescription className="text-gray-300">
               เปลี่ยนสถานะและเพิ่มหมายเหตุสำหรับคิวนี้
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="status">สถานะ</Label>
+              <Label htmlFor="status" className="text-white">สถานะ</Label>
               <Select value={updateStatus} onValueChange={(value: 'processing' | 'completed' | 'cancelled') => setUpdateStatus(value)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="processing">กำลังดำเนินการ</SelectItem>
-                  <SelectItem value="completed">เสร็จสิ้น</SelectItem>
-                  <SelectItem value="cancelled">ยกเลิก</SelectItem>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="processing" className="text-white hover:bg-gray-700">กำลังดำเนินการ</SelectItem>
+                  <SelectItem value="completed" className="text-white hover:bg-gray-700">เสร็จสิ้น</SelectItem>
+                  <SelectItem value="cancelled" className="text-white hover:bg-gray-700">ยกเลิก</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <div>
-              <Label htmlFor="notes">หมายเหตุ (ไม่บังคับ)</Label>
+              <Label htmlFor="notes" className="text-white">หมายเหตุ (ไม่บังคับ)</Label>
               <Textarea
                 id="notes"
                 placeholder="เช่น: ติดต่อไม่ได้, ลูกค้ายกเลิก, มีปัญหาในการดำเนินการ..."
                 value={adminNotes}
                 onChange={(e) => setAdminNotes(e.target.value)}
                 rows={3}
+                className="bg-gray-800 border-gray-600 text-white placeholder:text-gray-400"
               />
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowUpdateDialog(false)}
+              className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500"
+            >
               ยกเลิก
             </Button>
-            <Button onClick={handleUpdateStatus} disabled={isUpdating}>
+            <Button 
+              onClick={handleUpdateStatus} 
+              disabled={isUpdating}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
               {isUpdating ? 'กำลังอัปเดต...' : 'อัปเดต'}
             </Button>
           </DialogFooter>
