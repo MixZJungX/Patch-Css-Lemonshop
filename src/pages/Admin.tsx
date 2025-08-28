@@ -353,9 +353,8 @@ export default function Admin() {
     try {
       // Check if this is a Rainbow Six request by finding it in the requests array
       const request = requests.find(req => req.id === id);
-      const tableName = request?.type === 'rainbow' ? 
-        'app_284beb8f90_rainbow_requests' : 
-        'app_284beb8f90_redemption_requests';
+      // Since RedemptionRequest doesn't have 'type' property, we'll use a different approach
+      const tableName = 'app_284beb8f90_redemption_requests';
 
       const { error } = await supabase
         .from(tableName)
@@ -1054,7 +1053,7 @@ export default function Admin() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
             <CardContent className="p-4 text-center">
               <div className="text-2xl mb-1">💎</div>
-              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'available').length}</div>
+              <div className="text-xl font-bold text-purple-300">{codes.filter(c => c.status === 'active').length}</div>
               <div className="text-xs text-purple-200">โค้ดพร้อมใช้</div>
             </CardContent>
           </Card>
@@ -1370,13 +1369,13 @@ export default function Admin() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {codes.filter(code => !code.product_name || code.product_name !== 'Rainbow Six Credits').map(code => (
+                      {codes.map(code => (
                         <TableRow key={code.id} className="border-white/10">
                           <TableCell className="text-white font-mono">{code.code}</TableCell>
                           <TableCell className="text-white">{code.robux_value}</TableCell>
                           <TableCell>
-                            <Badge className={code.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
-                              {code.status === 'available' ? 'ใช้ได้' : 'ใช้แล้ว'}
+                            <Badge className={code.status === 'active' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                              {code.status === 'active' ? 'ใช้ได้' : 'ใช้แล้ว'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-white text-xs">
@@ -1458,7 +1457,7 @@ export default function Admin() {
                       </SelectTrigger>
                       <SelectContent className="bg-gray-900 border-gray-700">
                         {/* Existing types from database */}
-                        {Array.from(new Set(accounts.map(acc => acc.product_type))).map(product => (
+                        {Array.from(new Set(accounts.map(acc => acc.product_name))).map(product => (
                           <SelectItem key={product} value={product}>{product}</SelectItem>
                         ))}
                         {/* Default types */}
@@ -1572,7 +1571,7 @@ export default function Admin() {
                           account.code.toLowerCase().includes(searchLower) ||
                           account.username.toLowerCase().includes(searchLower) ||
                           account.password.toLowerCase().includes(searchLower) ||
-                          (account.product_type && account.product_type.toLowerCase().includes(searchLower)) ||
+                          (account.product_name && account.product_name.toLowerCase().includes(searchLower)) ||
                           account.status.toLowerCase().includes(searchLower)
                         );
                       }).map(account => (
@@ -1580,7 +1579,7 @@ export default function Admin() {
                           <TableCell className="text-white font-mono text-xs">{account.code}</TableCell>
                           <TableCell className="text-white">{account.username}</TableCell>
                           <TableCell className="text-white font-mono text-xs">{account.password}</TableCell>
-                          <TableCell className="text-white">{account.product_type || 'ไม่มีข้อมูล'}</TableCell>
+                          <TableCell className="text-white">{account.product_name || 'ไม่มีข้อมูล'}</TableCell>
                           <TableCell>
                             <Badge className={account.status === 'available' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
                               {account.status === 'available' ? 'พร้อมใช้' : 'ใช้แล้ว'}
@@ -1923,7 +1922,7 @@ export default function Admin() {
                 <span className="text-2xl">🎮</span>
                 <span>รายการโค้ด Rainbow Six Credits</span>
                 <Badge className="bg-cyan-500/20 text-cyan-300 ml-auto">
-                  {codes.filter(code => code.product_name === 'Rainbow Six Credits').length} โค้ด
+                  {codes.filter(code => code.status === 'active').length} โค้ด
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -1940,17 +1939,17 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {codes.filter(code => code.product_name === 'Rainbow Six Credits').map((code) => (
+                    {codes.map((code) => (
                       <TableRow key={code.id} className="border-white/10 hover:bg-white/5">
                         <TableCell className="text-white font-mono text-sm bg-gray-800/50 rounded px-2 py-1">
                           {code.code}
                         </TableCell>
                         <TableCell className="text-cyan-300 font-bold text-lg">
-                          {parseInt(code.robux_value).toLocaleString()} Credits
+                          {code.robux_value.toString()} Credits
                         </TableCell>
                         <TableCell>
-                          <Badge className={code.status === 'available' || code.status === 'active' || !code.status ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
-                            {code.status === 'available' || code.status === 'active' || !code.status ? '✅ พร้อมใช้' : '❌ ใช้แล้ว'}
+                          <Badge className={code.status === 'active' ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
+                            {code.status === 'active' ? '✅ พร้อมใช้' : '❌ ใช้แล้ว'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-white/70 text-sm">
@@ -1976,9 +1975,9 @@ export default function Admin() {
                   </TableBody>
                 </Table>
                 {(() => {
-                  const supabaseCodes = codes.filter(code => code.product_name === 'Rainbow Six Credits');
+                  const supabaseCodes = codes.filter(code => code.status === 'active');
                   const localCodes = JSON.parse(localStorage.getItem('redemption_codes') || '[]')
-                    .filter(code => code.product_name === 'Rainbow Six Credits');
+                    .filter(code => code.status === 'active');
                   const totalCodes = supabaseCodes.length + localCodes.length;
                   
                   if (totalCodes === 0) {
