@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบปุ่มลบ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+        }
+        .test-button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .test-button:hover {
+            background: #c82333;
+        }
+        .log {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 ทดสอบปุ่มลบ</h1>
+    
+    <button class="test-button" onclick="testDelete()">ทดสอบปุ่มลบ</button>
+    <button class="test-button" onclick="clearLog()">ล้าง Log</button>
+    
+    <div id="log" class="log"></div>
+    
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            console.log(message);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function testDelete() {
+            log('🔘 ปุ่มลบถูกคลิก');
+            
+            // ทดสอบ confirm dialog
+            const confirmed = confirm('คุณแน่ใจหรือไม่ที่ต้องการลบคำขอนี้? การดำเนินการนี้ไม่สามารถยกเลิกได้');
+            
+            if (confirmed) {
+                log('✅ ผู้ใช้ยืนยันการลบ');
+                
+                // ทดสอบการจำลองการลบ
+                setTimeout(() => {
+                    log('🗑️ กำลังลบข้อมูล...');
+                    
+                    setTimeout(() => {
+                        log('✅ ลบสำเร็จ');
+                        alert('ลบคำขอสำเร็จ');
+                    }, 1000);
+                }, 500);
+            } else {
+                log('❌ ผู้ใช้ยกเลิกการลบ');
+            }
+        }
+        
+        log('🚀 ระบบทดสอบพร้อมใช้งาน');
+    </script>
+</body>
+</html>
+
