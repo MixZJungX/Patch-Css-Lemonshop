@@ -10,8 +10,6 @@ import Status from './pages/Status';
 import Login from './pages/Login';
 import Index from './pages/Index';
 import NotFound from './pages/NotFound';
-import QueueDisplayPage from './pages/QueueDisplayPage';
-import QueueStatusPage from './pages/QueueStatusPage';
 
 
 // Configure QueryClient with error handling
@@ -42,10 +40,6 @@ const App = () => (
               <Route path="/status" element={<Status />} />
               <Route path="/login" element={<Login />} />
               <Route path="/old" element={<Index />} />
-              
-              {/* ระบบคิวใหม่ */}
-              <Route path="/queue-display" element={<QueueDisplayPage />} />
-              <Route path="/queue-status" element={<QueueStatusPage />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

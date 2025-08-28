@@ -9,9 +9,8 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem } from '@/types';
+import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { GamepadIcon, Settings, Megaphone } from 'lucide-react';
-import { addToQueue, testQueueConnection } from '@/lib/queueApi';
 import '@/styles/notifications.css';
 
 export default function Home() {
@@ -68,21 +67,9 @@ export default function Home() {
     contact: ''
   });
 
-  // ระบบคิว
-  const [showQueueNumberPopup, setShowQueueNumberPopup] = useState(false);
-  const [currentQueueNumber, setCurrentQueueNumber] = useState<number | null>(null);
-
   useEffect(() => {
     loadAvailableItems();
     loadAnnouncements();
-    
-    // ทดสอบการเชื่อมต่อระบบคิว
-    testQueueConnection().then(isConnected => {
-      if (!isConnected) {
-        console.warn('⚠️ ระบบคิวไม่พร้อมใช้งาน - กรุณารัน SQL script ใน Supabase');
-        toast.error('ระบบคิวไม่พร้อมใช้งาน กรุณาติดต่อแอดมิน');
-      }
-    });
   }, []);
 
   // Calculate statistics when data changes
@@ -282,35 +269,11 @@ export default function Home() {
 
       console.log('✅ บันทึกคำขอใน Supabase สำเร็จ:', requestData);
       
-      // เพิ่มคิวใหม่
-      try {
-        const queueData: Partial<QueueItem> = {
-          redemption_request_id: requestData.id,
-          customer_name: redeemForm.username,
-          contact_info: redeemForm.contact,
-          product_type: 'robux',
-          estimated_wait_time: 15 // ประมาณ 15 นาที
-        };
-        
-        const newQueueItem = await addToQueue(queueData);
-        console.log('✅ เพิ่มคิวสำเร็จ:', newQueueItem);
-        
-        // แสดงหมายเลขคิวให้ลูกค้า
-        toast.success(`✅ แลกโค้ดสำเร็จ! หมายเลขคิวของคุณคือ #${newQueueItem.queue_number}`, { id: toastId });
-        
-        // แสดง popup หมายเลขคิว
-        setShowQueueNumberPopup(true);
-        setCurrentQueueNumber(newQueueItem.queue_number);
-        
-      } catch (queueError) {
-        console.error('❌ ไม่สามารถเพิ่มคิวได้:', queueError);
-        toast.success('✅ แลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
-      }
-      
       setShowRedeemPopup(false);
       setValidatedCode(null);
       setRedeemCode('');
       setRedeemForm({ username: '', password: '', contact: '' });
+      toast.success('✅ แลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
       
       loadAvailableItems();
 
@@ -566,9 +529,9 @@ export default function Home() {
           </div>
           
           <div className="flex space-x-3">
-            <Link to="/queue-status">
+            <Link to="/status">
               <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all rounded-full">
-                🔍 เช็คสถานะคิว
+                🔍 เช็คสถานะ
               </Button>
             </Link>
             <Link to="/admin">
@@ -1148,29 +1111,6 @@ export default function Home() {
                 📱 ติดต่อ Lemon Shop
               </Button>
               
-
-              
-              <Button 
-                onClick={() => window.open('/queue-status', '_blank')}
-                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔍 เช็คสถานะคิว
-              </Button>
-              
-              <Button 
-                onClick={async () => {
-                  const isConnected = await testQueueConnection();
-                  if (isConnected) {
-                    toast.success('✅ ระบบคิวพร้อมใช้งาน');
-                  } else {
-                    toast.error('❌ ระบบคิวไม่พร้อมใช้งาน');
-                  }
-                }}
-                className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔧 ทดสอบระบบคิว
-              </Button>
-              
               <div className="text-purple-200 text-sm">
                 <p>⏰ เปิดบริการ: 24 ชั่วโมง</p>
                 <p>💬 ตอบกลับภายใน 5-10 นาที</p>
@@ -1179,47 +1119,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {/* Popup แสดงหมายเลขคิว */}
-      <Dialog open={showQueueNumberPopup} onOpenChange={setShowQueueNumberPopup}>
-        <DialogContent className="sm:max-w-md bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-green-800 text-center">
-              🎉 แลกโค้ดสำเร็จ!
-            </DialogTitle>
-            <DialogDescription className="text-center text-green-700">
-              หมายเลขคิวของคุณ
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="text-center py-6">
-            <div className="text-8xl font-bold text-green-600 mb-4">
-              #{currentQueueNumber}
-            </div>
-            <p className="text-green-700 mb-4">
-              กรุณาจดหมายเลขคิวนี้ไว้เพื่อตรวจสอบสถานะ
-            </p>
-            
-            <div className="space-y-3">
-              <Button 
-                onClick={() => window.open('/queue-status', '_blank')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                🔍 เช็คสถานะคิว
-              </Button>
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button 
-              onClick={() => setShowQueueNumberPopup(false)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-            >
-              ปิด
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

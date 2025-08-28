@@ -33,27 +33,3 @@ export interface RedemptionRequest {
   created_at: string;
   updated_at: string;
 }
-
-// ระบบคิวใหม่
-export interface QueueItem {
-  id: string;
-  queue_number: number; // หมายเลขคิวแบบสุ่ม
-  user_id?: string;
-  redemption_request_id?: string;
-  customer_name?: string;
-  contact_info?: string;
-  product_type: 'robux' | 'chicken' | 'rainbow';
-  status: 'waiting' | 'processing' | 'completed' | 'cancelled';
-  priority?: number; // ลำดับความสำคัญ
-  created_at: string;
-  updated_at: string;
-  estimated_wait_time?: number; // เวลารอโดยประมาณ (นาที)
-  admin_notes?: string; // หมายเหตุจากแอดมิน
-}
-
-export interface QueueDisplay {
-  current_processing?: QueueItem;
-  next_3_items: QueueItem[];
-  total_waiting: number;
-  average_wait_time: number;
-}

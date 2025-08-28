@@ -15,11 +15,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { Link } from 'react-router-dom';
 import { Upload, Search } from 'lucide-react';
-import QueueManager from '@/components/QueueManager';
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
@@ -1076,12 +1075,11 @@ export default function Admin() {
               { key: 'accounts', label: '🐔 บัญชี', count: accounts.length },
               { key: 'rainbow', label: '🎮 Rainbow Six', count: rainbowRequests.length },
               { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 },
-              { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length },
-              { key: 'queue', label: '🎯 ระบบคิว', count: 0 }
+              { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length }
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue')}
+                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -2320,13 +2318,6 @@ RBX005,3600`;
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* ระบบคิว */}
-      {activeTab === 'queue' && (
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20">
-          <QueueManager />
-        </div>
-      )}
     </div>
   );
 }
