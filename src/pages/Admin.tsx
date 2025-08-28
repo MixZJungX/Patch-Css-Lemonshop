@@ -362,6 +362,31 @@ export default function Admin() {
         .eq('id', id);
 
       if (error) throw error;
+
+      // ถ้าสถานะเป็น 'rejected' หรือ 'cancelled' ให้อัปเดตคิวด้วย
+      if (status === 'rejected' || status === 'cancelled') {
+        try {
+          // หาคิวที่เกี่ยวข้องกับคำขอนี้
+          const { data: queueItems } = await supabase
+            .from('queue_items')
+            .select('*')
+            .eq('redemption_request_id', id);
+
+          if (queueItems && queueItems.length > 0) {
+            // อัปเดตสถานะคิวเป็น 'cancelled'
+            await supabase
+              .from('queue_items')
+              .update({ 
+                status: 'cancelled',
+                admin_notes: adminNotes || `คำขอถูก${status === 'rejected' ? 'ปฏิเสธ' : 'ยกเลิก'} โดยแอดมิน`
+              })
+              .eq('redemption_request_id', id);
+          }
+        } catch (queueError) {
+          console.warn('ไม่สามารถอัปเดตคิวได้:', queueError);
+        }
+      }
+
       toast.success('อัพเดทสถานะสำเร็จ');
       loadData();
     } catch (error) {

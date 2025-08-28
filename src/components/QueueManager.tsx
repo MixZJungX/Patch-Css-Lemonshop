@@ -3,14 +3,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { QueueItem } from '@/types';
 import { getAllQueueItems, updateQueueStatus } from '@/lib/queueApi';
 import { toast } from 'sonner';
-import { Play, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare } from 'lucide-react';
 
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<'processing' | 'completed' | 'cancelled'>('processing');
+  const [adminNotes, setAdminNotes] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const loadQueueItems = async () => {
     try {
@@ -57,6 +66,32 @@ export default function QueueManager() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!selectedItem) return;
+    
+    setIsUpdating(true);
+    try {
+      await updateQueueStatus(selectedItem.id, updateStatus, adminNotes);
+      toast.success('อัปเดตสถานะคิวสำเร็จ');
+      setShowUpdateDialog(false);
+      setSelectedItem(null);
+      setUpdateStatus('processing');
+      setAdminNotes('');
+      loadQueueItems();
+    } catch (error) {
+      toast.error('เกิดข้อผิดพลาดในการอัปเดต');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const openUpdateDialog = (item: QueueItem) => {
+    setSelectedItem(item);
+    setUpdateStatus(item.status as 'processing' | 'completed' | 'cancelled');
+    setAdminNotes(item.admin_notes || '');
+    setShowUpdateDialog(true);
   };
 
   const waitingCount = queueItems.filter(item => item.status === 'waiting').length;
@@ -121,6 +156,7 @@ export default function QueueManager() {
                     <TableHead>ประเภท</TableHead>
                     <TableHead>สถานะ</TableHead>
                     <TableHead>วันที่สร้าง</TableHead>
+                    <TableHead>จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -158,6 +194,29 @@ export default function QueueManager() {
                             {formatDate(item.created_at)}
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => openUpdateDialog(item)}
+                              variant="outline"
+                              className="h-8 px-2"
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              แก้ไข
+                            </Button>
+                            {item.admin_notes && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2"
+                                title={item.admin_notes}
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -167,6 +226,54 @@ export default function QueueManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog สำหรับอัปเดตสถานะคิว */}
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>อัปเดตสถานะคิว #{selectedItem?.queue_number}</DialogTitle>
+            <DialogDescription>
+              เปลี่ยนสถานะและเพิ่มหมายเหตุสำหรับคิวนี้
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="status">สถานะ</Label>
+              <Select value={updateStatus} onValueChange={(value: 'processing' | 'completed' | 'cancelled') => setUpdateStatus(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="processing">กำลังดำเนินการ</SelectItem>
+                  <SelectItem value="completed">เสร็จสิ้น</SelectItem>
+                  <SelectItem value="cancelled">ยกเลิก</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="notes">หมายเหตุ (ไม่บังคับ)</Label>
+              <Textarea
+                id="notes"
+                placeholder="เช่น: ติดต่อไม่ได้, ลูกค้ายกเลิก, มีปัญหาในการดำเนินการ..."
+                value={adminNotes}
+                onChange={(e) => setAdminNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>
+              ยกเลิก
+            </Button>
+            <Button onClick={handleUpdateStatus} disabled={isUpdating}>
+              {isUpdating ? 'กำลังอัปเดต...' : 'อัปเดต'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
