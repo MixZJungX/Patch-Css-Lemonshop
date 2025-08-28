@@ -24,13 +24,65 @@ export default function Status() {
     setSearched(true);
 
     try {
-      const { data, error } = await supabase
-        .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+      // Try new namespace first (Robux requests)
+      let { data, error } = await supabase
+        .from('app_284beb8f90_redemption_requests')
         .select('*')
         .or(`roblox_username.ilike.%${searchTerm}%,contact_info.ilike.%${searchTerm}%`)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
+
+      // If not found, try Rainbow Six requests
+      if (error && error.code === 'PGRST116') {
+        const { data: rainbowData, error: rainbowError } = await supabase
+          .from('app_284beb8f90_rainbow_requests')
+          .select('*')
+          .or(`user_name.ilike.%${searchTerm}%,user_email.ilike.%${searchTerm}%,user_phone.ilike.%${searchTerm}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (rainbowError && rainbowError.code !== 'PGRST116') {
+          throw rainbowError;
+        }
+
+        if (rainbowData) {
+          // Transform Rainbow Six data to match RedemptionRequest format
+          data = {
+            id: rainbowData.id,
+            roblox_username: rainbowData.user_name || rainbowData.discord_username,
+            robux_amount: rainbowData.credits_requested || 0,
+            contact_info: `Rainbow Six: ${rainbowData.user_name} | Email: ${rainbowData.user_email} | Phone: ${rainbowData.user_phone}`,
+            status: rainbowData.status,
+            admin_notes: rainbowData.admin_notes,
+            created_at: rainbowData.created_at,
+            updated_at: rainbowData.updated_at,
+            type: 'rainbow'
+          };
+          error = null;
+        }
+      }
+
+      // If still not found, try old namespace as fallback
+      if (error && error.code === 'PGRST116') {
+        const { data: oldData, error: oldError } = await supabase
+          .from('app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_redemption_requests')
+          .select('*')
+          .or(`roblox_username.ilike.%${searchTerm}%,contact_info.ilike.%${searchTerm}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (oldError && oldError.code !== 'PGRST116') {
+          throw oldError;
+        }
+
+        if (oldData) {
+          data = oldData;
+          error = null;
+        }
+      }
 
       if (error && error.code !== 'PGRST116') {
         throw error;
@@ -74,11 +126,11 @@ export default function Status() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 bg-black/20 backdrop-blur-lg border-b border-white/10">
+      <header className="relative z-10 bg-black/20 backdrop-blur-lg border-b border-white/10 rounded-b-3xl">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-2xl">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-3xl flex items-center justify-center shadow-2xl">
                 <span className="text-3xl">🔍</span>
               </div>
               <div>
@@ -89,7 +141,7 @@ export default function Status() {
               </div>
             </div>
             <Link to="/">
-              <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+              <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20 rounded-full">
                 🏠 กลับหน้าหลัก
               </Button>
             </Link>
@@ -101,29 +153,29 @@ export default function Status() {
       <main className="relative z-10 container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           {/* Search Form */}
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8 rounded-3xl">
             <CardHeader className="text-center">
               <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
                 <span className="text-3xl">🔍</span>
                 <span>ค้นหาสถานะคำขอ</span>
               </CardTitle>
-              <p className="text-blue-200">ใส่ชื่อผู้ใช้ Roblox หรือข้อมูลติดต่อที่ใช้ส่งคำขอ</p>
+              <p className="text-blue-200">ใส่ชื่อผู้ใช้ Roblox, Rainbow Six หรือข้อมูลติดต่อที่ใช้ส่งคำขอ</p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="ชื่อผู้ใช้ Roblox หรือข้อมูลติดต่อ"
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 text-lg p-4"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                />
+                                  <Input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="ชื่อผู้ใช้ Roblox, Rainbow Six หรือข้อมูลติดต่อ"
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 text-lg p-4 rounded-2xl"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  />
               </div>
               <Button
                 onClick={handleSearch}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-4 text-lg"
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-4 text-lg rounded-full"
               >
                 {loading ? 'กำลังค้นหา...' : '🔍 ค้นหาสถานะ'}
               </Button>
@@ -132,7 +184,7 @@ export default function Status() {
 
           {/* Search Results */}
           {searched && (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 rounded-3xl">
               <CardHeader>
                 <CardTitle className="text-white flex items-center space-x-2">
                   <span className="text-2xl">📋</span>
@@ -143,7 +195,7 @@ export default function Status() {
                 {searchResult ? (
                   <div className="space-y-6">
                     {/* Status Card */}
-                    <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+                    <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold text-white">สถานะคำขอ</h3>
                         <Badge className={getStatusInfo(searchResult.status).color + ' text-lg px-4 py-2'}>
@@ -153,13 +205,20 @@ export default function Status() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-white">
                         <div>
-                          <p className="text-sm text-white/60 mb-1">ชื่อผู้ใช้ Roblox</p>
+                          <p className="text-sm text-white/60 mb-1">
+                            {searchResult.type === 'rainbow' ? 'ชื่อผู้ใช้' : 'ชื่อผู้ใช้ Roblox'}
+                          </p>
                           <p className="font-semibold">{searchResult.roblox_username}</p>
                         </div>
                         <div>
                           <p className="text-sm text-white/60 mb-1">ประเภทคำขอ</p>
                           <p className="font-semibold">
-                            {searchResult.robux_amount > 0 ? `${searchResult.robux_amount} Robux` : 'บัญชีไก่ตัน'}
+                            {searchResult.type === 'rainbow' 
+                              ? `${searchResult.robux_amount} Rainbow Six Credits`
+                              : searchResult.robux_amount > 0 
+                                ? `${searchResult.robux_amount} Robux` 
+                                : 'บัญชีไก่ตัน'
+                            }
                           </p>
                         </div>
                         <div>
@@ -197,7 +256,7 @@ export default function Status() {
                     </div>
 
                     {/* Status Timeline */}
-                    <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+                    <div className="bg-white/5 rounded-3xl p-6 border border-white/10">
                       <h3 className="text-xl font-bold text-white mb-4">ขั้นตอนการดำเนินการ</h3>
                       <div className="space-y-4">
                         <div className="flex items-center space-x-4">
@@ -233,7 +292,7 @@ export default function Status() {
                     </div>
 
                     {/* Contact Info */}
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
                       <p className="text-blue-200 text-sm">
                         <strong>💡 คำแนะนำ:</strong> หากคำขอของคุณอยู่ในสถานะ "เสร็จสิ้น" แต่ยังไม่ได้รับของรางวัล 
                         กรุณาติดต่อแอดมินผ่านช่องทางที่ท่านระบุไว้ในคำขอ
@@ -247,11 +306,12 @@ export default function Status() {
                     <p className="text-white/60 mb-6">
                       ไม่พบคำขอที่ตรงกับข้อมูลที่ค้นหา กรุณาตรวจสอบการพิมพ์หรือลองใช้ข้อมูลอื่น
                     </p>
-                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4">
                       <p className="text-yellow-200 text-sm">
                         <strong>💡 เคล็ดลับการค้นหา:</strong><br/>
                         • ใช้ชื่อผู้ใช้ Roblox ที่ใช้ส่งคำขอ<br/>
-                        • ใช้ข้อมูลติดต่อ (Discord, Line ID) ที่ระบุในคำขอ<br/>
+                        • ใช้ชื่อผู้ใช้ Rainbow Six ที่ใช้ส่งคำขอ<br/>
+                        • ใช้ข้อมูลติดต่อ (Discord, Line ID, Email, เบอร์โทร) ที่ระบุในคำขอ<br/>
                         • ตรวจสอบการพิมพ์ให้ถูกต้อง
                       </p>
                     </div>
@@ -263,14 +323,15 @@ export default function Status() {
 
           {/* Help Section */}
           {!searched && (
-            <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 rounded-3xl">
               <CardContent className="p-6">
                 <h3 className="text-lg font-bold text-white mb-4">🆘 ช่วยเหลือ</h3>
                 <div className="space-y-3 text-white/80">
                   <p><strong>วิธีการค้นหา:</strong></p>
                   <ul className="list-disc list-inside space-y-1 ml-4">
                     <li>ใส่ชื่อผู้ใช้ Roblox ที่ใช้ส่งคำขอ</li>
-                    <li>หรือใส่ข้อมูลติดต่อ (Discord, Line ID) ที่ระบุในคำขอ</li>
+                    <li>ใส่ชื่อผู้ใช้ Rainbow Six ที่ใช้ส่งคำขอ</li>
+                    <li>หรือใส่ข้อมูลติดต่อ (Discord, Line ID, Email, เบอร์โทร) ที่ระบุในคำขอ</li>
                   </ul>
                   <p className="text-sm mt-4"><strong>หมายเหตุ:</strong> ระบบจะแสดงคำขอล่าสุดที่ตรงกับข้อมูลที่ค้นหา</p>
                 </div>

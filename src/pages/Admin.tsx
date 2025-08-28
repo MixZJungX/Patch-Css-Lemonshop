@@ -18,7 +18,7 @@ import { Upload, Search } from 'lucide-react';
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
@@ -40,6 +40,8 @@ export default function Admin() {
     created_at: string;
   }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<Array<{ id: string; title?: string; content: string; type?: 'info' | 'warning' | 'critical'; link?: string; is_active?: boolean; created_at?: string }>>([]);
+  const [newAnnouncement, setNewAnnouncement] = useState<{ title: string; content: string; type: 'info' | 'warning' | 'critical'; link: string; is_active: boolean }>({ title: '', content: '', type: 'info', link: '', is_active: true });
 
   // Form states
   const [newCode, setNewCode] = useState({ code: '', robux_value: '' });
@@ -230,6 +232,17 @@ export default function Admin() {
 
         setCodes(allCodes);
 
+        // Load announcements (active and inactive)
+        try {
+          const { data: annData } = await supabase
+            .from('app_284beb8f90_announcements')
+            .select('*')
+            .order('created_at', { ascending: false });
+          setAnnouncements((annData || []).map((a: any) => ({ id: a.id, title: a.title, content: a.content || a.message, type: a.type || 'info', link: a.link || '', is_active: a.is_active, created_at: a.created_at })));
+        } catch (_e) {
+          setAnnouncements([]);
+        }
+
         // Load Rainbow Six requests - ONLY from Supabase
         try {
           const { data: rainbowData, error: rainbowError } = await supabase
@@ -276,12 +289,62 @@ export default function Admin() {
         setCodes(localCodes);
         setAccounts(localAccounts);
         setRainbowRequests(localRainbowRequests);
+        setAnnouncements([]);
       }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addAnnouncement = async () => {
+    if (!newAnnouncement.content.trim()) {
+      toast.error('กรุณากรอกข้อความประกาศ');
+      return;
+    }
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        title: newAnnouncement.title || null,
+        content: newAnnouncement.content,
+        type: newAnnouncement.type,
+        link: newAnnouncement.link || null,
+        is_active: newAnnouncement.is_active,
+        created_at: new Date().toISOString(),
+      };
+      const { data, error } = await adminApi.createAnnouncement(payload);
+      if (error) throw new Error(error);
+      toast.success('เพิ่มประกาศสำเร็จ');
+      setNewAnnouncement({ title: '', content: '', type: 'info', link: '', is_active: true });
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('ไม่สามารถเพิ่มประกาศได้');
+    }
+  };
+
+  const toggleAnnouncementActive = async (id: string, isActive: boolean) => {
+    try {
+      const { error } = await adminApi.updateAnnouncement(id, { is_active: isActive, updated_at: new Date().toISOString() });
+      if (error) throw new Error(error);
+      toast.success('อัพเดทสถานะประกาศสำเร็จ');
+      await loadData();
+    } catch (e) {
+      toast.error('อัพเดทสถานะไม่สำเร็จ');
+    }
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    if (!confirm('ลบประกาศนี้หรือไม่?')) return;
+    try {
+      const { error } = await adminApi.deleteAnnouncement(id);
+      if (error) throw new Error(error);
+      toast.success('ลบประกาศสำเร็จ');
+      await loadData();
+    } catch (e) {
+      toast.error('ไม่สามารถลบประกาศได้');
     }
   };
 
@@ -307,34 +370,172 @@ export default function Admin() {
   };
 
   const deleteRequest = async (id: string) => {
+    console.log('🚀 deleteRequest called with ID:', id);
+    console.log('📊 Current requests count:', requests.length);
+    console.log('📊 Current rainbowRequests count:', rainbowRequests.length);
+    
+    // ตรวจสอบสิทธิ์ของผู้ใช้
+    if (!user) {
+      console.error('❌ User not authenticated');
+      toast.error('กรุณาเข้าสู่ระบบก่อน');
+      return;
+    }
+    
     if (!confirm('คุณแน่ใจหรือไม่ที่ต้องการลบคำขอนี้? การดำเนินการนี้ไม่สามารถยกเลิกได้')) {
+      console.log('❌ User cancelled deletion');
       return;
     }
 
     try {
-      // Check if this is a Rainbow Six request by finding it in the requests array
-      const request = requests.find(req => req.id === id);
-      const tableName = request?.type === 'rainbow' ? 
-        'app_284beb8f90_rainbow_requests' : 
-        'app_284beb8f90_redemption_requests';
+      console.log('🗑️ Attempting to delete request, ID:', id);
+      
+      // Check if this is a Rainbow Six request by finding it in both arrays
+      const rainbowRequest = rainbowRequests.find(req => req.id === id);
+      const regularRequest = requests.find(req => req.id === id);
+      
+      let tableName = 'app_284beb8f90_redemption_requests'; // default
+      let requestType = 'regular';
+      
+      if (rainbowRequest) {
+        tableName = 'app_284beb8f90_rainbow_requests';
+        requestType = 'rainbow';
+        console.log('🗑️ Found Rainbow Six request, using table:', tableName);
+      } else if (regularRequest) {
+        console.log('🗑️ Found regular request, using table:', tableName);
+      } else {
+        console.log('⚠️ Request not found in either array, trying both tables');
+      }
 
-      const { error } = await supabase
+      // ลองลบจากตารางแรก
+      let { data, error } = await supabase
         .from(tableName)
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select();
 
-      if (error) throw error;
-      toast.success('ลบคำขอสำเร็จ');
+      if (error) {
+        console.error('❌ Delete failed from table:', tableName, error);
+        
+        // ตรวจสอบว่าเป็นปัญหา RLS หรือไม่
+        if (error.message.includes('permission') || error.message.includes('policy')) {
+          console.log('🔒 RLS policy issue detected, trying alternative approach...');
+          
+          // ลองใช้ adminApi แทน
+          try {
+            console.log('🔄 Trying adminApi delete...');
+            const result = await adminApi.deleteRequest(id, requestType);
+            if (result.error) {
+              throw new Error(result.error);
+            }
+            console.log('✅ Successfully deleted via adminApi');
+          } catch (adminError) {
+            console.error('❌ AdminApi delete failed:', adminError);
+            
+            // ลองตารางที่สองถ้าทุกอย่างไม่สำเร็จ
+            const otherTable = tableName === 'app_284beb8f90_rainbow_requests' 
+              ? 'app_284beb8f90_redemption_requests' 
+              : 'app_284beb8f90_rainbow_requests';
+            
+            console.log('🔄 Trying alternative table:', otherTable);
+            
+            const { data: secondData, error: secondError } = await supabase
+              .from(otherTable)
+              .delete()
+              .eq('id', id)
+              .select();
+              
+            if (secondError) {
+              console.error('❌ Delete failed from both tables:', secondError);
+              throw new Error(`ไม่สามารถลบข้อมูลได้: ${secondError.message}`);
+            }
+            
+            // ตรวจสอบว่าข้อมูลถูกลบจริงหรือไม่
+            if (!secondData || secondData.length === 0) {
+              console.error('❌ No rows were deleted from alternative table');
+              throw new Error('ไม่พบข้อมูลที่ต้องการลบ');
+            }
+            
+            console.log('✅ Successfully deleted from alternative table:', otherTable, 'Rows deleted:', secondData.length);
+          }
+        } else {
+          // ลองตารางที่สองถ้าตารางแรกไม่สำเร็จ
+          const otherTable = tableName === 'app_284beb8f90_rainbow_requests' 
+            ? 'app_284beb8f90_redemption_requests' 
+            : 'app_284beb8f90_rainbow_requests';
+          
+          console.log('🔄 Trying alternative table:', otherTable);
+          
+          const { data: secondData, error: secondError } = await supabase
+            .from(otherTable)
+            .delete()
+            .eq('id', id)
+            .select();
+            
+          if (secondError) {
+            console.error('❌ Delete failed from both tables:', secondError);
+            throw new Error(`ไม่สามารถลบข้อมูลได้: ${secondError.message}`);
+          }
+          
+          // ตรวจสอบว่าข้อมูลถูกลบจริงหรือไม่
+          if (!secondData || secondData.length === 0) {
+            console.error('❌ No rows were deleted from alternative table');
+            throw new Error('ไม่พบข้อมูลที่ต้องการลบ');
+          }
+          
+          console.log('✅ Successfully deleted from alternative table:', otherTable, 'Rows deleted:', secondData.length);
+        }
+      } else {
+        // ตรวจสอบว่าข้อมูลถูกลบจริงหรือไม่
+        if (!data || data.length === 0) {
+          console.error('❌ No rows were deleted from table:', tableName);
+          throw new Error('ไม่พบข้อมูลที่ต้องการลบ');
+        }
+        
+        console.log('✅ Successfully deleted from table:', tableName, 'Rows deleted:', data.length);
+      }
+      
+      // ยืนยันว่าการลบสำเร็จแล้วค่อยอัพเดท UI
+      console.log('✅ Database deletion successful, updating UI...');
+      
+      // ตรวจสอบว่าข้อมูลถูกลบจริงหรือไม่โดยการ query ใหม่
+      const { data: checkData, error: checkError } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq('id', id)
+        .single();
+      
+      if (checkData) {
+        console.error('❌ Data still exists after deletion!');
+        throw new Error('ข้อมูลยังคงอยู่ในฐานข้อมูล');
+      }
+      
+      console.log('✅ Confirmed: Data successfully deleted from database');
       
       // Force immediate UI update by filtering out the deleted item
       setRequests(prevRequests => prevRequests.filter(req => req.id !== id));
       setRainbowRequests(prevRequests => prevRequests.filter(req => req.id !== id));
       
-      // Don't reload data to prevent bounce-back effect
-      console.log('✅ UI updated, NOT calling loadData() to prevent bounce-back');
+      console.log('✅ UI updated, request removed from display');
+      toast.success('ลบคำขอสำเร็จ');
+      
+      // Reload data to ensure consistency
+      console.log('🔄 Reloading data to ensure consistency...');
+      await loadData();
     } catch (error) {
       console.error('Delete error:', error);
-      toast.error('เกิดข้อผิดพลาดในการลบคำขอ');
+      
+      // แสดงข้อความ error ที่เฉพาะเจาะจงมากขึ้น
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          toast.error('ไม่มีสิทธิ์ในการลบคำขอ กรุณาติดต่อผู้ดูแลระบบ');
+        } else if (error.message.includes('network')) {
+          toast.error('เกิดปัญหาการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
+        } else {
+          toast.error(`เกิดข้อผิดพลาดในการลบคำขอ: ${error.message}`);
+        }
+      } else {
+        toast.error('เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการลบคำขอ');
+      }
     }
   };
 
@@ -722,6 +923,53 @@ export default function Admin() {
     }
   };
 
+  // ฟังก์ชันทดสอบปุ่มลบ
+  const testDeleteButton = () => {
+    console.log('🧪 Testing delete button functionality');
+    console.log('👤 Current user:', user);
+    console.log('📊 Requests available:', requests.length);
+    console.log('📊 Rainbow requests available:', rainbowRequests.length);
+    
+    if (requests.length > 0) {
+      const testId = requests[0].id;
+      console.log('🧪 Testing with first request ID:', testId);
+      console.log('🧪 Request details:', requests[0]);
+      deleteRequest(testId);
+    } else if (rainbowRequests.length > 0) {
+      const testId = rainbowRequests[0].id;
+      console.log('🧪 Testing with first rainbow request ID:', testId);
+      console.log('🧪 Rainbow request details:', rainbowRequests[0]);
+      deleteRequest(testId);
+    } else {
+      console.log('❌ No requests available for testing');
+      toast.error('ไม่มีคำขอสำหรับทดสอบ');
+    }
+  };
+
+  // ฟังก์ชันทดสอบการเชื่อมต่อฐานข้อมูล
+  const testDatabaseConnection = async () => {
+    console.log('🔍 Testing database connection...');
+    
+    try {
+      // ทดสอบการอ่านข้อมูล
+      const { data: testData, error: testError } = await supabase
+        .from('app_284beb8f90_redemption_requests')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        console.error('❌ Database read test failed:', testError);
+        toast.error('ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
+      } else {
+        console.log('✅ Database read test successful');
+        toast.success('เชื่อมต่อฐานข้อมูลสำเร็จ');
+      }
+    } catch (error) {
+      console.error('❌ Database connection test failed:', error);
+      toast.error('เกิดข้อผิดพลาดในการทดสอบฐานข้อมูล');
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-900 via-purple-900 to-indigo-900 flex items-center justify-center">
@@ -758,6 +1006,20 @@ export default function Admin() {
             </div>
             <div className="flex items-center space-x-3">
               <span className="text-white">👋 {user.email}</span>
+              <Button 
+                onClick={testDeleteButton} 
+                variant="outline" 
+                className="bg-yellow-500/20 border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30"
+              >
+                🧪 ทดสอบปุ่มลบ
+              </Button>
+              <Button 
+                onClick={testDatabaseConnection} 
+                variant="outline" 
+                className="bg-blue-500/20 border-blue-500/30 text-blue-300 hover:bg-blue-500/30"
+              >
+                🔍 ทดสอบฐานข้อมูล
+              </Button>
               <Link to="/">
                 <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
                   กลับหน้าหลัก
@@ -812,7 +1074,8 @@ export default function Admin() {
               { key: 'codes', label: '💎 โค้ด', count: codes.length },
               { key: 'accounts', label: '🐔 บัญชี', count: accounts.length },
               { key: 'rainbow', label: '🎮 Rainbow Six', count: rainbowRequests.length },
-              { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 }
+              { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 },
+              { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length }
             ].map(tab => (
               <Button
                 key={tab.key}
@@ -1025,7 +1288,10 @@ export default function Admin() {
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={() => deleteRequest(request.id)}
+                                onClick={() => {
+                                  console.log('🔘 Delete button clicked for request ID:', request.id);
+                                  deleteRequest(request.id);
+                                }}
                                 className="bg-gray-600/20 text-gray-300 hover:bg-gray-600/30 text-xs"
                               >
                                 ลบ
@@ -1458,6 +1724,111 @@ export default function Admin() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {activeTab === 'announcements' && (
+          <div className="space-y-6">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">📢 เพิ่มประกาศใหม่</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    placeholder="หัวข้อ (ไม่บังคับ)"
+                    value={newAnnouncement.title}
+                    onChange={(e) => setNewAnnouncement(prev => ({ ...prev, title: e.target.value }))}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                  />
+                  <Select onValueChange={(value) => setNewAnnouncement(prev => ({ ...prev, type: value as 'info' | 'warning' | 'critical' }))}>
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                      <SelectValue placeholder="ประเภท" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-gray-700">
+                      <SelectItem value="info">Info</SelectItem>
+                      <SelectItem value="warning">Warning</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="ลิงก์ (ไม่บังคับ)"
+                    value={newAnnouncement.link}
+                    onChange={(e) => setNewAnnouncement(prev => ({ ...prev, link: e.target.value }))}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                  />
+                  <Select onValueChange={(value) => setNewAnnouncement(prev => ({ ...prev, is_active: value === 'true' }))}>
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                      <SelectValue placeholder="สถานะ" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-gray-700">
+                      <SelectItem value="true">แสดง</SelectItem>
+                      <SelectItem value="false">ซ่อน</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Textarea
+                    placeholder="ข้อความประกาศ"
+                    value={newAnnouncement.content}
+                    onChange={(e) => setNewAnnouncement(prev => ({ ...prev, content: e.target.value }))}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 md:col-span-2 min-h-[120px]"
+                  />
+                  <Button onClick={addAnnouncement} className="bg-gradient-to-r from-cyan-600 to-blue-600 md:col-span-2">
+                    บันทึกประกาศ
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">📜 รายการประกาศ</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10">
+                        <TableHead className="text-white">หัวข้อ</TableHead>
+                        <TableHead className="text-white">ข้อความ</TableHead>
+                        <TableHead className="text-white">ประเภท</TableHead>
+                        <TableHead className="text-white">สถานะ</TableHead>
+                        <TableHead className="text-white">วันที่</TableHead>
+                        <TableHead className="text-white">จัดการ</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {announcements.length === 0 ? (
+                        <TableRow className="border-white/10">
+                          <TableCell colSpan={6} className="text-center text-white/70 py-8">ไม่มีประกาศ</TableCell>
+                        </TableRow>
+                      ) : announcements.map(a => (
+                        <TableRow key={a.id} className="border-white/10">
+                          <TableCell className="text-white">{a.title || '-'}</TableCell>
+                          <TableCell className="text-white max-w-[400px] truncate" title={a.content}>{a.content}</TableCell>
+                          <TableCell className="text-white">{a.type || 'info'}</TableCell>
+                          <TableCell>
+                            <Badge className={a.is_active ? 'bg-green-500/20 text-green-300' : 'bg-gray-500/20 text-gray-300'}>
+                              {a.is_active ? 'แสดง' : 'ซ่อน'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-white text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('th-TH') : '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button size="sm" className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs" onClick={() => toggleAnnouncementActive(a.id, !a.is_active)}>
+                                {a.is_active ? 'ซ่อน' : 'แสดง'}
+                              </Button>
+                              <Button size="sm" className="bg-red-500/20 text-red-300 hover:bg-red-500/30 text-xs" onClick={() => deleteAnnouncement(a.id)}>
+                                ลบ
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {activeTab === 'add-rainbow' && (

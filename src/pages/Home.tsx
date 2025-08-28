@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -9,10 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
-import { GamepadIcon, Settings } from 'lucide-react';
+import { GamepadIcon, Settings, Megaphone } from 'lucide-react';
+import '@/styles/notifications.css';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'redeem' | 'chicken' | 'rainbow'>('redeem');
+  type Announcement = {
+    id: string;
+    title?: string;
+    content: string;
+    type?: 'info' | 'warning' | 'critical';
+    link?: string;
+    is_active?: boolean;
+    created_at?: string;
+  };
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   
   // Rainbow Six form states
   const [rainbowForm, setRainbowForm] = useState({
@@ -57,6 +69,7 @@ export default function Home() {
 
   useEffect(() => {
     loadAvailableItems();
+    loadAnnouncements();
   }, []);
 
   // Calculate statistics when data changes
@@ -129,6 +142,38 @@ export default function Home() {
       setAvailableRainbowCodes([]);
     }
   };
+
+  const loadAnnouncements = async () => {
+    try {
+      // Try Supabase first
+      const { data, error } = await supabase
+        .from('app_284beb8f90_announcements')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        throw error;
+      }
+
+      const mapped: Announcement[] = (data || []).map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        content: a.content || a.message,
+        type: a.type || 'info',
+        link: a.link || undefined,
+        is_active: a.is_active,
+        created_at: a.created_at,
+      }));
+
+      setAnnouncements(mapped);
+    } catch (_e) {
+      setAnnouncements([]);
+    }
+  };
+
+  const getAlertVariant = (type?: string) => (type === 'critical' ? 'destructive' : 'default');
 
   const validateCode = async () => {
     if (!redeemCode.trim()) {
@@ -422,10 +467,59 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative">
       <div className="container mx-auto px-4 py-8">
+        {announcements.length > 0 && (
+          <div className="mb-6 announcement-marquee">
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Megaphone className="w-5 h-5 text-yellow-300" />
+                <span className="text-white font-semibold">ประกาศ</span>
+              </div>
+              <div className="overflow-hidden">
+                <div className="announcement-track" style={{ ['--marquee-duration' as any]: `${Math.max(18, announcements.length * 6)}s` }}>
+                  {announcements.map((a) => (
+                    <span key={a.id} className={`announcement-pill ${a.type || 'info'}`}>
+                      <span className="text-sm">
+                        {a.type === 'critical' || a.type === 'warning' ? '⚠️' : '📣'}
+                      </span>
+                      {a.title && <span className="hidden sm:inline">{a.title}:</span>}
+                      <span className="opacity-90">{a.content}</span>
+                      {a.link && (
+                        <button
+                          onClick={() => window.open(a.link!, '_blank')}
+                          className="announcement-cta ml-2 text-xs"
+                        >
+                          ดูเพิ่มเติม
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {/* Duplicate for seamless loop */}
+                  {announcements.map((a) => (
+                    <span key={`${a.id}-dup`} className={`announcement-pill ${a.type || 'info'}`}>
+                      <span className="text-sm">
+                        {a.type === 'critical' || a.type === 'warning' ? '⚠️' : '📣'}
+                      </span>
+                      {a.title && <span className="hidden sm:inline">{a.title}:</span>}
+                      <span className="opacity-90">{a.content}</span>
+                      {a.link && (
+                        <button
+                          onClick={() => window.open(a.link!, '_blank')}
+                          className="announcement-cta ml-2 text-xs"
+                        >
+                          ดูเพิ่มเติม
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-3xl flex items-center justify-center">
               <span className="text-white text-2xl">💎</span>
             </div>
             <div>
@@ -436,19 +530,19 @@ export default function Home() {
           
           <div className="flex space-x-3">
             <Link to="/status">
-              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all">
+              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all rounded-full">
                 🔍 เช็คสถานะ
               </Button>
             </Link>
             <Link to="/admin">
-              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all">
+              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all rounded-full">
                 <Settings className="w-4 h-4 mr-2" />
                 👑 แอดมิน
               </Button>
             </Link>
             <Button 
               onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 backdrop-blur-xl border border-blue-500/30 text-white hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 backdrop-blur-xl border border-blue-500/30 text-white hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg rounded-full"
             >
               <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -457,7 +551,7 @@ export default function Home() {
             </Button>
             <Button 
               onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
-              className="bg-gradient-to-r from-orange-600 to-yellow-600 backdrop-blur-xl border border-orange-500/30 text-white hover:from-orange-700 hover:to-yellow-700 transition-all shadow-lg"
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 backdrop-blur-xl border border-orange-500/30 text-white hover:from-orange-700 hover:to-yellow-700 transition-all shadow-lg rounded-full"
             >
               🛒 ร้านค้าออนไลน์
             </Button>
@@ -466,7 +560,7 @@ export default function Home() {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🎮</div>
               <div className="text-2xl font-bold text-white">{availableCodes.length}</div>
@@ -475,7 +569,7 @@ export default function Home() {
             </CardContent>
           </Card>
           
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🐔</div>
               <div className="text-2xl font-bold text-white">{availableAccounts.filter(account => account.status === 'available').length}</div>
@@ -484,7 +578,7 @@ export default function Home() {
             </CardContent>
           </Card>
           
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🌈</div>
               <div className="text-2xl font-bold text-white">{availableRainbowCodes.length}</div>
@@ -493,7 +587,7 @@ export default function Home() {
             </CardContent>
           </Card>
           
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center">
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🔒</div>
               <div className="text-2xl font-bold text-green-400">100%</div>
@@ -506,10 +600,10 @@ export default function Home() {
 
 
         <div className="flex justify-center mb-8">
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-2 border border-white/20">
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-2 border border-white/20">
             <Button
               onClick={() => setActiveTab('redeem')}
-              className={`px-6 py-3 rounded-xl transition-all ${
+              className={`px-6 py-3 rounded-full transition-all ${
                 activeTab === 'redeem'
                   ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
                   : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
@@ -519,7 +613,7 @@ export default function Home() {
             </Button>
             <Button
               onClick={() => setActiveTab('chicken')}
-              className={`px-6 py-3 rounded-xl transition-all ${
+              className={`px-6 py-3 rounded-full transition-all ${
                 activeTab === 'chicken'
                   ? 'bg-gradient-to-r from-orange-600 to-yellow-600 text-white shadow-lg'
                   : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
@@ -530,7 +624,7 @@ export default function Home() {
             
             <Button
               onClick={() => setActiveTab('rainbow')}
-              className={`px-6 py-3 rounded-xl transition-all ${
+              className={`px-6 py-3 rounded-full transition-all ${
                 activeTab === 'rainbow'
                   ? 'bg-gradient-to-r from-blue-600 to-orange-600 text-white shadow-lg'
                   : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
@@ -544,7 +638,7 @@ export default function Home() {
         {/* Main Content Area */}
         <div className="max-w-4xl mx-auto">
           {(activeTab === 'redeem' || activeTab === 'chicken') && (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8 rounded-3xl">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
                   <span className="text-3xl">{activeTab === 'redeem' ? '💳' : '🐔'}</span>
@@ -565,20 +659,20 @@ export default function Home() {
                         value={activeTab === 'redeem' ? redeemCode : chickenRedeemCode}
                         onChange={(e) => activeTab === 'redeem' ? setRedeemCode(e.target.value) : setChickenRedeemCode(e.target.value)}
                         placeholder="ใส่โค้ดที่ได้รับ"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1 rounded-2xl"
                         onKeyPress={(e) => e.key === 'Enter' && (activeTab === 'redeem' ? validateCode() : handleChickenRedeemCode())}
                       />
                       <Button
                         onClick={activeTab === 'redeem' ? validateCode : handleChickenRedeemCode}
                         disabled={activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting}
-                        className={`bg-gradient-to-r ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
+                        className={`bg-gradient-to-r rounded-full ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
                       >
                         {(activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting) ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
                       </Button>
                     </div>
                   </div>
                   
-                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-2xl p-4">
                     <p className="text-blue-100 text-sm">
                       <strong>💡 วิธีใช้:</strong> {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง จะมีหน้าต่างขึ้นมาให้ใส่ชื่อผู้ใช้และรหัสผ่าน Roblox เพื่อรับ Robux' : 'โค้ดที่ได้รับจะถูกตรวจสอบและแสดงข้อมูลบัญชีที่สามารถใช้งานได้ กรุณาเก็บข้อมูลบัญชีอย่างปลอดภัยหลังจากได้รับ'}
                     </p>
@@ -589,7 +683,7 @@ export default function Home() {
           )}
 
           {activeTab === 'rainbow' && (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8">
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8 rounded-3xl">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
                   <GamepadIcon className="w-8 h-8" />
@@ -607,7 +701,7 @@ export default function Home() {
                       value={rainbowForm.ubisoftEmail}
                       onChange={(e) => setRainbowForm(prev => ({ ...prev, ubisoftEmail: e.target.value }))}
                       placeholder="email@example.com"
-                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                     />
                   </div>
 
@@ -619,7 +713,7 @@ export default function Home() {
                       value={rainbowForm.ubisoftPassword}
                       onChange={(e) => setRainbowForm(prev => ({ ...prev, ubisoftPassword: e.target.value }))}
                       placeholder="••••••••"
-                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                     />
                   </div>
 
@@ -651,7 +745,7 @@ export default function Home() {
                             value={rainbowForm.xboxEmail}
                             onChange={(e) => setRainbowForm(prev => ({ ...prev, xboxEmail: e.target.value }))}
                             placeholder="xbox@example.com"
-                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                           />
                         </div>
                         
@@ -663,7 +757,7 @@ export default function Home() {
                             value={rainbowForm.xboxPassword}
                             onChange={(e) => setRainbowForm(prev => ({ ...prev, xboxPassword: e.target.value }))}
                             placeholder="••••••••"
-                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                            className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                           />
                         </div>
                       </div>
@@ -677,12 +771,12 @@ export default function Home() {
                       value={rainbowForm.redeemCode}
                       onChange={(e) => setRainbowForm(prev => ({ ...prev, redeemCode: e.target.value }))}
                       placeholder="กรอกโค้ดแลกรับ"
-                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50 h-11 text-center font-mono uppercase"
+                      className="border-white/20 bg-white/10 text-white placeholder:text-white/50 h-11 text-center font-mono uppercase rounded-2xl"
                     />
                   </div>
 
                   <div className="space-y-4">
-                    <div className="bg-orange-900/30 border border-orange-500/30 rounded-lg p-4">
+                    <div className="bg-orange-900/30 border border-orange-500/30 rounded-2xl p-4">
                       <h4 className="text-orange-200 font-medium mb-2 flex items-center">
                         <span className="text-xl mr-2">⚠️</span>
                         ข้อมูลติดต่อ (สำคัญมาก!)
@@ -701,7 +795,7 @@ export default function Home() {
                         value={rainbowForm.contact}
                         onChange={(e) => setRainbowForm(prev => ({ ...prev, contact: e.target.value }))}
                         placeholder="กรอก Discord, LINE ID หรือ Facebook ของคุณ"
-                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                       />
                     </div>
                     
@@ -714,7 +808,7 @@ export default function Home() {
                         value={rainbowForm.phoneNumber}
                         onChange={(e) => setRainbowForm(prev => ({ ...prev, phoneNumber: e.target.value }))}
                         placeholder="กรอกเบอร์โทรศัพท์ของคุณ (เช่น 08X-XXX-XXXX)"
-                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50"
+                        className="border-white/20 bg-white/10 text-white placeholder:text-white/50 rounded-2xl"
                       />
                     </div>
                   </div>
@@ -722,7 +816,7 @@ export default function Home() {
                 
                 <Button 
                   onClick={handleRainbowRedeemCode} 
-                  className="w-full mt-6 bg-gradient-to-r from-blue-600 via-orange-600 to-red-600 hover:from-blue-700 hover:via-orange-700 hover:to-red-700 text-white font-bold py-3 text-lg" 
+                  className="w-full mt-6 bg-gradient-to-r from-blue-600 via-orange-600 to-red-600 hover:from-blue-700 hover:via-orange-700 hover:to-red-700 text-white font-bold py-3 text-lg rounded-full" 
                   disabled={isRainbowButtonSubmitting}
                 >
                   {isRainbowButtonSubmitting ? (
@@ -738,7 +832,7 @@ export default function Home() {
                   )}
                 </Button>
 
-                <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                <div className="bg-blue-900/30 border border-blue-500/30 rounded-2xl p-4">
                   <h4 className="text-blue-200 font-medium mb-2">💡 คำแนะนำ</h4>
                   <p className="text-blue-100 text-sm">
                     • กรอกข้อมูลบัญชี Ubisoft ของคุณให้ครบถ้วน<br/>
@@ -757,7 +851,7 @@ export default function Home() {
 
         {/* Rainbow Six Success Dialog */}
         <Dialog open={showRainbowRedeemPopup} onOpenChange={setShowRainbowRedeemPopup}>
-          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl">
             <DialogHeader>
               <DialogTitle className="text-blue-600 text-xl">🎮 ส่งคำขอ Rainbow Six สำเร็จ!</DialogTitle>
               <DialogDescription className="text-gray-600">
@@ -765,7 +859,7 @@ export default function Home() {
               </DialogDescription>
             </DialogHeader>
             
-            <div className="p-4 border rounded-lg bg-green-50">
+            <div className="p-4 border rounded-2xl bg-green-50">
               <div className="text-center space-y-3">
                 <div className="text-6xl">✅</div>
                 <div className="text-green-700">
@@ -781,7 +875,7 @@ export default function Home() {
                   setShowRainbowRedeemPopup(false);
                   setRainbowGameInfo(null);
                 }} 
-                className="w-full bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700"
+                className="w-full bg-gradient-to-r from-blue-600 to-orange-600 hover:from-blue-700 hover:to-orange-700 rounded-full"
               >
                 เสร็จสิ้น
               </Button>
@@ -791,7 +885,7 @@ export default function Home() {
 
         {/* Chicken Account Redemption Dialog */}
         <Dialog open={showChickenRedeemPopup} onOpenChange={setShowChickenRedeemPopup}>
-          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20">
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl">
             <DialogHeader>
               <DialogTitle className="text-orange-600 text-xl">🐔 บัญชีไก่ตันของคุณ</DialogTitle>
               <DialogDescription className="text-gray-600">
@@ -805,20 +899,20 @@ export default function Home() {
                   <div className="space-y-3">
                     <div>
                       <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
-                      <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                      <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
                         {validatedChickenAccount.username || validatedChickenAccount.account_username || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
-                      <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                      <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
                         {validatedChickenAccount.password || validatedChickenAccount.account_password || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
                     {(validatedChickenAccount.email || validatedChickenAccount.account_email) && (
                       <div>
                         <Label className="text-sm font-medium text-gray-700">อีเมล:</Label>
-                        <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                        <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
                           {validatedChickenAccount.email || validatedChickenAccount.account_email}
                         </div>
                       </div>
@@ -826,7 +920,7 @@ export default function Home() {
                     {(validatedChickenAccount.level || validatedChickenAccount.account_level) && (
                       <div>
                         <Label className="text-sm font-medium text-gray-700">เลเวล:</Label>
-                        <div className="bg-white p-2 rounded border font-mono text-sm mt-1">
+                        <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
                           {validatedChickenAccount.level || validatedChickenAccount.account_level}
                         </div>
                       </div>
@@ -834,7 +928,7 @@ export default function Home() {
                     {(validatedChickenAccount.description || validatedChickenAccount.notes) && (
                       <div>
                         <Label className="text-sm font-medium text-gray-700">รายละเอียด:</Label>
-                        <div className="bg-white p-2 rounded border text-sm mt-1">
+                        <div className="bg-white p-2 rounded-2xl border text-sm mt-1">
                           {validatedChickenAccount.description || validatedChickenAccount.notes}
                         </div>
                       </div>
@@ -842,7 +936,7 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3">
                   <p className="text-yellow-800 text-xs">
                     <strong>⚠️ คำเตือน:</strong> กรุณาเก็บข้อมูลบัญชีนี้ไว้อย่างปลอดภัย และเปลี่ยนรหัสผ่านหลังจากเข้าสู่ระบบครั้งแรก
                   </p>
@@ -857,7 +951,7 @@ export default function Home() {
                   setValidatedChickenAccount(null);
                   setChickenRedeemCode('');
                 }} 
-                className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700"
+                className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 rounded-full"
               >
                 🐔 เสร็จสิ้น
               </Button>
@@ -867,7 +961,7 @@ export default function Home() {
 
         {/* Robux Redemption Dialog */}
         <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
-          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl">
+          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl">
             <DialogHeader className="text-center pb-6">
               <div className="relative mb-4">
                 {/* Glowing Background */}
@@ -897,7 +991,7 @@ export default function Home() {
                     value={redeemForm.username}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
                 
@@ -912,7 +1006,7 @@ export default function Home() {
                     value={redeemForm.password}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
                     placeholder="รหัสผ่านของคุณ"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
                 
@@ -926,13 +1020,13 @@ export default function Home() {
                     value={redeemForm.contact}
                     onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
                     placeholder="กรอกเบอร์โทรศัพท์ (เช่น 08X-XXX-XXXX)"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
                 </div>
               </div>
               
               {/* Info Box */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
                 <div className="flex items-start gap-3">
                   <div className="text-green-600 text-lg">💡</div>
                   <div>
@@ -948,7 +1042,7 @@ export default function Home() {
                 <Button 
                   type="submit"
                   disabled={isRobuxButtonSubmitting}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105"
+                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105 rounded-full"
                 >
                   {isRobuxButtonSubmitting ? (
                     <div className="flex items-center gap-3">
@@ -969,22 +1063,22 @@ export default function Home() {
 
         {/* Additional Products Section */}
         <div className="mt-16 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
             <h3 className="text-2xl font-bold text-white mb-4">🛒 สินค้าเพิ่มเติม</h3>
             <p className="text-purple-200 mb-6">เยี่ยมชมร้านค้าออนไลน์ของเราเพื่อดูสินค้าอื่นๆ เพิ่มเติม ไก่ตัน Robux โค้ด Rainbow Six</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">🐔</div>
                 <h4 className="text-white font-semibold mb-2">ไก่ตัน</h4>
                 <p className="text-purple-200 text-sm">บัญชีเกมไก่ตัน</p>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">💎</div>
                 <h4 className="text-white font-semibold mb-2">Robux</h4>
                 <p className="text-purple-200 text-sm">โค้ดแลก Robux</p>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
                 <div className="text-3xl mb-2">🌈</div>
                 <h4 className="text-white font-semibold mb-2">Rainbow Six</h4>
                 <p className="text-purple-200 text-sm">โค้ดเกม Rainbow Six</p>
@@ -993,7 +1087,7 @@ export default function Home() {
             
             <Button 
               onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
-              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105 mb-8"
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105 mb-8"
             >
               🛒 ไปยังร้านค้าออนไลน์
             </Button>
@@ -1002,14 +1096,14 @@ export default function Home() {
 
         {/* Contact Section */}
         <div className="mt-8 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-8 border border-white/10">
+          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
             <h3 className="text-2xl font-bold text-white mb-4">📞 ต้องการความช่วยเหลือ?</h3>
             <p className="text-purple-200 mb-6">ติดต่อเราได้ผ่าน Facebook เพื่อรับบริการและคำแนะนำ</p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Button 
                 onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl shadow-lg transition-all transform hover:scale-105"
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
               >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
