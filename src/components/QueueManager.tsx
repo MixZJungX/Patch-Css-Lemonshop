@@ -104,7 +104,7 @@ export default function QueueManager() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl font-bold">🎯 จัดการระบบคิว</CardTitle>
-            <Button onClick={loadQueueItems} disabled={loading} variant="outline">
+            <Button onClick={loadQueueItems} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               รีเฟรช
             </Button>
@@ -134,29 +134,29 @@ export default function QueueManager() {
 
       <Card>
         <CardHeader>
-          <CardTitle>รายการคิวทั้งหมด</CardTitle>
+          <CardTitle className="text-white">รายการคิวทั้งหมด</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">กำลังโหลดข้อมูล...</p>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+              <p className="mt-2 text-white">กำลังโหลดข้อมูล...</p>
             </div>
           ) : queueItems.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-gray-600">ไม่มีคิวในระบบ</p>
+              <p className="text-white">ไม่มีคิวในระบบ</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>หมายเลขคิว</TableHead>
-                    <TableHead>ลูกค้า</TableHead>
-                    <TableHead>ประเภท</TableHead>
-                    <TableHead>สถานะ</TableHead>
-                    <TableHead>วันที่สร้าง</TableHead>
-                    <TableHead>จัดการ</TableHead>
+                    <TableHead className="text-white font-semibold">หมายเลขคิว</TableHead>
+                    <TableHead className="text-white font-semibold">ลูกค้า</TableHead>
+                    <TableHead className="text-white font-semibold">ประเภท</TableHead>
+                    <TableHead className="text-white font-semibold">สถานะ</TableHead>
+                    <TableHead className="text-white font-semibold">วันที่สร้าง</TableHead>
+                    <TableHead className="text-white font-semibold">จัดการ</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -166,22 +166,22 @@ export default function QueueManager() {
                     
                     return (
                       <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="text-xl font-bold">#{item.queue_number}</div>
+                        <TableCell className="text-white">
+                          <div className="text-xl font-bold text-blue-300">#{item.queue_number}</div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-white">
                           <div>
-                            <div className="font-medium">{item.customer_name || 'ไม่ระบุ'}</div>
-                            <div className="text-sm text-gray-500">{item.contact_info}</div>
+                            <div className="font-medium text-white">{item.customer_name || 'ไม่ระบุ'}</div>
+                            <div className="text-sm text-gray-300">{item.contact_info}</div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-white">
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{productInfo.icon}</span>
-                            <span>{productInfo.name}</span>
+                            <span className="text-white">{productInfo.name}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-white">
                           <Badge className={`${statusInfo.color} text-white`}>
                             <div className="flex items-center gap-1">
                               {statusInfo.icon}
@@ -189,8 +189,8 @@ export default function QueueManager() {
                             </div>
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
+                        <TableCell className="text-white">
+                          <div className="text-sm text-gray-300">
                             {formatDate(item.created_at)}
                           </div>
                         </TableCell>
