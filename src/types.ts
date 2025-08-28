@@ -34,6 +34,16 @@ export interface RedemptionRequest {
   updated_at: string;
 }
 
+export interface RainbowCode {
+  id: string;
+  code: string;
+  credits: number;
+  is_used: boolean;
+  created_at: string;
+  used_at?: string;
+  used_by?: string;
+}
+
 // ระบบคิวใหม่
 export interface QueueItem {
   id: string;
