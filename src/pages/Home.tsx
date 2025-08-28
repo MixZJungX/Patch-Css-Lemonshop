@@ -1146,29 +1146,6 @@ export default function Home() {
                 📱 ติดต่อ Lemon Shop
               </Button>
               
-
-              
-              <Button 
-                onClick={() => window.open('/queue-status', '_blank')}
-                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔍 เช็คสถานะคิว
-              </Button>
-              
-              <Button 
-                onClick={async () => {
-                  const isConnected = await testQueueConnection();
-                  if (isConnected) {
-                    toast.success('✅ ระบบคิวพร้อมใช้งาน');
-                  } else {
-                    toast.error('❌ ระบบคิวไม่พร้อมใช้งาน');
-                  }
-                }}
-                className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔧 ทดสอบระบบคิว
-              </Button>
-              
               <div className="text-purple-200 text-sm">
                 <p>⏰ เปิดบริการ: 24 ชั่วโมง</p>
                 <p>💬 ตอบกลับภายใน 5-10 นาที</p>
