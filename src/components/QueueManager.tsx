@@ -230,9 +230,14 @@ export default function QueueManager() {
                         </TableCell>
                         <TableCell className="text-white font-mono text-sm font-bold">
                           {(() => {
-                            const contactInfo = item.contact_info || '';
-                            const codeMatch = contactInfo.match(/Code: ([A-Z0-9]+)/);
-                            return codeMatch ? codeMatch[1] : '-';
+                            // ใช้ข้อมูลจาก codesData ถ้ามี
+                            if (codesData[item.id]?.codes?.[0]?.code) {
+                              return codesData[item.id].codes[0].code;
+                            }
+                            if (codesData[item.id]?.accounts?.[0]?.code) {
+                              return codesData[item.id].accounts[0].code;
+                            }
+                            return '-';
                           })()}
                         </TableCell>
                         <TableCell className="text-white">
@@ -240,44 +245,44 @@ export default function QueueManager() {
                         </TableCell>
                         <TableCell className="text-white font-mono text-xs">
                           {(() => {
-                            const contactInfo = item.contact_info || '';
-                            const passwordMatch = contactInfo.match(/Password: ([^|]+)/);
-                            return passwordMatch ? passwordMatch[1].trim() : '-';
+                            // ใช้ข้อมูลจาก codesData ถ้ามี
+                            if (codesData[item.id]?.accounts?.[0]?.password) {
+                              return codesData[item.id].accounts[0].password;
+                            }
+                            return '-';
                           })()}
                         </TableCell>
                         <TableCell className="text-white">
                           {(() => {
-                            const contactInfo = item.contact_info || '';
-                            // ตรวจสอบว่าเป็น Robux หรือ Chicken จาก contact_info
-                            if (contactInfo.includes('Robux') || contactInfo.includes('robux')) {
-                              const robuxMatch = contactInfo.match(/(\d+)\s*Robux/);
-                              return robuxMatch ? `${robuxMatch[1]} Robux` : 'Robux';
-                            } else {
+                            // ใช้ข้อมูลจาก codesData ถ้ามี
+                            if (codesData[item.id]?.codes?.[0]?.robux_value) {
+                              return `${codesData[item.id].codes[0].robux_value} Robux`;
+                            }
+                            if (codesData[item.id]?.accounts?.[0]?.product_name) {
+                              return codesData[item.id].accounts[0].product_name;
+                            }
+                            // ตรวจสอบจาก product_type
+                            if (item.product_type === 'robux') {
+                              return 'Robux';
+                            } else if (item.product_type === 'chicken') {
                               return 'ไก่ตัน';
                             }
+                            return 'ไก่ตัน';
                           })()}
                         </TableCell>
                         <TableCell className="text-white text-sm font-semibold">
                           {(() => {
+                            // ใช้ข้อมูลจาก contact_info โดยตรง (เป็นเบอร์โทร)
                             const contactInfo = item.contact_info || '';
-                            const phoneMatch = contactInfo.match(/Phone: ([^|]+)/);
-                            const contactMatch = contactInfo.match(/Contact: ([^|]+)/);
-                            
-                            let contact = '-';
-                            if (phoneMatch) {
-                              contact = phoneMatch[1].trim();
-                            } else if (contactMatch) {
-                              contact = contactMatch[1].trim();
+                            if (contactInfo && contactInfo.length > 0) {
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-400">📱</span>
+                                  <span>{contactInfo}</span>
+                                </div>
+                              );
                             }
-                            
-                            return contact !== '-' ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-green-400">📱</span>
-                                <span>{contact}</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">ไม่มีข้อมูล</span>
-                            );
+                            return <span className="text-gray-400">ไม่มีข้อมูล</span>;
                           })()}
                         </TableCell>
                         <TableCell className="text-white">
