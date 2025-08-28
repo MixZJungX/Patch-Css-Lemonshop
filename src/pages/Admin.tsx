@@ -1346,8 +1346,7 @@ export default function Admin() {
                       setBulkImportType('codes');
                       setShowBulkImportDialog(true);
                     }}
-                    variant="outline"
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     นำเข้าหลายรายการ
@@ -1439,8 +1438,7 @@ export default function Admin() {
                       setBulkImportType('accounts');
                       setShowBulkImportDialog(true);
                     }}
-                    variant="outline"
-                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     นำเข้าหลายรายการ
@@ -1522,12 +1520,11 @@ export default function Admin() {
                           <Button
                             type="button"
                             size="sm"
-                            variant="outline"
                             onClick={() => {
                               setShowCustomInput(false);
                               setCustomProductName('');
                             }}
-                            className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            className="bg-gray-600 hover:bg-gray-700 text-white"
                           >
                             ยกเลิก
                           </Button>
@@ -1568,9 +1565,8 @@ export default function Admin() {
                   {searchTerm && (
                     <Button
                       onClick={() => setSearchTerm('')}
-                      variant="outline"
                       size="sm"
-                      className="border-white/20 text-white hover:bg-white/10"
+                      className="bg-gray-600 hover:bg-gray-700 text-white"
                     >
                       ล้างการค้นหา
                     </Button>
@@ -2116,8 +2112,7 @@ export default function Admin() {
               <div className="flex space-x-3">
                 <Button
                   onClick={() => setShowBulkImportDialog(false)}
-                  variant="outline"
-                  className="flex-1 bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white"
                 >
                   ยกเลิก
                 </Button>
@@ -2174,15 +2169,13 @@ RBX888,3600`}
                 <div className="flex gap-2">
                   <Button 
                     type="button"
-                    variant="outline"
                     onClick={() => setBulkRainbowCodes('')}
-                    className="flex-1 bg-red-500/20 border-red-400/50 text-red-300 hover:bg-red-500/30 hover:border-red-400 hover:text-red-200"
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                   >
                     🗑️ ล้างข้อมูล
                   </Button>
                   <Button 
                     type="button"
-                    variant="outline"
                     onClick={() => {
                       const sampleCodes = `RBX001,1800
 RBX002,1800
@@ -2191,7 +2184,7 @@ RBX004,1200
 RBX005,3600`;
                       setBulkRainbowCodes(sampleCodes);
                     }}
-                    className="flex-1 bg-blue-500/20 border-blue-400/50 text-blue-300 hover:bg-blue-500/30 hover:border-blue-400 hover:text-blue-200"
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     📋 ตัวอย่าง
                   </Button>
@@ -2316,10 +2309,9 @@ RBX005,3600`;
             <div className="flex gap-3 pt-4 border-t border-white/20">
               <Button 
                 type="button" 
-                variant="outline" 
                 onClick={() => setShowBulkRainbowModal(false)}
                 disabled={isAddingRainbowCode}
-                className="flex-1 h-12 text-base bg-gray-500/20 border-gray-400/50 text-gray-300 hover:bg-gray-500/30 hover:border-gray-400 hover:text-gray-200"
+                className="flex-1 h-12 text-base bg-gray-600 hover:bg-gray-700 text-white"
               >
                 ❌ ยกเลิก
               </Button>

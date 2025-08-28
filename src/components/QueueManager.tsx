@@ -199,8 +199,7 @@ export default function QueueManager() {
                             <Button
                               size="sm"
                               onClick={() => openUpdateDialog(item)}
-                              variant="outline"
-                              className="h-8 px-2"
+                              className="h-8 px-2 bg-blue-600 hover:bg-blue-700 text-white"
                             >
                               <Edit className="w-3 h-3 mr-1" />
                               แก้ไข
