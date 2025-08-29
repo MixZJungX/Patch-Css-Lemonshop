@@ -4,13 +4,20 @@ import { QueueItem, QueueDisplay } from '@/types';
 // ฟังก์ชันทดสอบการเชื่อมต่อฐานข้อมูล
 export const testQueueConnection = async (): Promise<boolean> => {
   try {
+    // ทดสอบการเชื่อมต่อโดยดูโครงสร้างตาราง
     const { data, error } = await supabase
       .from('queue_items')
-      .select('count')
+      .select('id, queue_number, status, created_at')
       .limit(1);
     
     if (error) {
       console.error('❌ ไม่สามารถเชื่อมต่อตาราง queue_items ได้:', error);
+      console.error('รายละเอียด error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       return false;
     }
     
@@ -22,13 +29,24 @@ export const testQueueConnection = async (): Promise<boolean> => {
   }
 };
 
+// ฟังก์ชันทดสอบการสร้างหมายเลขคิว
+export const testQueueNumberGeneration = async (): Promise<boolean> => {
+  try {
+    const queueNumber = await generateQueueNumber();
+    console.log(`✅ สร้างหมายเลขคิวสำเร็จ: ${queueNumber}`);
+    return true;
+  } catch (error) {
+    console.error('❌ เกิดข้อผิดพลาดในการสร้างหมายเลขคิว:', error);
+    return false;
+  }
+};
+
 // สร้างหมายเลขคิวแบบเรียงลำดับ
 export const generateQueueNumber = async (): Promise<number> => {
-  // ดึงหมายเลขคิวสูงสุดที่ยังไม่เสร็จ
+  // ดึงหมายเลขคิวสูงสุดทั้งหมด (ไม่ว่าจะสถานะใด)
   const { data: maxQueue, error } = await supabase
     .from('queue_items')
     .select('queue_number')
-    .in('status', ['waiting', 'processing'])
     .order('queue_number', { ascending: false })
     .limit(1)
     .single();
@@ -37,36 +55,62 @@ export const generateQueueNumber = async (): Promise<number> => {
     throw error;
   }
 
-  // ถ้าไม่มีคิวที่รออยู่ ให้เริ่มที่ 1
+  // ถ้าไม่มีคิวใดๆ ในระบบ ให้เริ่มที่ 1
   if (!maxQueue) {
     return 1;
   }
 
-  // ถ้ามีคิวที่รออยู่ ให้เพิ่ม 1
+  // ถ้ามีคิวอยู่แล้ว ให้เพิ่ม 1
   return maxQueue.queue_number + 1;
 };
 
 // เพิ่มคิวใหม่
 export const addToQueue = async (queueData: Partial<QueueItem>): Promise<QueueItem> => {
-  // สร้างหมายเลขคิวแบบเรียงลำดับ
-  const queueNumber = await generateQueueNumber();
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (attempts < maxAttempts) {
+    try {
+      // สร้างหมายเลขคิวแบบเรียงลำดับ
+      const queueNumber = await generateQueueNumber();
 
-  const newQueueItem: Partial<QueueItem> = {
-    ...queueData,
-    queue_number: queueNumber,
-    status: 'waiting',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
+      const newQueueItem: Partial<QueueItem> = {
+        ...queueData,
+        queue_number: queueNumber,
+        status: 'waiting',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-  const { data, error } = await supabase
-    .from('queue_items')
-    .insert(newQueueItem)
-    .select()
-    .single();
+      const { data, error } = await supabase
+        .from('queue_items')
+        .insert(newQueueItem)
+        .select()
+        .single();
 
-  if (error) throw error;
-  return data;
+      if (error) {
+        // ถ้าเกิด error เรื่อง duplicate key ให้ลองใหม่
+        if (error.code === '23505' && attempts < maxAttempts - 1) {
+          console.log(`⚠️ หมายเลขคิว ${queueNumber} ซ้ำ ลองใหม่...`);
+          attempts++;
+          // รอสักครู่ก่อนลองใหม่
+          await new Promise(resolve => setTimeout(resolve, 100));
+          continue;
+        }
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      if (attempts >= maxAttempts - 1) {
+        throw error;
+      }
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  throw new Error('ไม่สามารถสร้างหมายเลขคิวได้หลังจากลองหลายครั้ง');
 };
 
 // ดึงข้อมูลคิวที่แสดง

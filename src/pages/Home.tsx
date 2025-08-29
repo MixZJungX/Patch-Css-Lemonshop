@@ -9,8 +9,9 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
+import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem } from '@/types';
 import { GamepadIcon, Settings, Megaphone } from 'lucide-react';
+import { addToQueue, testQueueConnection, testQueueNumberGeneration } from '@/lib/queueApi';
 import '@/styles/notifications.css';
 
 export default function Home() {
@@ -40,7 +41,7 @@ export default function Home() {
   const [showRainbowRedeemPopup, setShowRainbowRedeemPopup] = useState(false);
   const [isRainbowButtonSubmitting, setIsRainbowButtonSubmitting] = useState(false);
   const [rainbowGameInfo, setRainbowGameInfo] = useState<{ code: string } | null>(null);
-  const [availableRainbowCodes, setAvailableRainbowCodes] = useState<RainbowCode[]>([]);
+  const [availableRainbowCodes, setAvailableRainbowCodes] = useState<any[]>([]);
   const [totalRainbowCredits, setTotalRainbowCredits] = useState(0);
   
   // Chicken account redemption states
@@ -67,22 +68,34 @@ export default function Home() {
     contact: ''
   });
 
+  // ระบบคิว
+  const [showQueueNumberPopup, setShowQueueNumberPopup] = useState(false);
+  const [currentQueueNumber, setCurrentQueueNumber] = useState<number | null>(null);
+
   useEffect(() => {
     loadAvailableItems();
     loadAnnouncements();
+    
+    // ทดสอบการเชื่อมต่อระบบคิว
+    testQueueConnection().then(isConnected => {
+      if (!isConnected) {
+        console.warn('⚠️ ระบบคิวไม่พร้อมใช้งาน - กรุณารัน SQL script ใน Supabase');
+        toast.error('ระบบคิวไม่พร้อมใช้งาน กรุณาติดต่อแอดมิน');
+      }
+    });
   }, []);
 
   // Calculate statistics when data changes
   useEffect(() => {
     if (availableCodes.length > 0) {
-      const totalValue = availableCodes.reduce((sum, code) => sum + (code.robux_value || code.robux_amount || 0), 0);
+              const totalValue = availableCodes.reduce((sum, code) => sum + (code.robux_value || 0), 0);
       setTotalRobuxValue(totalValue);
     }
   }, [availableCodes]);
 
   useEffect(() => {
     if (availableAccounts.length > 0) {
-      const activeAccounts = availableAccounts.filter(account => !account.is_redeemed).length;
+      const activeAccounts = availableAccounts.filter(account => account.status === 'available').length;
       setTotalActiveAccounts(activeAccounts);
     }
   }, [availableAccounts]);
@@ -245,35 +258,112 @@ export default function Home() {
         return;
       }
 
-      const requestData = {
-        id: crypto.randomUUID(),
-        code_id: validatedCode!.id,
-        roblox_username: redeemForm.username,
-        roblox_password: redeemForm.password,
-        contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Phone: ${redeemForm.contact}`,
-        robux_amount: validatedCode!.robux_value || validatedCode!.robux_amount || 0,
-        status: 'pending',
-        created_at: new Date().toISOString()
-      };
+      // สร้าง redemption request ในตารางหลัก
+      try {
+        const requestData = {
+          roblox_username: redeemForm.username,
+          roblox_password: redeemForm.password,
+          robux_amount: validatedCode!.robux_value || 0,
+          contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
+          phone: redeemForm.contact,
+          status: 'pending',
+          assigned_code: validatedCode!.code,
+          code_id: validatedCode!.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-      // Save the redemption request
-      const { error: saveError } = await supabase
-        .from('app_284beb8f90_redemption_requests')
-        .insert([requestData]);
+        console.log('📝 สร้าง request data:', requestData);
+        console.log('🔑 โค้ดที่ใช้:', validatedCode!.code);
 
-      if (saveError) {
-        console.error('❌ ไม่สามารถบันทึกคำขอใน Supabase ได้:', saveError);
-        toast.error('เกิดข้อผิดพลาดในการบันทึกคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
-        return;
+        // Save the redemption request
+        const { error: saveError } = await supabase
+          .from('app_284beb8f90_redemption_requests')
+          .insert([requestData]);
+          
+        if (saveError) {
+          console.error('❌ ไม่สามารถสร้างคำขอได้:', saveError);
+          console.error('รายละเอียด error:', {
+            code: saveError.code,
+            message: saveError.message,
+            details: saveError.details,
+            hint: saveError.hint
+          });
+          console.error('📝 requestData ที่พยายามบันทึก:', requestData);
+          
+          // ถ้าเกิด error ให้ลองบันทึกแบบเรียบง่าย
+          try {
+            const simpleRequestData = {
+              roblox_username: redeemForm.username,
+              robux_amount: validatedCode!.robux_value || 0,
+              contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Phone: ${redeemForm.contact}`,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            const { error: simpleError } = await supabase
+              .from('app_284beb8f90_redemption_requests')
+              .insert([simpleRequestData]);
+              
+            if (simpleError) {
+              console.error('❌ ไม่สามารถบันทึกแบบเรียบง่ายได้:', simpleError);
+              toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+              return;
+            }
+            
+            console.log('✅ บันทึกแบบเรียบง่ายสำเร็จ');
+            
+          } catch (simpleError) {
+            console.error('❌ ไม่สามารถบันทึกแบบเรียบง่ายได้:', simpleError);
+            toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+            return;
+          }
+        }
+
+        console.log('✅ สร้างคำขอสำเร็จ');
+
+        // เพิ่มคิวใหม่
+        try {
+          const queueData: Partial<QueueItem> = {
+            customer_name: redeemForm.username,
+            contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
+            product_type: 'robux',
+            status: 'waiting',
+            estimated_wait_time: 15
+          };
+          
+          const newQueueItem = await addToQueue(queueData);
+          console.log('✅ เพิ่มคิวสำเร็จ:', newQueueItem);
+          
+          // แสดงหมายเลขคิวให้ลูกค้า
+          toast.success(`✅ แลกโค้ดสำเร็จ! หมายเลขคิวของคุณคือ #${newQueueItem.queue_number}`, { id: toastId });
+          
+          // แสดง popup หมายเลขคิว
+          setShowQueueNumberPopup(true);
+          setCurrentQueueNumber(newQueueItem.queue_number);
+          
+          // นำทางไปยังหน้าเช็คสถานะคิวหลังจาก 3 วินาที
+          setTimeout(() => {
+            window.open('/queue-status', '_blank');
+          }, 3000);
+          
+        } catch (queueError) {
+          console.error('❌ ไม่สามารถเพิ่มคิวได้:', queueError);
+          
+          // แม้คิวจะไม่สำเร็จ แต่คำขอสำเร็จแล้ว ยังแสดงข้อความสำเร็จ
+          toast.success(`✅ แลกโค้ดสำเร็จ! (คิวไม่พร้อมใช้งาน)`, { id: toastId });
+        }
+        
+      } catch (requestError) {
+        console.error('❌ ไม่สามารถสร้างคำขอได้:', requestError);
+        toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
       }
-
-      console.log('✅ บันทึกคำขอใน Supabase สำเร็จ:', requestData);
       
       setShowRedeemPopup(false);
       setValidatedCode(null);
       setRedeemCode('');
       setRedeemForm({ username: '', password: '', contact: '' });
-      toast.success('✅ แลกโค้ดสำเร็จ! ทางร้านจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
       
       loadAvailableItems();
 
@@ -387,6 +477,11 @@ export default function Home() {
       setShowRainbowRedeemPopup(true);
       toast.success('✅ บันทึกคำขอใน Supabase สำเร็จ! ทางแอดมินจะดำเนินการให้ภายใน 24 ชั่วโมง', { id: toastId });
 
+      // นำทางไปยังหน้าเช็คสถานะคิวหลังจาก 3 วินาที
+      setTimeout(() => {
+        window.open('/queue-status', '_blank');
+      }, 3000);
+
       // Reset form
       setRainbowForm({
         ubisoftEmail: '',
@@ -418,17 +513,23 @@ export default function Home() {
 
     try {
       // Allow unlimited usage - find account regardless of status
-      const foundAccount = availableAccounts.find(account => 
-        (account.code || account.redeem_code).toLowerCase() === chickenRedeemCode.toLowerCase()
-      ) || 
+      let foundAccount = availableAccounts.find(account => 
+        account.code.toLowerCase() === chickenRedeemCode.toLowerCase()
+      );
+      
       // Also check used accounts to allow re-entry
-      await supabase
-        .from('app_284beb8f90_chicken_accounts')
-        .select('*')
-        .ilike('code', chickenRedeemCode)
-        .single()
-        .then(result => result.data)
-        .catch(() => null);
+      if (!foundAccount) {
+        try {
+          const { data } = await supabase
+            .from('app_284beb8f90_chicken_accounts')
+            .select('*')
+            .ilike('code', chickenRedeemCode)
+            .single();
+          foundAccount = data as any;
+        } catch (error) {
+          foundAccount = null;
+        }
+      }
 
       if (!foundAccount) {
         toast.error("โค้ดไม่ถูกต้องหรือไม่พบ", { id: toastId });
@@ -529,9 +630,9 @@ export default function Home() {
           </div>
           
           <div className="flex space-x-3">
-            <Link to="/status">
-              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all rounded-full">
-                🔍 เช็คสถานะ
+            <Link to="/queue-status">
+              <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 backdrop-blur-xl border border-green-500/30 text-white transition-all rounded-full">
+                🔍 เช็คสถานะคิว
               </Button>
             </Link>
             <Link to="/admin">
@@ -555,6 +656,26 @@ export default function Home() {
             >
               🛒 ร้านค้าออนไลน์
             </Button>
+          </div>
+        </div>
+
+        {/* แจ้งเตือนระบบคิว */}
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-400/30 rounded-3xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="text-2xl">📺</div>
+                <div>
+                  <h3 className="text-white font-semibold">ระบบคิวพร้อมใช้งาน</h3>
+                  <p className="text-green-200 text-sm">หลังจากแลกโค้ดเสร็จ คุณสามารถเช็คสถานะคิวได้</p>
+                </div>
+              </div>
+                             <Link to="/queue-status">
+                 <Button className="bg-green-600 hover:bg-green-700 text-white rounded-full">
+                   เช็คสถานะคิว
+                 </Button>
+               </Link>
+            </div>
           </div>
         </div>
 
@@ -900,36 +1021,20 @@ export default function Home() {
                     <div>
                       <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
                       <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.username || validatedChickenAccount.account_username || 'ไม่มีข้อมูล'}
+                        {validatedChickenAccount.username || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
                       <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.password || validatedChickenAccount.account_password || 'ไม่มีข้อมูล'}
+                        {validatedChickenAccount.password || 'ไม่มีข้อมูล'}
                       </div>
                     </div>
-                    {(validatedChickenAccount.email || validatedChickenAccount.account_email) && (
+                    {validatedChickenAccount.notes && (
                       <div>
-                        <Label className="text-sm font-medium text-gray-700">อีเมล:</Label>
-                        <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                          {validatedChickenAccount.email || validatedChickenAccount.account_email}
-                        </div>
-                      </div>
-                    )}
-                    {(validatedChickenAccount.level || validatedChickenAccount.account_level) && (
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">เลเวล:</Label>
-                        <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                          {validatedChickenAccount.level || validatedChickenAccount.account_level}
-                        </div>
-                      </div>
-                    )}
-                    {(validatedChickenAccount.description || validatedChickenAccount.notes) && (
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">รายละเอียด:</Label>
+                        <Label className="text-sm font-medium text-gray-700">หมายเหตุ:</Label>
                         <div className="bg-white p-2 rounded-2xl border text-sm mt-1">
-                          {validatedChickenAccount.description || validatedChickenAccount.notes}
+                          {validatedChickenAccount.notes}
                         </div>
                       </div>
                     )}
@@ -975,7 +1080,7 @@ export default function Home() {
                 แลกโค้ดรับ Robux
               </DialogTitle>
               <DialogDescription className="text-gray-600 text-base mt-2">
-                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value || validatedCode?.robux_amount} Robux</span>
+                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value} Robux</span>
               </DialogDescription>
             </DialogHeader>
             
@@ -1111,6 +1216,34 @@ export default function Home() {
                 📱 ติดต่อ Lemon Shop
               </Button>
               
+
+              
+              <Button 
+                onClick={() => window.open('/queue-status', '_blank')}
+                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
+              >
+                🔍 เช็คสถานะคิว
+              </Button>
+              
+              <Button 
+                onClick={async () => {
+                  const isConnected = await testQueueConnection();
+                  if (isConnected) {
+                    const canGenerate = await testQueueNumberGeneration();
+                    if (canGenerate) {
+                      toast.success('✅ ระบบคิวพร้อมใช้งาน พร้อมสร้างหมายเลขคิว');
+                    } else {
+                      toast.error('❌ ระบบคิวพร้อมใช้งาน แต่ไม่สามารถสร้างหมายเลขคิวได้');
+                    }
+                  } else {
+                    toast.error('❌ ระบบคิวไม่พร้อมใช้งาน');
+                  }
+                }}
+                className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
+              >
+                🔧 ทดสอบระบบคิว
+              </Button>
+              
               <div className="text-purple-200 text-sm">
                 <p>⏰ เปิดบริการ: 24 ชั่วโมง</p>
                 <p>💬 ตอบกลับภายใน 5-10 นาที</p>
@@ -1119,6 +1252,47 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Popup แสดงหมายเลขคิว */}
+      <Dialog open={showQueueNumberPopup} onOpenChange={setShowQueueNumberPopup}>
+        <DialogContent className="sm:max-w-md bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-green-800 text-center">
+              🎉 แลกโค้ดสำเร็จ!
+            </DialogTitle>
+            <DialogDescription className="text-center text-green-700">
+              หมายเลขคิวของคุณ
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="text-center py-6">
+            <div className="text-8xl font-bold text-green-600 mb-4">
+              #{currentQueueNumber}
+            </div>
+            <p className="text-green-700 mb-4">
+              กรุณาจดหมายเลขคิวนี้ไว้เพื่อตรวจสอบสถานะ
+            </p>
+            
+            <div className="space-y-3">
+              <Button 
+                onClick={() => window.open('/queue-status', '_blank')}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                🔍 เช็คสถานะคิว
+              </Button>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              onClick={() => setShowQueueNumberPopup(false)}
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+            >
+              ปิด
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

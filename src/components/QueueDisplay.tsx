@@ -26,17 +26,31 @@ export default function QueueDisplay() {
     // อัปเดตข้อมูลทุก 10 วินาที
     const interval = setInterval(loadQueueData, 10000);
     
-    return () => clearInterval(interval);
+    // อัปเดตทันทีเมื่อหน้าถูกเปิด
+    const updateImmediately = () => {
+      loadQueueData();
+    };
+    
+    // ฟัง event เมื่อหน้าได้รับ focus
+    window.addEventListener('focus', updateImmediately);
+    window.addEventListener('visibilitychange', updateImmediately);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', updateImmediately);
+      window.removeEventListener('visibilitychange', updateImmediately);
+    };
   }, []);
 
   if (loading) {
-    return (
-      <Card className="w-full max-w-4xl mx-auto bg-gradient-to-r from-blue-900 to-purple-900 text-white">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">🔄 กำลังโหลดข้อมูลคิว...</CardTitle>
-        </CardHeader>
-      </Card>
-    );
+      return (
+    <Card className="w-full max-w-4xl mx-auto bg-gradient-to-r from-blue-900 to-purple-900 text-white">
+      <CardHeader className="text-center">
+        <CardTitle className="text-2xl font-bold">🔄 กำลังโหลดข้อมูลคิว...</CardTitle>
+        <p className="text-blue-200 mt-2">กรุณารอสักครู่ ข้อมูลจะอัปเดตโดยอัตโนมัติ</p>
+      </CardHeader>
+    </Card>
+  );
   }
 
   if (!queueData) {
@@ -193,11 +207,16 @@ export default function QueueDisplay() {
       {/* ข้อความด้านล่าง */}
       <Card className="mt-6 bg-gradient-to-r from-gray-800 to-gray-900 text-white">
         <CardContent className="p-4 text-center">
-          <p className="text-sm opacity-80">
+          <p className="text-sm opacity-80 mb-2">
             💡 หมายเลขคิวจะถูกเรียกตามลำดับ กรุณารอการเรียก
           </p>
-          <p className="text-xs opacity-60 mt-2">
-            อัปเดตล่าสุด: {new Date().toLocaleString('th-TH')}
+          <div className="bg-blue-500/20 backdrop-blur-sm rounded-2xl p-3 border border-blue-400/30 mb-2">
+            <p className="text-blue-200 text-sm">
+              🎯 <strong>หมายเหตุ:</strong> หลังจากแลกโค้ดเสร็จ คิวของคุณจะปรากฏในรายการทันที
+            </p>
+          </div>
+          <p className="text-xs opacity-60">
+            อัปเดตล่าสุด: {new Date().toLocaleString('th-TH')} | อัปเดตทุก 10 วินาที
           </p>
         </CardContent>
       </Card>

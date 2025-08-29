@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { QueueItem, QueueDisplay } from '@/types';
 import { checkQueueStatus, getQueuePosition, getQueueDisplay } from '@/lib/queueApi';
-import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play } from 'lucide-react';
+import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare } from 'lucide-react';
 
 export default function QueueStatusChecker() {
   const [queueNumber, setQueueNumber] = useState('');
@@ -194,20 +194,20 @@ export default function QueueStatusChecker() {
                         </Badge>
                       </div>
 
-                      {queueItem.customer_name && (
-                        <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
-                          <span className="font-medium text-purple-200">ชื่อลูกค้า:</span>
-                          <span className="text-white">{queueItem.customer_name}</span>
-                        </div>
-                      )}
+        {queueItem.customer_name && (
+          <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
+            <span className="font-medium text-purple-200">👤 ชื่อลูกค้า:</span>
+            <span className="text-white">{queueItem.customer_name}</span>
+          </div>
+        )}
 
-                      {queueItem.contact_info && (
-                        <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
-                          <span className="font-medium text-purple-200">ข้อมูลติดต่อ:</span>
-                          <span className="text-white">{queueItem.contact_info}</span>
-                        </div>
-                      )}
-
+        {queueItem.contact_info && (
+          <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
+            <span className="font-medium text-purple-200">ข้อมูลติดต่อ:</span>
+            <span className="text-white">{queueItem.contact_info}</span>
+          </div>
+        )}
+                      
                       <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
                         <span className="font-medium text-purple-200">วันที่สร้างคิว:</span>
                         <span className="text-white">{formatDate(queueItem.created_at)}</span>
@@ -224,6 +224,18 @@ export default function QueueStatusChecker() {
                         <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
                           <span className="font-medium text-purple-200">เวลารอโดยประมาณ:</span>
                           <span className="text-white font-semibold">{queueItem.estimated_wait_time} นาที</span>
+                        </div>
+                      )}
+
+                      {queueItem.admin_notes && (
+                        <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 backdrop-blur-sm rounded-2xl p-4 border border-yellow-400/30">
+                          <div className="flex items-start gap-2">
+                            <MessageSquare className="w-5 h-5 text-yellow-300 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <span className="font-medium text-yellow-200 block mb-1">หมายเหตุจากแอดมิน:</span>
+                              <span className="text-yellow-100 text-sm">{queueItem.admin_notes}</span>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -340,6 +352,7 @@ export default function QueueStatusChecker() {
                 <span className="text-purple-300 text-sm">📞 หากมีปัญหา กรุณาติดต่อแอดมิน</span>
               </div>
             </div>
+
           </div>
         </div>
       </div>

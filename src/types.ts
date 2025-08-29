@@ -33,3 +33,27 @@ export interface RedemptionRequest {
   created_at: string;
   updated_at: string;
 }
+
+// ระบบคิวจาก repository ที่แนะนำ
+export interface QueueItem {
+  id: string;
+  queue_number: number;
+  user_id?: string;
+  redemption_request_id?: string;
+  customer_name?: string;
+  contact_info: string;
+  product_type: 'robux' | 'chicken' | 'rainbow';
+  status: 'waiting' | 'processing' | 'completed' | 'cancelled';
+  priority?: number;
+  estimated_wait_time?: number;
+  admin_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QueueDisplay {
+  current_processing?: QueueItem;
+  next_3_items: QueueItem[];
+  total_waiting: number;
+  average_wait_time: number;
+}
