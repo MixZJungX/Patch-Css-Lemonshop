@@ -1,9 +1,9 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, Gift, ArrowLeft, GamepadIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Gift, ArrowLeft, GamepadIcon, Search, X, Filter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function RainbowSixRedemption() {
   const [ubisoftEmail, setUbisoftEmail] = useState("");
@@ -34,6 +35,76 @@ export default function RainbowSixRedemption() {
     code: string;
     instruction: string;
   } | null>(null);
+  
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [availableCodes, setAvailableCodes] = useState<any[]>([]);
+  const [filteredCodes, setFilteredCodes] = useState<any[]>([]);
+
+  // Load available codes on component mount
+  const loadAvailableCodes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("rainbow_six_redeem_codes")
+        .select("*")
+        .eq("is_used", false)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      
+      setAvailableCodes(data || []);
+      setFilteredCodes(data || []);
+    } catch (error) {
+      console.error("Error loading codes:", error);
+    }
+  };
+
+  // Filter codes based on search term and category
+  const filterCodes = () => {
+    let filtered = availableCodes;
+
+    // Apply category filter
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(code => {
+        switch (selectedCategory) {
+          case "operators":
+            return code.code_type === "operator" || code.code_type === "character";
+          case "credits":
+            return code.code_type === "credits" || code.code_type === "currency";
+          case "skins":
+            return code.code_type === "skin" || code.code_type === "cosmetic";
+          case "boosters":
+            return code.code_type === "booster" || code.code_type === "xp";
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(code => 
+        code.game_code.toLowerCase().includes(searchLower) ||
+        (code.code_type && code.code_type.toLowerCase().includes(searchLower)) ||
+        (code.description && code.description.toLowerCase().includes(searchLower)) ||
+        (code.redemption_instruction && code.redemption_instruction.toLowerCase().includes(searchLower))
+      );
+    }
+
+    setFilteredCodes(filtered);
+  };
+
+  // Load codes on mount
+  React.useEffect(() => {
+    loadAvailableCodes();
+  }, []);
+
+  // Filter codes when search term or category changes
+  React.useEffect(() => {
+    filterCodes();
+  }, [searchTerm, selectedCategory, availableCodes]);
 
   const handleRedeemCode = async () => {
     if (!redeemCode.trim()) {
@@ -200,6 +271,56 @@ export default function RainbowSixRedemption() {
               </Alert>
             )}
             
+            {/* Search and Filter Section */}
+            <div className="space-y-4 mb-6">
+              {/* Search Bar */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="ค้นหาโค้ด... (รหัสโค้ด, ประเภท, คำอธิบาย)"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Category Filter */}
+              <div className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-white/70" />
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-full bg-white/10 border-white/20 text-white">
+                    <SelectValue placeholder="เลือกหมวดหมู่" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-600">
+                    <SelectItem value="all" className="text-white hover:bg-gray-700">🎮 ทั้งหมด</SelectItem>
+                    <SelectItem value="operators" className="text-white hover:bg-gray-700">👤 Operators</SelectItem>
+                    <SelectItem value="credits" className="text-white hover:bg-gray-700">💰 Credits</SelectItem>
+                    <SelectItem value="skins" className="text-white hover:bg-gray-700">🎨 Skins</SelectItem>
+                    <SelectItem value="boosters" className="text-white hover:bg-gray-700">⚡ Boosters</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Available Codes Count */}
+              <div className="text-center">
+                <span className="text-white/70 text-sm">
+                  พบโค้ด {filteredCodes.length} รายการ
+                  {selectedCategory !== "all" && ` ในหมวดหมู่ ${selectedCategory}`}
+                </span>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="ubisoft-email" className="text-white/80">อีเมล Ubisoft</Label>
@@ -315,6 +436,63 @@ export default function RainbowSixRedemption() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Available Codes Display */}
+        {filteredCodes.length > 0 && (
+          <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20">
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="text-xl md:text-2xl text-white text-center">🎮 โค้ดที่พร้อมใช้งาน</CardTitle>
+              <CardDescription className="text-white/70 text-center text-sm md:text-base">
+                เลือกโค้ดที่ต้องการแลกรับ
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 md:p-6">
+              <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+                {filteredCodes.map((code, index) => (
+                  <div
+                    key={code.id}
+                    className="bg-white/5 border border-white/20 rounded-lg p-4 hover:bg-white/10 transition-all duration-200 cursor-pointer"
+                    onClick={() => setRedeemCode(code.game_code)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-white font-mono text-sm bg-blue-500/20 px-2 py-1 rounded">
+                            {code.game_code}
+                          </span>
+                          {code.code_type && (
+                            <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">
+                              {code.code_type}
+                            </span>
+                          )}
+                        </div>
+                        {code.description && (
+                          <p className="text-white/70 text-sm">{code.description}</p>
+                        )}
+                        {code.redemption_instruction && (
+                          <p className="text-white/50 text-xs mt-1">{code.redemption_instruction}</p>
+                        )}
+                      </div>
+                      <div className="ml-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-white border-white/20 hover:bg-white/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRedeemCode(code.game_code);
+                          }}
+                        >
+                          เลือก
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
       
       {/* Game Code Dialog */}

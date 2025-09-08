@@ -14,7 +14,7 @@ import { adminApi } from '@/lib/adminApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { Link } from 'react-router-dom';
-import { Upload, Search } from 'lucide-react';
+import { Upload, Search, X, Filter } from 'lucide-react';
 import QueueManager from '@/components/QueueManager';
 
 export default function Admin() {
@@ -22,6 +22,8 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
+  const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
+  const [activeRainbowFilter, setActiveRainbowFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<RedemptionRequest[]>([]);
   const [codes, setCodes] = useState<RedemptionCode[]>([]);
@@ -40,6 +42,7 @@ export default function Admin() {
     credits: number;
     created_at: string;
   }[]>([]);
+  const [filteredRainbowRequests, setFilteredRainbowRequests] = useState<typeof rainbowRequests>([]);
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Array<{ id: string; title?: string; content: string; type?: 'info' | 'warning' | 'critical'; link?: string; is_active?: boolean; created_at?: string }>>([]);
   const [newAnnouncement, setNewAnnouncement] = useState<{ title: string; content: string; type: 'info' | 'warning' | 'critical'; link: string; is_active: boolean }>({ title: '', content: '', type: 'info', link: '', is_active: true });
@@ -200,6 +203,30 @@ export default function Admin() {
       setFilteredRequests(requests.filter(request => request.status === activeRequestFilter));
     }
   }, [requests, activeRequestFilter]);
+
+  // Filter Rainbow Six requests based on search term and status filter
+  useEffect(() => {
+    let filtered = rainbowRequests;
+
+    // Apply status filter
+    if (activeRainbowFilter !== 'all') {
+      filtered = filtered.filter(request => request.status === activeRainbowFilter);
+    }
+
+    // Apply search filter
+    if (rainbowSearchTerm.trim()) {
+      const searchLower = rainbowSearchTerm.toLowerCase();
+      filtered = filtered.filter(request => 
+        request.ubisoftEmail.toLowerCase().includes(searchLower) ||
+        request.contact.toLowerCase().includes(searchLower) ||
+        request.phoneNumber.toLowerCase().includes(searchLower) ||
+        request.redeemCode.toLowerCase().includes(searchLower) ||
+        request.status.toLowerCase().includes(searchLower)
+      );
+    }
+
+    setFilteredRainbowRequests(filtered);
+  }, [rainbowRequests, activeRainbowFilter, rainbowSearchTerm]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1614,11 +1641,105 @@ export default function Admin() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Search and Filter Section */}
+              <div className="space-y-4 mb-6">
+                {/* Search Bar */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาคำขอ... (อีเมล, ชื่อ, เบอร์โทร, โค้ด, สถานะ)"
+                    value={rainbowSearchTerm}
+                    onChange={(e) => setRainbowSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                  />
+                  {rainbowSearchTerm && (
+                    <button
+                      onClick={() => setRainbowSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Filter Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setActiveRainbowFilter('all')}
+                    variant={activeRainbowFilter === 'all' ? 'default' : 'outline'}
+                    className={`${
+                      activeRainbowFilter === 'all'
+                        ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                        : 'text-white border-purple-400/50 hover:bg-purple-500/20'
+                    } transition-all duration-200`}
+                  >
+                    📊 ทั้งหมด ({rainbowRequests.length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRainbowFilter('pending')}
+                    variant={activeRainbowFilter === 'pending' ? 'default' : 'outline'}
+                    className={`${
+                      activeRainbowFilter === 'pending'
+                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        : 'text-white border-yellow-400/50 hover:bg-yellow-500/20'
+                    } transition-all duration-200`}
+                  >
+                    ⏳ รอดำเนินการ ({rainbowRequests.filter(r => r.status === 'pending').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRainbowFilter('processing')}
+                    variant={activeRainbowFilter === 'processing' ? 'default' : 'outline'}
+                    className={`${
+                      activeRainbowFilter === 'processing'
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'text-white border-blue-400/50 hover:bg-blue-500/20'
+                    } transition-all duration-200`}
+                  >
+                    ⚡ กำลังดำเนินการ ({rainbowRequests.filter(r => r.status === 'processing').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRainbowFilter('completed')}
+                    variant={activeRainbowFilter === 'completed' ? 'default' : 'outline'}
+                    className={`${
+                      activeRainbowFilter === 'completed'
+                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                        : 'text-white border-green-400/50 hover:bg-green-500/20'
+                    } transition-all duration-200`}
+                  >
+                    ✅ สำเร็จแล้ว ({rainbowRequests.filter(r => r.status === 'completed').length})
+                  </Button>
+                  <Button
+                    onClick={() => setActiveRainbowFilter('rejected')}
+                    variant={activeRainbowFilter === 'rejected' ? 'default' : 'outline'}
+                    className={`${
+                      activeRainbowFilter === 'rejected'
+                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        : 'text-white border-red-400/50 hover:bg-red-500/20'
+                    } transition-all duration-200`}
+                  >
+                    ❌ ยกเลิก ({rainbowRequests.filter(r => r.status === 'rejected').length})
+                  </Button>
+                </div>
+                
+                {/* Results Count */}
+                <div className="text-center">
+                  <span className="text-white/70 text-sm">
+                    แสดง {filteredRainbowRequests.length} จาก {rainbowRequests.length} คำขอ
+                    {activeRainbowFilter !== "all" && ` (สถานะ: ${activeRainbowFilter})`}
+                  </span>
+                </div>
+              </div>
+
               <div className="space-y-4">
-                {rainbowRequests.length === 0 ? (
-                  <p className="text-white/70 text-center py-8">ไม่มีคำขอ Rainbow Six</p>
+                {filteredRainbowRequests.length === 0 ? (
+                  <p className="text-white/70 text-center py-8">
+                    {rainbowRequests.length === 0 ? 'ไม่มีคำขอ Rainbow Six' : 'ไม่พบคำขอที่ตรงกับการค้นหา'}
+                  </p>
                 ) : (
-                  rainbowRequests.map((request) => (
+                  filteredRainbowRequests.map((request) => (
                     <div key={request.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>

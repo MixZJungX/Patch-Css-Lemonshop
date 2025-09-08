@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { QueueItem, QueueDisplay } from '@/types';
 import { checkQueueStatus, getQueuePosition, getQueueDisplay } from '@/lib/queueApi';
-import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare } from 'lucide-react';
+import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X } from 'lucide-react';
 
 export default function QueueStatusChecker() {
   const [queueNumber, setQueueNumber] = useState('');
@@ -15,6 +15,7 @@ export default function QueueStatusChecker() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [queueDisplay, setQueueDisplay] = useState<QueueDisplay | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // โหลดข้อมูลจอแสดงคิว
   const loadQueueDisplay = async () => {
@@ -136,6 +137,28 @@ export default function QueueStatusChecker() {
               </div>
               
               <div className="space-y-6">
+                {/* Search Bar for Queue Display */}
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาคิว... (หมายเลขคิว, ชื่อ, เบอร์โทร)"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-200"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
+                
                 <div className="flex gap-3">
                   <Input
                     type="number"
@@ -348,14 +371,35 @@ export default function QueueStatusChecker() {
                       <h3 className="text-2xl font-bold text-white mb-2">📋 คิวถัดไป</h3>
                     </div>
                     
-                    {queueDisplay.next_3_items.length === 0 ? (
+                    {queueDisplay.next_3_items.filter(item => {
+                      if (!searchTerm.trim()) return true;
+                      const searchLower = searchTerm.toLowerCase();
+                      return (
+                        item.queue_number.toString().includes(searchLower) ||
+                        (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) ||
+                        (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) ||
+                        item.contact_info.toLowerCase().includes(searchLower)
+                      );
+                    }).length === 0 ? (
                       <div className="text-center py-8">
                         <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-400 opacity-50" />
                         <p className="text-lg text-white">ไม่มีคิวที่รออยู่</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-4">
-                        {queueDisplay.next_3_items.map((item, index) => (
+                        {queueDisplay.next_3_items
+                          .filter(item => {
+                            if (!searchTerm.trim()) return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            return (
+                              item.queue_number.toString().includes(searchLower) ||
+                              (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) ||
+                              (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) ||
+                              item.contact_info.toLowerCase().includes(searchLower)
+                            );
+                          })
+                          .slice(0, 3)
+                          .map((item, index) => (
                           <div key={item.id} className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20">
                             <div className="text-3xl font-bold text-white mb-2">#{item.queue_number}</div>
                             <div className="flex items-center justify-center mb-2">

@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueueDisplay as QueueDisplayType } from '@/types';
 import { getQueueDisplay } from '@/lib/queueApi';
-import { Clock, Users, Play, CheckCircle } from 'lucide-react';
+import { Clock, Users, Play, CheckCircle, Search, X } from 'lucide-react';
 
 export default function QueueDisplay() {
   const [queueData, setQueueData] = useState<QueueDisplayType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadQueueData = async () => {
     try {
@@ -90,6 +91,18 @@ export default function QueueDisplay() {
     }
   };
 
+  // Filter queue items based on search term
+  const filteredNextItems = queueData.next_items?.filter(item => {
+    if (!searchTerm.trim()) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.queue_number.toString().includes(searchLower) ||
+      (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) ||
+      (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) ||
+      item.contact_info.toLowerCase().includes(searchLower)
+    );
+  }) || [];
+
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
       {/* หัวข้อหลัก */}
@@ -134,6 +147,32 @@ export default function QueueDisplay() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Search Bar */}
+      <Card className="bg-gray-800/50 border-gray-600/50 mb-6">
+        <CardContent className="p-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="ค้นหาคิว... (หมายเลขคิว, ชื่อ, เบอร์โทร)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* คิวที่กำลังดำเนินการ */}
       {queueData.current_processing && (
@@ -184,14 +223,14 @@ export default function QueueDisplay() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {queueData.next_3_items.length === 0 ? (
+          {filteredNextItems.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <p className="text-xl">ไม่มีคิวที่รออยู่</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {queueData.next_3_items.map((item, index) => (
+              {filteredNextItems.slice(0, 3).map((item, index) => (
                 <Card key={item.id} className="bg-white/10 border-white/20">
                   <CardContent className="p-4 text-center">
                     <div className="text-4xl font-bold mb-2">

@@ -11,7 +11,7 @@ import { QueueItem } from '@/types';
 import { getAllQueueItems, updateQueueStatus, deleteQueueItem } from '@/lib/queueApi';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2 } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2, Search, X } from 'lucide-react';
 
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
@@ -26,6 +26,7 @@ export default function QueueManager() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<QueueItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadQueueItems = async () => {
     try {
@@ -79,14 +80,32 @@ export default function QueueManager() {
   const completedCount = queueItems.filter(item => item.status === 'completed').length;
   const cancelledCount = queueItems.filter(item => item.status === 'cancelled').length;
 
-  // Filter items based on active filter
+  // Filter items based on active filter and search term
   useEffect(() => {
-    if (activeFilter === 'all') {
-      setFilteredItems(queueItems);
-    } else {
-      setFilteredItems(queueItems.filter(item => item.status === activeFilter));
+    let filtered = queueItems;
+    
+    // Apply status filter
+    if (activeFilter !== 'all') {
+      filtered = filtered.filter(item => item.status === activeFilter);
     }
-  }, [queueItems, activeFilter]);
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.queue_number.toString().includes(searchLower) ||
+        (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) ||
+        (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) ||
+        item.contact_info.toLowerCase().includes(searchLower) ||
+        (item.roblox_password && item.roblox_password.toLowerCase().includes(searchLower)) ||
+        (item.assigned_code && item.assigned_code.toLowerCase().includes(searchLower)) ||
+        (item.assigned_account_code && item.assigned_account_code.toLowerCase().includes(searchLower)) ||
+        item.status.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    setFilteredItems(filtered);
+  }, [queueItems, activeFilter, searchTerm]);
 
   const handleEditItem = (item: QueueItem) => {
     setSelectedItem(item);
@@ -242,10 +261,34 @@ export default function QueueManager() {
         </CardContent>
       </Card>
 
-      {/* Filter Tabs */}
+      {/* Search and Filter Section */}
       <Card className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 border-gray-700/50">
         <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="ค้นหาคิว... (หมายเลขคิว, ชื่อ, เบอร์โทร, รหัสผ่าน, โค้ด)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-10 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-200"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+            
+            {/* Filter Buttons */}
+            <div className="flex flex-wrap gap-2 justify-center">
             <Button
               onClick={() => setActiveFilter('all')}
               variant={activeFilter === 'all' ? 'default' : 'outline'}
@@ -301,6 +344,7 @@ export default function QueueManager() {
             >
               ❌ ยกเลิก ({cancelledCount})
             </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
