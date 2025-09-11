@@ -276,6 +276,24 @@ export default function Home() {
         console.log('📝 สร้าง request data:', requestData);
         console.log('🔑 โค้ดที่ใช้:', validatedCode!.code);
 
+        // ตรวจสอบว่าโค้ดถูกใช้แล้วหรือไม่ก่อนสร้างคำขอ
+        console.log('🔍 ตรวจสอบโค้ดซ้ำ:', validatedCode!.code);
+        const { data: existingCode, error: checkError } = await supabase
+          .from('app_284beb8f90_redemption_requests')
+          .select('id, assigned_code, status')
+          .eq('assigned_code', validatedCode!.code)
+          .limit(1);
+          
+        if (checkError) {
+          console.error('❌ ไม่สามารถตรวจสอบโค้ดได้:', checkError);
+        } else if (existingCode && existingCode.length > 0) {
+          console.log('⚠️ โค้ดนี้ถูกใช้แล้ว:', existingCode[0]);
+          toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
+          return;
+        } else {
+          console.log('✅ โค้ดพร้อมใช้งาน');
+        }
+
         // Save the redemption request
         const { error: saveError } = await supabase
           .from('app_284beb8f90_redemption_requests')
@@ -290,6 +308,12 @@ export default function Home() {
             hint: saveError.hint
           });
           console.error('📝 requestData ที่พยายามบันทึก:', requestData);
+          
+          // ตรวจสอบว่าเป็น duplicate key error หรือไม่
+          if (saveError.message.includes('duplicate key') || saveError.code === '23505') {
+            toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
+            return;
+          }
           
           // ถ้าเกิด error ให้ลองบันทึกแบบเรียบง่าย
           try {
@@ -308,7 +332,11 @@ export default function Home() {
               
             if (simpleError) {
               console.error('❌ ไม่สามารถบันทึกแบบเรียบง่ายได้:', simpleError);
-              toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+              if (simpleError.message.includes('duplicate key') || simpleError.code === '23505') {
+                toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
+              } else {
+                toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
+              }
               return;
             }
             
@@ -325,19 +353,12 @@ export default function Home() {
 
         // เพิ่มคิวใหม่
         try {
-          const queueData: Partial<QueueItem> = {
-            customer_name: redeemForm.username,
+          const queueData = {
+            // ใช้เฉพาะคอลัมน์ที่มีอยู่จริงในตาราง queue_items
             contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
             product_type: 'robux',
             status: 'waiting',
-            estimated_wait_time: 15,
-            // ข้อมูลเพิ่มเติมจาก redemption request
-            roblox_username: redeemForm.username,
-            roblox_password: redeemForm.password,
-            robux_amount: validatedCode!.robux_value || 0,
-            code_id: validatedCode!.id,
-            assigned_code: validatedCode!.code,
-            assigned_account_code: undefined // จะถูกกำหนดภายหลัง
+            estimated_wait_time: 15
           };
           
           const newQueueItem = await addToQueue(queueData);
@@ -358,8 +379,87 @@ export default function Home() {
         } catch (queueError) {
           console.error('❌ ไม่สามารถเพิ่มคิวได้:', queueError);
           
-          // แม้คิวจะไม่สำเร็จ แต่คำขอสำเร็จแล้ว ยังแสดงข้อความสำเร็จ
-          toast.success(`✅ แลกโค้ดสำเร็จ! (คิวไม่พร้อมใช้งาน)`, { id: toastId });
+          // แสดงรายละเอียด error เพื่อ debug
+          if (queueError instanceof Error) {
+            console.error('Error details:', {
+              message: queueError.message,
+              name: queueError.name,
+              stack: queueError.stack
+            });
+          } else {
+            console.error('Queue error object:', queueError);
+          }
+          
+          // ลองสร้างคิวแบบง่ายๆ
+          try {
+            console.log('🔄 ลองสร้างคิวแบบง่ายๆ...');
+            
+            // ตรวจสอบโครงสร้างตารางก่อน
+            const { data: tableInfo, error: tableError } = await supabase
+              .from('queue_items')
+              .select('*')
+              .limit(1);
+              
+            if (tableError) {
+              console.error('❌ ไม่สามารถเข้าถึงตาราง queue_items ได้:', tableError);
+              toast.success(`✅ แลกโค้ดสำเร็จ! (ตารางคิวไม่พร้อมใช้งาน)`, { id: toastId });
+              return;
+            }
+            
+            console.log('✅ ตาราง queue_items พร้อมใช้งาน');
+            
+            // สร้างหมายเลขคิวแบบง่าย
+            const { data: maxQueue, error: maxError } = await supabase
+              .from('queue_items')
+              .select('queue_number')
+              .order('queue_number', { ascending: false })
+              .limit(1)
+              .single();
+              
+            const nextQueueNumber = maxQueue ? maxQueue.queue_number + 1 : 1;
+            
+            const simpleQueueData = {
+              queue_number: nextQueueNumber,
+              contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
+              product_type: 'robux',
+              status: 'waiting',
+              estimated_wait_time: 15
+            };
+            
+            console.log('📝 ข้อมูลคิวที่จะสร้าง:', simpleQueueData);
+            
+            const { data: simpleQueue, error: simpleQueueError } = await supabase
+              .from('queue_items')
+              .insert(simpleQueueData)
+              .select()
+              .single();
+              
+            if (simpleQueueError) {
+              console.error('❌ ไม่สามารถสร้างคิวแบบง่ายได้:', simpleQueueError);
+              console.error('Simple queue error details:', {
+                code: simpleQueueError.code,
+                message: simpleQueueError.message,
+                details: simpleQueueError.details,
+                hint: simpleQueueError.hint
+              });
+              toast.success(`✅ แลกโค้ดสำเร็จ! (คิวไม่พร้อมใช้งาน)`, { id: toastId });
+            } else {
+              console.log('✅ สร้างคิวแบบง่ายสำเร็จ:', simpleQueue);
+              toast.success(`✅ แลกโค้ดสำเร็จ! หมายเลขคิวของคุณคือ #${simpleQueue.queue_number}`, { id: toastId });
+              
+              // แสดง popup หมายเลขคิว
+              setShowQueueNumberPopup(true);
+              setCurrentQueueNumber(simpleQueue.queue_number);
+              
+              // นำทางไปยังหน้าเช็คสถานะคิวหลังจาก 3 วินาที
+              setTimeout(() => {
+                window.open('/queue-status', '_blank');
+              }, 3000);
+            }
+          } catch (simpleError) {
+            console.error('❌ ไม่สามารถสร้างคิวแบบง่ายได้:', simpleError);
+            toast.success(`✅ แลกโค้ดสำเร็จ! (คิวไม่พร้อมใช้งาน)`, { id: toastId });
+          }
         }
         
       } catch (requestError) {
@@ -1234,16 +1334,68 @@ export default function Home() {
               
               <Button 
                 onClick={async () => {
-                  const isConnected = await testQueueConnection();
-                  if (isConnected) {
-                    const canGenerate = await testQueueNumberGeneration();
-                    if (canGenerate) {
-                      toast.success('✅ ระบบคิวพร้อมใช้งาน พร้อมสร้างหมายเลขคิว');
-                    } else {
-                      toast.error('❌ ระบบคิวพร้อมใช้งาน แต่ไม่สามารถสร้างหมายเลขคิวได้');
+                  try {
+                    console.log('🧪 เริ่มทดสอบระบบ...');
+                    
+                    // ทดสอบการเชื่อมต่อฐานข้อมูล
+                    const isConnected = await testQueueConnection();
+                    if (!isConnected) {
+                      toast.error('❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
+                      return;
                     }
-                  } else {
-                    toast.error('❌ ระบบคิวไม่พร้อมใช้งาน');
+                    
+                    // ทดสอบการสร้างหมายเลขคิว
+                    const canGenerate = await testQueueNumberGeneration();
+                    if (!canGenerate) {
+                      toast.error('❌ ไม่สามารถสร้างหมายเลขคิวได้');
+                      return;
+                    }
+                    
+                    // ทดสอบการสร้างคิวจริง
+                    console.log('🧪 ทดสอบการสร้างคิว...');
+                    const testQueueData = {
+                      contact_info: 'ชื่อ: Test User | เบอร์โทร: 0123456789',
+                      product_type: 'robux',
+                      status: 'waiting',
+                      estimated_wait_time: 15
+                    };
+                    
+                    const { data: testQueue, error: testQueueError } = await supabase
+                      .from('queue_items')
+                      .insert(testQueueData)
+                      .select()
+                      .single();
+                      
+                    if (testQueueError) {
+                      console.error('❌ การสร้างคิวทดสอบล้มเหลว:', testQueueError);
+                      toast.error(`❌ การสร้างคิวล้มเหลว: ${testQueueError.message}`);
+                      return;
+                    }
+                    
+                    console.log('✅ สร้างคิวทดสอบสำเร็จ:', testQueue);
+                    toast.success(`✅ ระบบคิวพร้อมใช้งาน! ทดสอบสร้างคิว #${testQueue.queue_number} สำเร็จ`);
+                    
+                    // ลบคิวทดสอบทันที
+                    setTimeout(async () => {
+                      try {
+                        const { error: deleteError } = await supabase
+                          .from('queue_items')
+                          .delete()
+                          .eq('id', testQueue.id);
+                          
+                        if (deleteError) {
+                          console.error('❌ ไม่สามารถลบคิวทดสอบได้:', deleteError);
+                        } else {
+                          console.log('🗑️ ลบคิวทดสอบสำเร็จ');
+                        }
+                      } catch (deleteError) {
+                        console.error('❌ ไม่สามารถลบคิวทดสอบได้:', deleteError);
+                      }
+                    }, 2000);
+                    
+                  } catch (error) {
+                    console.error('❌ ข้อผิดพลาดในการทดสอบ:', error);
+                    toast.error(`❌ ข้อผิดพลาด: ${error instanceof Error ? error.message : 'ไม่ทราบสาเหตุ'}`);
                   }
                 }}
                 className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"

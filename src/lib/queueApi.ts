@@ -65,7 +65,7 @@ export const generateQueueNumber = async (): Promise<number> => {
 };
 
 // เพิ่มคิวใหม่
-export const addToQueue = async (queueData: Partial<QueueItem>): Promise<QueueItem> => {
+export const addToQueue = async (queueData: any): Promise<any> => {
   let attempts = 0;
   const maxAttempts = 3;
   
@@ -74,13 +74,15 @@ export const addToQueue = async (queueData: Partial<QueueItem>): Promise<QueueIt
       // สร้างหมายเลขคิวแบบเรียงลำดับ
       const queueNumber = await generateQueueNumber();
 
-      const newQueueItem: Partial<QueueItem> = {
+      const newQueueItem = {
         ...queueData,
         queue_number: queueNumber,
         status: 'waiting',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+
+      console.log('📝 ข้อมูลคิวที่จะสร้าง:', newQueueItem);
 
       const { data, error } = await supabase
         .from('queue_items')
@@ -89,6 +91,7 @@ export const addToQueue = async (queueData: Partial<QueueItem>): Promise<QueueIt
         .single();
 
       if (error) {
+        console.error('❌ Error creating queue:', error);
         // ถ้าเกิด error เรื่อง duplicate key ให้ลองใหม่
         if (error.code === '23505' && attempts < maxAttempts - 1) {
           console.log(`⚠️ หมายเลขคิว ${queueNumber} ซ้ำ ลองใหม่...`);
@@ -100,8 +103,10 @@ export const addToQueue = async (queueData: Partial<QueueItem>): Promise<QueueIt
         throw error;
       }
       
+      console.log('✅ สร้างคิวสำเร็จ:', data);
       return data;
     } catch (error) {
+      console.error('❌ Error in addToQueue:', error);
       if (attempts >= maxAttempts - 1) {
         throw error;
       }
@@ -393,52 +398,27 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
 
   // รวมข้อมูลโดยการจับคู่จาก contact_info หรือ customer_name
   const enrichedData = queueData?.map(queueItem => {
-    console.log('🔍 กำลังตรวจสอบคิว #' + queueItem.queue_number, {
-      contact_info: queueItem.contact_info,
-      customer_name: queueItem.customer_name
-    });
-    
-    // หา redemption request ที่ตรงกัน - ใช้วิธีง่ายๆ
+    // หา redemption request ที่ตรงกัน - ใช้วิธีที่เร็วขึ้น
     const matchingRedemption = redemptionData?.find(redemption => {
       // จับคู่จาก username ใน contact_info
-      const queueUsername = queueItem.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
-      
-      console.log('🔍 เปรียบเทียบกับ redemption:', {
-        redemption_username: redemption.roblox_username,
-        queue_username: queueUsername,
-        contact_includes: queueItem.contact_info.includes(redemption.roblox_username),
-        username_match: queueUsername === redemption.roblox_username,
-        customer_match: queueItem.customer_name === redemption.roblox_username
-      });
+      const queueUsername = queueItem.contact_info?.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
       
       // จับคู่แบบหลายวิธี
-      const isMatch = 
+      return (
         // วิธีที่ 1: username อยู่ใน contact_info
-        queueItem.contact_info.includes(redemption.roblox_username) ||
+        queueItem.contact_info?.includes(redemption.roblox_username) ||
         // วิธีที่ 2: username ที่แยกออกมาเท่ากัน
         queueUsername === redemption.roblox_username ||
-        // วิธีที่ 3: customer_name เท่ากับ username
+        // วิธีที่ 3: customer_name เท่ากับ username (ถ้ามี)
         queueItem.customer_name === redemption.roblox_username ||
         // วิธีที่ 4: ดูจากเบอร์โทร
-        (queueItem.contact_info.includes('เบอร์โทร:') && redemption.contact_info.includes('เบอร์โทร:') && 
+        (queueItem.contact_info?.includes('เบอร์โทร:') && redemption.contact_info?.includes('เบอร์โทร:') && 
          queueItem.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() === 
          redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
         // วิธีที่ 5: ดูจาก Code ใน contact_info
-        (queueItem.contact_info.includes('Code:') && redemption.assigned_code && 
-         queueItem.contact_info.includes(redemption.assigned_code));
-      
-      if (isMatch) {
-        console.log('✅ พบการจับคู่!', {
-          queueNumber: queueItem.queue_number,
-          queueItem: queueItem.contact_info,
-          redemption: redemption.roblox_username,
-          robux_amount: redemption.robux_amount,
-          assigned_code: redemption.assigned_code,
-          roblox_password: redemption.roblox_password
-        });
-      }
-      
-      return isMatch;
+        (queueItem.contact_info?.includes('Code:') && redemption.assigned_code && 
+         queueItem.contact_info.includes(redemption.assigned_code))
+      );
     });
 
     // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
@@ -460,24 +440,7 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
                        sourceContact.match(/Code:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
     }
     
-    console.log('🔍 Fallback ข้อมูลจาก contact_info:', {
-      queueNumber: queueItem.queue_number,
-      contact_info: sourceContact,
-      passwordFromContact,
-      codeFromContact,
-      redemptionPassword: matchingRedemption?.roblox_password,
-      redemptionCode: matchingRedemption?.assigned_code,
-      // ทดสอบ regex ทุกแบบ
-      testPassword1: sourceContact?.match(/Password:\s*([^|]+)/),
-      testPassword2: sourceContact?.match(/Password:\s*([^\s|]+)/),
-      testPassword3: sourceContact?.match(/Password:\s*(.+?)(?:\s*\||$)/),
-      testCode1: sourceContact?.match(/Code:\s*([^|]+)/),
-      testCode2: sourceContact?.match(/Code:\s*([^\s|]+)/),
-      testCode3: sourceContact?.match(/Code:\s*(.+?)(?:\s*\||$)/),
-      // ทดสอบการมีอยู่ของคำ
-      hasPassword: !!sourceContact && sourceContact.includes('Password:'),
-      hasCode: !!sourceContact && sourceContact.includes('Code:')
-    });
+    // ลบ console.log เพื่อลด log spam
     
     const result = {
       ...queueItem,
@@ -489,17 +452,6 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
       assigned_account_code: matchingRedemption?.assigned_account_code || queueItem.assigned_account_code,
       code_id: matchingRedemption?.code_id || queueItem.code_id
     };
-    
-    console.log('✅ ผลลัพธ์สุดท้าย:', {
-      queueNumber: result.queue_number,
-      roblox_username: result.roblox_username,
-      roblox_password: result.roblox_password,
-      robux_amount: result.robux_amount,
-      assigned_code: result.assigned_code,
-      // แสดงที่มาของข้อมูล
-      passwordSource: passwordFromContact ? 'contact_info' : (matchingRedemption?.roblox_password ? 'redemption_requests' : 'none'),
-      codeSource: codeFromContact ? 'contact_info' : (matchingRedemption?.assigned_code ? 'redemption_requests' : 'none')
-    });
     
     return result;
   }) || [];
