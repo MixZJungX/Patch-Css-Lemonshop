@@ -11,7 +11,8 @@ import { QueueItem } from '@/types';
 import { getAllQueueItems, updateQueueStatus, deleteQueueItem } from '@/lib/queueApi';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2, Search, X, AlertCircle } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2, Search, X, AlertCircle, CheckSquare, Square, Settings } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
@@ -27,6 +28,13 @@ export default function QueueManager() {
   const [itemToDelete, setItemToDelete] = useState<QueueItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Bulk update states
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [bulkUpdateDialogOpen, setBulkUpdateDialogOpen] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<string>('');
+  const [bulkNotes, setBulkNotes] = useState<string>('');
+  const [bulkUpdating, setBulkUpdating] = useState(false);
 
   const loadQueueItems = async () => {
     try {
@@ -230,6 +238,65 @@ export default function QueueManager() {
     }
   };
 
+  // Bulk update functions
+  const handleSelectItem = (itemId: string, checked: boolean) => {
+    const newSelected = new Set(selectedItems);
+    if (checked) {
+      newSelected.add(itemId);
+    } else {
+      newSelected.delete(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedItems(new Set(filteredItems.map(item => item.id)));
+    } else {
+      setSelectedItems(new Set());
+    }
+  };
+
+  const handleBulkUpdate = async () => {
+    if (selectedItems.size === 0 || !bulkStatus) return;
+
+    setBulkUpdating(true);
+    try {
+      const selectedItemsArray = Array.from(selectedItems);
+      let successCount = 0;
+      let errorCount = 0;
+
+      // อัปเดตทีละรายการ
+      for (const itemId of selectedItemsArray) {
+        try {
+          await updateQueueStatus(itemId, bulkStatus as any, bulkNotes);
+          successCount++;
+        } catch (error) {
+          console.error(`Error updating item ${itemId}:`, error);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`อัปเดตสถานะ ${successCount} รายการสำเร็จ`);
+      }
+      if (errorCount > 0) {
+        toast.error(`อัปเดตสถานะ ${errorCount} รายการล้มเหลว`);
+      }
+
+      setBulkUpdateDialogOpen(false);
+      setSelectedItems(new Set());
+      setBulkStatus('');
+      setBulkNotes('');
+      loadQueueItems();
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      toast.error('เกิดข้อผิดพลาดในการอัปเดตจำนวนมาก');
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
   const cancelDelete = () => {
     setDeleteDialogOpen(false);
     setItemToDelete(null);
@@ -420,17 +487,53 @@ export default function QueueManager() {
       {/* Queue Table Card */}
       <Card className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 border-gray-700/50">
         <CardHeader>
-          <CardTitle className="text-white text-xl font-semibold flex items-center gap-2">
-            📋 รายการคิวทั้งหมด
-            <span className="text-sm font-normal text-gray-400 bg-gray-700/50 px-2 py-1 rounded-md">
-              {filteredItems.length} รายการ
-            </span>
-            {searchTerm && (
-              <span className="text-sm font-normal text-blue-400 bg-blue-500/20 px-2 py-1 rounded-md">
-                🔍 พบ {filteredItems.length} รายการสำหรับ "{searchTerm}"
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white text-xl font-semibold flex items-center gap-2">
+              📋 รายการคิวทั้งหมด
+              <span className="text-sm font-normal text-gray-400 bg-gray-700/50 px-2 py-1 rounded-md">
+                {filteredItems.length} รายการ
               </span>
+              {searchTerm && (
+                <span className="text-sm font-normal text-blue-400 bg-blue-500/20 px-2 py-1 rounded-md">
+                  🔍 พบ {filteredItems.length} รายการสำหรับ "{searchTerm}"
+                </span>
+              )}
+              {selectedItems.size > 0 && (
+                <span className="text-sm font-normal text-green-400 bg-green-500/20 px-2 py-1 rounded-md">
+                  ✅ เลือกแล้ว {selectedItems.size} รายการ
+                </span>
+              )}
+            </CardTitle>
+            
+            {/* Bulk Update Section */}
+            {filteredItems.length > 0 && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedItems.size === filteredItems.length && filteredItems.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    className="border-purple-400 data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500"
+                  />
+                  <span className="text-sm text-purple-200">
+                    เลือกทั้งหมด
+                  </span>
+                </div>
+                
+                {selectedItems.size > 0 && (
+                  <Dialog open={bulkUpdateDialogOpen} onOpenChange={setBulkUpdateDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-green-500/30"
+                      >
+                        <CheckSquare className="w-4 h-4 mr-2" />
+                        อัปเดต {selectedItems.size} รายการ
+                      </Button>
+                    </DialogTrigger>
+                  </Dialog>
+                )}
+              </div>
             )}
-          </CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -473,6 +576,7 @@ export default function QueueManager() {
               <Table className="[&_td]:py-4 [&_th]:py-4">
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border-gray-700/50">
+                    <TableHead className="text-white font-semibold text-center w-12">☑️</TableHead>
                     <TableHead className="text-white font-semibold text-center">🎫 หมายเลขคิว</TableHead>
                     <TableHead className="text-white font-semibold">👤 ข้อมูลลูกค้า</TableHead>
                     <TableHead className="text-white font-semibold text-center">📦 ประเภท</TableHead>
@@ -488,6 +592,13 @@ export default function QueueManager() {
                     
                     return (
                       <TableRow key={item.id} className="hover:bg-gray-800/50 transition-colors duration-200 border-gray-700/30">
+                        <TableCell className="text-center">
+                          <Checkbox
+                            checked={selectedItems.has(item.id)}
+                            onCheckedChange={(checked) => handleSelectItem(item.id, checked as boolean)}
+                            className="border-purple-400 data-[state=checked]:bg-purple-500 data-[state=checked]:border-purple-500"
+                          />
+                        </TableCell>
                         <TableCell className="text-center">
                           <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-lg p-3 border border-purple-400/30">
                             <div className="text-xl font-bold text-white">#{item.queue_number}</div>
@@ -781,6 +892,90 @@ export default function QueueManager() {
                 <div className="flex items-center gap-2">
                   <Trash2 className="w-4 h-4" />
                   ลบคิว
+                </div>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Update Dialog */}
+      <Dialog open={bulkUpdateDialogOpen} onOpenChange={setBulkUpdateDialogOpen}>
+        <DialogContent className="bg-gray-900 border-green-500/30 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-green-400 flex items-center gap-2">
+              <CheckSquare className="w-5 h-5" />
+              อัปเดตสถานะจำนวนมาก
+            </DialogTitle>
+            <DialogDescription className="text-gray-300">
+              คุณกำลังจะอัปเดตสถานะของ <span className="text-green-400 font-semibold">{selectedItems.size} รายการ</span>
+              <br />
+              กรุณาเลือกสถานะใหม่และหมายเหตุ (ถ้ามี)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="bulk-status" className="text-white font-medium">สถานะใหม่</Label>
+              <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                  <SelectValue placeholder="เลือกสถานะ..." />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-600">
+                  <SelectItem value="waiting" className="text-yellow-400 hover:bg-gray-700">
+                    ⏳ รอดำเนินการ
+                  </SelectItem>
+                  <SelectItem value="processing" className="text-blue-400 hover:bg-gray-700">
+                    ⚡ กำลังดำเนินการ
+                  </SelectItem>
+                  <SelectItem value="completed" className="text-green-400 hover:bg-gray-700">
+                    ✅ เสร็จสิ้น
+                  </SelectItem>
+                  <SelectItem value="cancelled" className="text-red-400 hover:bg-gray-700">
+                    ❌ ยกเลิก
+                  </SelectItem>
+                  <SelectItem value="problem" className="text-orange-400 hover:bg-gray-700">
+                    ⚠️ มีปัญหา
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="bulk-notes" className="text-white font-medium">หมายเหตุ (ไม่บังคับ)</Label>
+              <Textarea
+                id="bulk-notes"
+                placeholder="หมายเหตุสำหรับการอัปเดต..."
+                value={bulkNotes}
+                onChange={(e) => setBulkNotes(e.target.value)}
+                className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 min-h-[80px]"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            <Button
+              onClick={() => setBulkUpdateDialogOpen(false)}
+              variant="outline"
+              className="border-gray-500 text-gray-300 hover:bg-gray-700"
+              disabled={bulkUpdating}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleBulkUpdate}
+              disabled={bulkUpdating || !bulkStatus}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {bulkUpdating ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  กำลังอัปเดต...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="w-4 h-4" />
+                  อัปเดต {selectedItems.size} รายการ
                 </div>
               )}
             </Button>
