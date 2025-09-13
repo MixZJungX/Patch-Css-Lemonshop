@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการค้นหาคิว</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #51cf66;
+            background: rgba(81, 207, 102, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .debug {
+            color: #ffd43b;
+            background: rgba(255, 212, 59, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 ทดสอบการค้นหาคิว</h1>
+        <p>ทดสอบการค้นหาคิวด้วยชื่อในเกม "JarnBanG" หรือข้อมูลอื่นๆ</p>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="กรอกชื่อในเกม, เบอร์โทร, หรือโค้ด..." value="JarnBanG">
+            <button onclick="testSearch()">ทดสอบการค้นหา</button>
+            <button onclick="debugData()">Debug ข้อมูล</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // ฟังก์ชันทดสอบการค้นหา
+        async function testSearch() {
+            const searchTerm = document.getElementById('searchInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            resultsDiv.innerHTML = '<div class="debug">กำลังทดสอบการค้นหา...</div>';
+            
+            try {
+                // ทดสอบการค้นหาใน queue_items
+                const queueResponse = await fetch('/api/search-queue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ searchTerm })
+                });
+                
+                const queueData = await queueResponse.json();
+                
+                let html = '<div class="debug">🔍 ผลการทดสอบการค้นหา "' + searchTerm + '":\n\n';
+                
+                if (queueData.success) {
+                    html += '✅ การค้นหาใน queue_items สำเร็จ\n';
+                    html += '📊 จำนวนผลลัพธ์: ' + queueData.results.length + '\n\n';
+                    
+                    if (queueData.results.length > 0) {
+                        html += '📋 ผลลัพธ์ที่พบ:\n';
+                        queueData.results.forEach((item, index) => {
+                            html += `${index + 1}. Queue #${item.queue_number}\n`;
+                            html += `   - Username: ${item.roblox_username || 'ไม่ระบุ'}\n`;
+                            html += `   - Contact: ${item.contact_info}\n`;
+                            html += `   - Status: ${item.status}\n`;
+                            html += `   - Code: ${item.assigned_code || 'ไม่ระบุ'}\n\n`;
+                        });
+                    } else {
+                        html += '❌ ไม่พบผลลัพธ์ใน queue_items\n\n';
+                    }
+                } else {
+                    html += '❌ เกิดข้อผิดพลาดในการค้นหา queue_items: ' + queueData.error + '\n\n';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="error">❌ เกิดข้อผิดพลาด: ' + error.message + '</div>';
+            }
+        }
+        
+        // ฟังก์ชัน debug ข้อมูล
+        async function debugData() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="debug">กำลัง debug ข้อมูล...</div>';
+            
+            try {
+                const response = await fetch('/api/debug-queue');
+                const data = await response.json();
+                
+                let html = '<div class="debug">🔍 ผลการ Debug ข้อมูล:\n\n';
+                
+                if (data.queueItems) {
+                    html += '📊 ข้อมูลใน queue_items: ' + data.queueItems.length + ' รายการ\n';
+                    if (data.queueItems.length > 0) {
+                        html += '📋 ตัวอย่างข้อมูล:\n';
+                        data.queueItems.slice(0, 3).forEach((item, index) => {
+                            html += `${index + 1}. Queue #${item.queue_number}\n`;
+                            html += `   - Username: ${item.roblox_username || 'ไม่ระบุ'}\n`;
+                            html += `   - Contact: ${item.contact_info}\n`;
+                            html += `   - Status: ${item.status}\n\n`;
+                        });
+                    }
+                }
+                
+                if (data.redemptionRequests) {
+                    html += '\n📊 ข้อมูลใน redemption_requests: ' + data.redemptionRequests.length + ' รายการ\n';
+                    if (data.redemptionRequests.length > 0) {
+                        html += '📋 ตัวอย่างข้อมูล:\n';
+                        data.redemptionRequests.slice(0, 3).forEach((item, index) => {
+                            html += `${index + 1}. ID: ${item.id}\n`;
+                            html += `   - Username: ${item.roblox_username || 'ไม่ระบุ'}\n`;
+                            html += `   - Contact: ${item.contact_info}\n`;
+                            html += `   - Status: ${item.status}\n\n`;
+                        });
+                    }
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="error">❌ เกิดข้อผิดพลาดในการ debug: ' + error.message + '</div>';
+            }
+        }
+        
+        // ทดสอบการค้นหาทันทีเมื่อโหลดหน้า
+        window.onload = function() {
+            testSearch();
+        };
+    </script>
+</body>
+</html>
+
+

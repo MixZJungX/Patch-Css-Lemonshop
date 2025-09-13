@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการค้นหาคิว</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .result { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 ทดสอบการค้นหาคิว</h1>
+    
+    <div class="test-case">
+        <h3>Test Case 1: ค้นหา "14y 2y" (มีช่องว่าง)</h3>
+        <input type="text" id="search1" value="14y 2y" placeholder="ค้นหา...">
+        <button onclick="testSearch('search1')">ทดสอบ</button>
+        <div id="result1" class="result"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>Test Case 2: ค้นหา "14y_2y" (มี underscore)</h3>
+        <input type="text" id="search2" value="14y_2y" placeholder="ค้นหา...">
+        <button onclick="testSearch('search2')">ทดสอบ</button>
+        <div id="result2" class="result"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>Test Case 3: ค้นหาเบอร์โทร "0661282287"</h3>
+        <input type="text" id="search3" value="0661282287" placeholder="ค้นหา...">
+        <button onclick="testSearch('search3')">ทดสอบ</button>
+        <div id="result3" class="result"></div>
+    </div>
+    
+    <div class="test-case">
+        <h3>Test Case 4: ค้นหาหมายเลขคิว "476"</h3>
+        <input type="text" id="search4" value="476" placeholder="ค้นหา...">
+        <button onclick="testSearch('search4')">ทดสอบ</button>
+        <div id="result4" class="result"></div>
+    </div>
+
+    <script>
+        // จำลองฟังก์ชันการค้นหา
+        function normalizeSearchTerm(searchTerm) {
+            const normalizedSearchTerm = searchTerm.trim();
+            const searchLower = normalizedSearchTerm.toLowerCase();
+            
+            const searchVariants = [
+                searchLower,
+                searchLower.replace(/\s+/g, '_'),  // แปลงช่องว่างเป็น underscore
+                searchLower.replace(/_/g, ' '),    // แปลง underscore เป็นช่องว่าง
+            ].filter((variant, index, self) => self.indexOf(variant) === index); // ลบตัวซ้ำ
+            
+            return { searchLower, searchVariants };
+        }
+        
+        function testSearch(inputId) {
+            const searchTerm = document.getElementById(inputId).value;
+            const resultDiv = document.getElementById(inputId.replace('search', 'result'));
+            
+            resultDiv.innerHTML = '<p>🔄 กำลังทดสอบ...</p>';
+            
+            // จำลองการประมวลผล
+            setTimeout(() => {
+                const { searchLower, searchVariants } = normalizeSearchTerm(searchTerm);
+                
+                let resultHtml = `
+                    <h4>ผลการทดสอบ:</h4>
+                    <p><strong>คำค้นหาเดิม:</strong> "${searchTerm}"</p>
+                    <p><strong>คำค้นหาที่แปลงแล้ว:</strong> "${searchLower}"</p>
+                    <p><strong>รูปแบบการค้นหา:</strong> [${searchVariants.map(v => `"${v}"`).join(', ')}]</p>
+                `;
+                
+                // จำลองผลลัพธ์
+                if (searchTerm.includes('14y') || searchTerm.includes('476') || searchTerm.includes('0661282287')) {
+                    resultHtml += '<p class="success">✅ <strong>ควรพบข้อมูล</strong> - มีข้อมูลในตาราง</p>';
+                } else {
+                    resultHtml += '<p class="error">❌ <strong>ไม่พบข้อมูล</strong> - ไม่มีข้อมูลในตาราง</p>';
+                }
+                
+                resultDiv.innerHTML = resultHtml;
+                resultDiv.parentElement.className = resultDiv.parentElement.className.replace(' error', '').replace(' success', '');
+                
+                if (searchTerm.includes('14y') || searchTerm.includes('476') || searchTerm.includes('0661282287')) {
+                    resultDiv.parentElement.className += ' success';
+                } else {
+                    resultDiv.parentElement.className += ' error';
+                }
+            }, 1000);
+        }
+        
+        // ทดสอบอัตโนมัติเมื่อโหลดหน้า
+        window.onload = function() {
+            setTimeout(() => {
+                testSearch('search1');
+                testSearch('search2');
+                testSearch('search3');
+                testSearch('search4');
+            }, 500);
+        };
+    </script>
+</body>
+</html>

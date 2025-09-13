@@ -11,12 +11,12 @@ import { QueueItem } from '@/types';
 import { getAllQueueItems, updateQueueStatus, deleteQueueItem } from '@/lib/queueApi';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2, Search, X } from 'lucide-react';
+import { Play, CheckCircle, XCircle, Clock, RefreshCw, Edit, MessageSquare, Trash2, Search, X, AlertCircle } from 'lucide-react';
 
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<QueueItem[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'processing' | 'completed' | 'cancelled'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem'>('all');
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -53,6 +53,7 @@ export default function QueueManager() {
       case 'processing': return { icon: <Play className="w-4 h-4" />, color: 'bg-blue-500', text: 'กำลังดำเนินการ' };
       case 'completed': return { icon: <CheckCircle className="w-4 h-4" />, color: 'bg-green-500', text: 'เสร็จสิ้น' };
       case 'cancelled': return { icon: <XCircle className="w-4 h-4" />, color: 'bg-red-500', text: 'ยกเลิก' };
+      case 'problem': return { icon: <AlertCircle className="w-4 h-4" />, color: 'bg-orange-500', text: 'มีปัญหา' };
       default: return { icon: <Clock className="w-4 h-4" />, color: 'bg-gray-500', text: 'ไม่ทราบ' };
     }
   };
@@ -79,6 +80,7 @@ export default function QueueManager() {
   const processingCount = queueItems.filter(item => item.status === 'processing').length;
   const completedCount = queueItems.filter(item => item.status === 'completed').length;
   const cancelledCount = queueItems.filter(item => item.status === 'cancelled').length;
+  const problemCount = queueItems.filter(item => item.status === 'problem').length;
 
   // Filter items based on active filter and search term
   useEffect(() => {
@@ -91,17 +93,43 @@ export default function QueueManager() {
     
     // Apply search filter
     if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(item => 
-        item.queue_number.toString().includes(searchLower) ||
-        (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) ||
-        (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) ||
-        item.contact_info.toLowerCase().includes(searchLower) ||
-        (item.roblox_password && item.roblox_password.toLowerCase().includes(searchLower)) ||
-        (item.assigned_code && item.assigned_code.toLowerCase().includes(searchLower)) ||
-        (item.assigned_account_code && item.assigned_account_code.toLowerCase().includes(searchLower)) ||
-        item.status.toLowerCase().includes(searchLower)
-      );
+      const searchLower = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(item => {
+        // ค้นหาจากหมายเลขคิว
+        if (item.queue_number.toString().includes(searchLower)) return true;
+        
+        // ค้นหาจากชื่อในเกม (roblox_username)
+        if (item.roblox_username && item.roblox_username.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจากชื่อลูกค้า
+        if (item.customer_name && item.customer_name.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจากเบอร์โทรใน contact_info
+        const phoneMatch = item.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() || 
+                          item.contact_info.match(/Phone:\s*([^|]+)/)?.[1]?.trim() ||
+                          item.contact_info.match(/(\d{10,})/)?.[1];
+        if (phoneMatch && phoneMatch.includes(searchLower)) return true;
+        
+        // ค้นหาจากชื่อในเกมใน contact_info
+        const nameMatch = item.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim() ||
+                         item.contact_info.match(/Username:\s*([^|]+)/)?.[1]?.trim();
+        if (nameMatch && nameMatch.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจากโค้ด
+        if (item.assigned_code && item.assigned_code.toLowerCase().includes(searchLower)) return true;
+        if (item.assigned_account_code && item.assigned_account_code.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจากรหัสผ่าน
+        if (item.roblox_password && item.roblox_password.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจาก contact_info ทั้งหมด (fallback)
+        if (item.contact_info.toLowerCase().includes(searchLower)) return true;
+        
+        // ค้นหาจากสถานะ
+        if (item.status.toLowerCase().includes(searchLower)) return true;
+        
+        return false;
+      });
     }
     
     setFilteredItems(filtered);
@@ -135,6 +163,9 @@ export default function QueueManager() {
             break;
           case 'processing':
             requestStatus = 'processing';
+            break;
+          case 'problem':
+            requestStatus = 'pending'; // ยังคงเป็น pending แต่มีปัญหา
             break;
           default:
             requestStatus = 'pending';
@@ -272,7 +303,7 @@ export default function QueueManager() {
               </div>
               <input
                 type="text"
-                placeholder="ค้นหาคิว... (หมายเลขคิว, ชื่อ, เบอร์โทร, รหัสผ่าน, โค้ด)"
+                placeholder="🔍 ค้นหาคิว... (หมายเลขคิว, ชื่อในเกม, เบอร์โทร, รหัสผ่าน, โค้ด)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 bg-gray-800/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-200"
@@ -285,6 +316,32 @@ export default function QueueManager() {
                   <X className="h-5 w-5" />
                 </button>
               )}
+            </div>
+            
+            {/* Search Tips */}
+            <div className="text-sm text-gray-400 bg-gray-800/30 rounded-lg p-3 border border-gray-700/50">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-yellow-400">💡</span>
+                <span className="font-medium text-yellow-300">วิธีค้นหาคิว:</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-400">🎫</span>
+                  <span>หมายเลขคิว: <code className="bg-gray-700/50 px-1 rounded">#123</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400">👤</span>
+                  <span>ชื่อในเกม: <code className="bg-gray-700/50 px-1 rounded">PlayerName</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-400">📱</span>
+                  <span>เบอร์โทร: <code className="bg-gray-700/50 px-1 rounded">0821695505</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-orange-400">🎫</span>
+                  <span>โค้ด: <code className="bg-gray-700/50 px-1 rounded">50BXJK258J</code></span>
+                </div>
+              </div>
             </div>
             
             {/* Filter Buttons */}
@@ -344,6 +401,17 @@ export default function QueueManager() {
             >
               ❌ ยกเลิก ({cancelledCount})
             </Button>
+            <Button
+              onClick={() => setActiveFilter('problem')}
+              variant={activeFilter === 'problem' ? 'default' : 'outline'}
+              className={`${
+                activeFilter === 'problem'
+                  ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                  : 'text-white border-orange-400/50 hover:bg-orange-500/20'
+              } transition-all duration-200`}
+            >
+              ⚠️ มีปัญหา ({problemCount})
+            </Button>
             </div>
           </div>
         </CardContent>
@@ -357,6 +425,11 @@ export default function QueueManager() {
             <span className="text-sm font-normal text-gray-400 bg-gray-700/50 px-2 py-1 rounded-md">
               {filteredItems.length} รายการ
             </span>
+            {searchTerm && (
+              <span className="text-sm font-normal text-blue-400 bg-blue-500/20 px-2 py-1 rounded-md">
+                🔍 พบ {filteredItems.length} รายการสำหรับ "{searchTerm}"
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -370,10 +443,29 @@ export default function QueueManager() {
             <div className="text-center py-12">
               <div className="text-6xl mb-4">📭</div>
               <p className="text-white text-lg font-medium">
-                {activeFilter === 'all' ? 'ไม่มีคิวในระบบ' : `ไม่มีคิวที่${activeFilter === 'waiting' ? 'รอดำเนินการ' : activeFilter === 'processing' ? 'กำลังดำเนินการ' : activeFilter === 'completed' ? 'เสร็จสิ้น' : 'ยกเลิก'}`}
+                {searchTerm ? (
+                  <>
+                    ไม่พบคิวที่ตรงกับ "{searchTerm}"
+                  </>
+                ) : (
+                  activeFilter === 'all' ? 'ไม่มีคิวในระบบ' : `ไม่มีคิวที่${activeFilter === 'waiting' ? 'รอดำเนินการ' : activeFilter === 'processing' ? 'กำลังดำเนินการ' : activeFilter === 'completed' ? 'เสร็จสิ้น' : activeFilter === 'cancelled' ? 'ยกเลิก' : 'มีปัญหา'}`
+                )}
               </p>
               <p className="text-gray-400 text-sm">
-                {activeFilter === 'all' ? 'ยังไม่มีลูกค้าเข้ามาในคิว' : 'ลองเปลี่ยน filter หรือรอสักครู่'}
+                {searchTerm ? (
+                  <>
+                    ลองค้นหาด้วย: หมายเลขคิว, ชื่อในเกม, เบอร์โทร, หรือโค้ด
+                    <br />
+                    <button 
+                      onClick={() => setSearchTerm('')}
+                      className="text-blue-400 hover:text-blue-300 underline mt-2"
+                    >
+                      ล้างการค้นหา
+                    </button>
+                  </>
+                ) : (
+                  activeFilter === 'all' ? 'ยังไม่มีลูกค้าเข้ามาในคิว' : 'ลองเปลี่ยน filter หรือรอสักครู่'
+                )}
               </p>
             </div>
           ) : (
@@ -406,7 +498,7 @@ export default function QueueManager() {
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                               <div className="font-semibold text-white text-lg">
-                                {item.roblox_username || item.customer_name || 'ไม่ระบุ'}
+                                คิว #{item.queue_number}
                               </div>
                             </div>
                             
@@ -417,9 +509,9 @@ export default function QueueManager() {
                             
                             {/* แสดงข้อมูลเพิ่มเติม */}
                             <div className="space-y-1">
-                              {item.roblox_username && (
+                              {(item.roblox_username || item.customer_name) && (
                                 <div className="text-xs text-blue-300 bg-blue-500/10 rounded px-2 py-1 inline-block">
-                                  👤 {item.roblox_username}
+                                  👤 {item.roblox_username || item.customer_name}
                                 </div>
                               )}
                               {item.roblox_password && (
@@ -520,7 +612,7 @@ export default function QueueManager() {
             <DialogTitle className="text-white text-xl font-bold flex items-center gap-3">
               ✏️ แก้ไขสถานะคิว #{selectedItem?.queue_number}
               <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 px-3 py-1 rounded-full text-sm font-normal">
-                {selectedItem?.customer_name}
+                👤 {selectedItem?.roblox_username || selectedItem?.customer_name || 'ไม่ระบุ'}
               </div>
             </DialogTitle>
             <DialogDescription className="text-gray-300 text-base">
@@ -560,6 +652,12 @@ export default function QueueManager() {
                       ยกเลิก
                     </div>
                   </SelectItem>
+                  <SelectItem value="problem" className="text-white hover:bg-gray-700">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      มีปัญหา
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -589,6 +687,21 @@ export default function QueueManager() {
                   )}
                   {selectedItem.roblox_password && (
                     <p><strong>รหัสผ่าน:</strong> {selectedItem.roblox_password}</p>
+                  )}
+                  
+                  {/* แยกข้อมูลจาก contact_info */}
+                  {selectedItem.contact_info && (
+                    <>
+                      {selectedItem.contact_info.includes('เบอร์โทร:') && (
+                        <p><strong>เบอร์โทร:</strong> {selectedItem.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() || 'ไม่ระบุ'}</p>
+                      )}
+                      {selectedItem.contact_info.includes('Password:') && (
+                        <p><strong>รหัสผ่าน:</strong> {selectedItem.contact_info.match(/Password:\s*([^|]+)/)?.[1]?.trim() || 'ไม่ระบุ'}</p>
+                      )}
+                      {selectedItem.contact_info.includes('Code:') && (
+                        <p><strong>โค้ด:</strong> {selectedItem.contact_info.match(/Code:\s*([^|]+)/)?.[1]?.trim() || 'ไม่ระบุ'}</p>
+                      )}
+                    </>
                   )}
                   {selectedItem.robux_amount && (
                     <p><strong>จำนวน Robux:</strong> {selectedItem.robux_amount}</p>

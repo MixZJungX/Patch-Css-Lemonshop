@@ -43,7 +43,7 @@ export interface QueueItem {
   customer_name?: string;
   contact_info: string;
   product_type: 'robux' | 'chicken' | 'rainbow';
-  status: 'waiting' | 'processing' | 'completed' | 'cancelled';
+  status: 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem';
   priority?: number;
   estimated_wait_time?: number;
   admin_notes?: string;

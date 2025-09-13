@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { QueueItem, QueueDisplay } from '@/types';
-import { checkQueueStatus, getQueuePosition, getQueueDisplay } from '@/lib/queueApi';
-import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X } from 'lucide-react';
+import { getQueuePosition, getQueueDisplay, searchQueueByGameInfo } from '@/lib/queueApi';
+import { testSimpleSearch } from '@/lib/testSearch';
+import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X, MessageCircle, Home, ArrowLeft } from 'lucide-react';
+import { ChatWidget } from './ChatWidget';
+import { Link } from 'react-router-dom';
 
 export default function QueueStatusChecker() {
   const [queueNumber, setQueueNumber] = useState('');
@@ -16,6 +19,8 @@ export default function QueueStatusChecker() {
   const [error, setError] = useState('');
   const [queueDisplay, setQueueDisplay] = useState<QueueDisplay | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<QueueItem[]>([]);
 
   // โหลดข้อมูลจอแสดงคิว
   const loadQueueDisplay = async () => {
@@ -35,35 +40,36 @@ export default function QueueStatusChecker() {
 
   const handleCheckStatus = async () => {
     if (!queueNumber.trim()) {
-      setError('กรุณากรอกหมายเลขคิว');
-      return;
-    }
-
-    const number = parseInt(queueNumber);
-    if (isNaN(number) || number < 1) {
-      setError('หมายเลขคิวต้องเป็นตัวเลขบวก');
+      setError('กรุณากรอกข้อมูลสำหรับค้นหา');
       return;
     }
 
     setLoading(true);
     setError('');
     setQueueItem(null);
+    setSearchResults([]);
 
     try {
-      const result = await checkQueueStatus(number);
-      if (result) {
-        setQueueItem(result);
-        
-        if (result.status === 'waiting') {
-          const position = await getQueuePosition(number);
-          setQueuePosition(position);
-        } else {
-          setQueuePosition(0);
+      // ค้นหาจากคิวอย่างเดียว - เรียบง่าย
+      const results = await searchQueueByGameInfo(queueNumber);
+      
+      if (results.length > 0) {
+        setSearchResults(results);
+        // ถ้าพบผลลัพธ์เดียว ให้แสดงทันที
+        if (results.length === 1) {
+          setQueueItem(results[0]);
+          if (results[0].status === 'waiting') {
+            const position = await getQueuePosition(results[0].queue_number);
+            setQueuePosition(position);
+          } else {
+            setQueuePosition(0);
+          }
         }
       } else {
-        setError('ไม่พบหมายเลขคิวนี้ กรุณาตรวจสอบอีกครั้ง');
+        setError(`ไม่พบคิวที่ตรงกับ "${queueNumber}" กรุณาตรวจสอบหมายเลขคิว ชื่อในเกม หรือเบอร์โทรอีกครั้ง`);
       }
     } catch (err) {
+      console.error('Error checking queue status:', err);
       setError('เกิดข้อผิดพลาดในการตรวจสอบ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
@@ -76,7 +82,9 @@ export default function QueueStatusChecker() {
       case 'processing': return { icon: <AlertCircle className="w-5 h-5" />, color: 'bg-blue-500', text: 'กำลังดำเนินการ', description: 'คิวของคุณกำลังถูกดำเนินการ กรุณารอสักครู่' };
       case 'completed': return { icon: <CheckCircle className="w-5 h-5" />, color: 'bg-green-500', text: 'เสร็จสิ้น', description: 'การดำเนินการเสร็จสิ้นแล้ว' };
       case 'cancelled': return { icon: <XCircle className="w-5 h-5" />, color: 'bg-red-500', text: 'ยกเลิก', description: 'คิวนี้ถูกยกเลิกแล้ว' };
-      default: return { icon: <Clock className="w-5 h-5" />, color: 'bg-gray-500', text: 'ไม่ทราบสถานะ', description: 'ไม่สามารถระบุสถานะได้' };
+      case 'problem': return { icon: <AlertCircle className="w-5 h-5" />, color: 'bg-orange-500', text: 'มีปัญหา', description: 'คิวของคุณมีปัญหา กรุณาติดต่อแอดมิน' };
+      case 'pending': return { icon: <Clock className="w-5 h-5" />, color: 'bg-yellow-500', text: 'รอการดำเนินการ', description: 'คิวของคุณอยู่ในรายการรอ กรุณารอการเรียก' };
+      default: return { icon: <Clock className="w-5 h-5" />, color: 'bg-yellow-500', text: 'รอการดำเนินการ', description: 'คิวของคุณอยู่ในรายการรอ กรุณารอการเรียก' };
     }
   };
 
@@ -87,6 +95,15 @@ export default function QueueStatusChecker() {
       case 'rainbow': return { icon: '🌈', name: 'Rainbow Six' };
       default: return { icon: '📦', name: 'สินค้า' };
     }
+  };
+
+  // ฟังก์ชันซ่อนรหัสผ่านใน contact_info
+  const hidePasswordInContactInfo = (contactInfo: string) => {
+    return contactInfo
+      .replace(/Password:\s*[^|]+/g, 'Password: ••••••••••')
+      .replace(/password:\s*[^|]+/gi, 'Password: ••••••••••')
+      .replace(/Password:\s*\.+/g, 'Password: ••••••••••')
+      .replace(/password:\s*\.+/gi, 'Password: ••••••••••');
   };
 
   const formatDate = (dateString: string) => {
@@ -106,9 +123,51 @@ export default function QueueStatusChecker() {
     return `${hours} ชั่วโมง ${remainingMinutes} นาที`;
   };
 
+  const handleSelectQueue = async (selectedQueue: QueueItem) => {
+    setQueueItem(selectedQueue);
+    setSearchResults([]);
+    
+    if (selectedQueue.status === 'waiting') {
+      const position = await getQueuePosition(selectedQueue.queue_number);
+      setQueuePosition(position);
+    } else {
+      setQueuePosition(0);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       <div className="w-full max-w-7xl mx-auto p-6 space-y-8">
+        {/* Navigation Bar */}
+        <div className="flex items-center justify-between mb-6">
+          <Link 
+            to="/" 
+            className="group flex items-center space-x-3 bg-white/10 backdrop-blur-xl hover:bg-white/20 border border-white/20 hover:border-white/30 rounded-2xl px-6 py-3 transition-all duration-300 hover:scale-105 shadow-lg"
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="text-white font-semibold text-lg">กลับหน้าแรก</div>
+              <div className="text-purple-200 text-sm">Thai Robux Redemption</div>
+            </div>
+          </Link>
+          
+          <div className="flex items-center space-x-4">
+            <Link 
+              to="/admin" 
+              className="group bg-white/10 backdrop-blur-xl hover:bg-white/20 border border-white/20 hover:border-white/30 rounded-2xl px-4 py-2 transition-all duration-300 hover:scale-105"
+            >
+              <div className="flex items-center space-x-2">
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-full p-1.5 group-hover:scale-110 transition-transform duration-300">
+                  <Home className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-white text-sm font-medium">แอดมิน</span>
+              </div>
+            </Link>
+          </div>
+        </div>
+
         {/* หัวข้อหลัก */}
         <div className="text-center space-y-4">
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
@@ -133,7 +192,7 @@ export default function QueueStatusChecker() {
             <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-6 border border-white/20 shadow-2xl">
               <div className="text-center mb-6">
                 <h2 className="text-3xl font-bold text-white mb-2">🔍 เช็คสถานะคิว</h2>
-                <p className="text-purple-200">ตรวจสอบสถานะและตำแหน่งในคิวของคุณ</p>
+                <p className="text-purple-200">ค้นหาด้วยหมายเลขคิว หรือชื่อในเกม</p>
               </div>
               
               <div className="space-y-6">
@@ -144,7 +203,7 @@ export default function QueueStatusChecker() {
                   </div>
                   <input
                     type="text"
-                    placeholder="ค้นหาคิว... (หมายเลขคิว, ชื่อ, เบอร์โทร)"
+                    placeholder="ค้นหาคิว... (ชื่อในเกมเท่านั้น)"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder:text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-200"
@@ -161,12 +220,11 @@ export default function QueueStatusChecker() {
                 
                 <div className="flex gap-3">
                   <Input
-                    type="number"
-                    placeholder="กรอกหมายเลขคิว (เช่น: 1, 2, 3...)"
+                    type="text"
+                    placeholder="กรอกชื่อในเกมเท่านั้น (เช่น: PlayerName)"
                     value={queueNumber}
                     onChange={(e) => setQueueNumber(e.target.value)}
                     className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-purple-300 rounded-2xl"
-                    min="1"
                   />
                   <Button 
                     onClick={handleCheckStatus} 
@@ -190,8 +248,52 @@ export default function QueueStatusChecker() {
                 {error && (
                   <Alert className="border-red-400/30 bg-red-500/10 backdrop-blur-sm rounded-2xl">
                     <AlertCircle className="h-4 w-4 text-red-400" />
-                    <AlertDescription className="text-red-300">{error}</AlertDescription>
+                    <AlertDescription className="text-red-300">
+                      <div className="space-y-3">
+                        <div>{error}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-red-200">หากมีปัญหา กรุณาติดต่อแอดมิน</span>
+                          <Button
+                            onClick={() => setIsChatOpen(true)}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1"
+                          >
+                            <MessageCircle className="h-4 w-4 mr-1" />
+                            แชทกับแอดมิน
+                          </Button>
+                        </div>
+                      </div>
+                    </AlertDescription>
                   </Alert>
+                )}
+
+                {/* แสดงผลการค้นหาเมื่อมีหลายผลลัพธ์ */}
+                {searchResults.length > 1 && (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
+                    <h3 className="text-white font-semibold mb-3">พบคิวที่ตรงกัน {searchResults.length} รายการ:</h3>
+                    <div className="space-y-2">
+                      {searchResults.map((result) => (
+                        <div
+                          key={result.id}
+                          onClick={() => handleSelectQueue(result)}
+                          className="bg-white/5 hover:bg-white/10 rounded-lg p-3 cursor-pointer transition-colors border border-white/10"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-white font-medium">คิว #{result.queue_number}</div>
+                              <div className="text-purple-200 text-sm">
+                                {result.roblox_username && `ชื่อ: ${result.roblox_username}`}
+                                {result.assigned_code && ` | โค้ด: ${result.assigned_code}`}
+                              </div>
+                            </div>
+                            <Badge className={`${getStatusInfo(result.status).color} text-white rounded-full px-3 py-1`}>
+                              {getStatusInfo(result.status).text}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {queueItem && (
@@ -227,7 +329,9 @@ export default function QueueStatusChecker() {
         {queueItem.contact_info && (
           <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
             <span className="font-medium text-purple-200">ข้อมูลติดต่อ:</span>
-            <span className="text-white">{queueItem.contact_info}</span>
+            <span className="text-white">
+              {hidePasswordInContactInfo(queueItem.contact_info)}
+            </span>
           </div>
         )}
 
@@ -241,7 +345,7 @@ export default function QueueStatusChecker() {
         {queueItem.roblox_password && (
           <div className="flex items-center justify-between bg-white/10 rounded-2xl p-4">
             <span className="font-medium text-purple-200">🔒 รหัสผ่าน:</span>
-            <span className="text-white font-mono">{queueItem.roblox_password}</span>
+            <span className="text-white font-mono">••••••••••</span>
           </div>
         )}
 
@@ -301,6 +405,22 @@ export default function QueueStatusChecker() {
                     <div className="mt-6 bg-blue-500/20 backdrop-blur-sm rounded-2xl p-4 border border-blue-400/30">
                       <p className="text-sm text-blue-200 text-center">💡 {getStatusInfo(queueItem.status).description}</p>
                     </div>
+
+                    {/* ปุ่มติดต่อแอดมินเมื่อมีปัญหา */}
+                    {queueItem.status === 'problem' && (
+                      <div className="mt-4 bg-orange-500/20 backdrop-blur-sm rounded-2xl p-4 border border-orange-400/30">
+                        <div className="text-center space-y-3">
+                          <p className="text-sm text-orange-200">⚠️ คิวของคุณมีปัญหา กรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ</p>
+                          <Button
+                            onClick={() => setIsChatOpen(true)}
+                            className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-6 py-2"
+                          >
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            ติดต่อแอดมิน
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -435,6 +555,14 @@ export default function QueueStatusChecker() {
           </div>
         </div>
       </div>
+
+      {/* Chat Widget */}
+      <ChatWidget
+        customerId={queueItem?.queue_number?.toString() || (queueNumber || 'GUEST').trim().toLowerCase()}
+        customerName={`ลูกค้าคิว #${queueItem?.queue_number || (queueNumber || 'GUEST').trim()}`}
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import App from './App.tsx';
 import { LoadingFallback } from '@/components/LoadingFallback';
 import './index.css';
 import { forceVercelRebuild } from './force-vercel-rebuild';
+import './lib/consoleHelpers';
 
 // Force Vercel rebuild
 forceVercelRebuild();

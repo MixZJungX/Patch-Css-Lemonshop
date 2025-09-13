@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบข้อมูล Customer Name และ Contact Info</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #51cf66;
+            background: rgba(81, 207, 102, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .debug {
+            color: #ffd43b;
+            background: rgba(255, 212, 59, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .data-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .field {
+            margin: 5px 0;
+        }
+        .field-label {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .field-value {
+            color: #ffffff;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 ทดสอบข้อมูล Customer Name และ Contact Info</h1>
+        <p>ดูข้อมูล customer_name และ contact_info ในตาราง queue_items</p>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="กรอกชื่อหรือข้อมูลที่ต้องการค้นหา...">
+            <button onclick="searchData()">ค้นหาข้อมูล</button>
+            <button onclick="showAllData()">แสดงข้อมูลทั้งหมด</button>
+            <button onclick="analyzePatterns()">วิเคราะห์รูปแบบ</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // ฟังก์ชันแสดงข้อมูลทั้งหมด
+        async function showAllData() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="debug">กำลังโหลดข้อมูล...</div>';
+            
+            try {
+                const response = await fetch('/api/debug-queue');
+                const data = await response.json();
+                
+                let html = '<div class="debug">📊 ข้อมูล Customer Name และ Contact Info:\n\n';
+                
+                if (data.queueItems && data.queueItems.length > 0) {
+                    html += `พบข้อมูล ${data.queueItems.length} รายการ:\n\n`;
+                    
+                    data.queueItems.forEach((item, index) => {
+                        html += `${index + 1}. คิว #${item.queue_number} (${item.status})\n`;
+                        html += `   👤 Customer Name: ${item.customer_name || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   🎮 Roblox Username: ${item.roblox_username || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   📝 Contact Info: ${item.contact_info || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   📅 สร้างเมื่อ: ${new Date(item.created_at).toLocaleString('th-TH')}\n\n`;
+                    });
+                } else {
+                    html += '❌ ไม่พบข้อมูลในตาราง queue_items\n';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="error">❌ เกิดข้อผิดพลาด: ' + error.message + '</div>';
+            }
+        }
+        
+        // ฟังก์ชันค้นหาข้อมูล
+        async function searchData() {
+            const searchTerm = document.getElementById('searchInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            if (!searchTerm.trim()) {
+                resultsDiv.innerHTML = '<div class="error">❌ กรุณากรอกคำค้นหา</div>';
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="debug">กำลังค้นหาข้อมูล...</div>';
+            
+            try {
+                const response = await fetch('/api/search-queue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ searchTerm })
+                });
+                
+                const data = await response.json();
+                
+                let html = '<div class="debug">🔍 ผลการค้นหา "' + searchTerm + '":\n\n';
+                
+                if (data.success && data.results && data.results.length > 0) {
+                    html += `✅ พบข้อมูล ${data.results.length} รายการ:\n\n`;
+                    
+                    data.results.forEach((item, index) => {
+                        html += `${index + 1}. คิว #${item.queue_number} (${item.status})\n`;
+                        html += `   👤 Customer Name: ${item.customer_name || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   🎮 Roblox Username: ${item.roblox_username || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   📝 Contact Info: ${item.contact_info || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   🎫 Assigned Code: ${item.assigned_code || '[ไม่มีข้อมูล]'}\n`;
+                        html += `   📅 สร้างเมื่อ: ${new Date(item.created_at).toLocaleString('th-TH')}\n\n`;
+                    });
+                } else {
+                    html += '❌ ไม่พบข้อมูลที่ตรงกับคำค้นหา\n';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="error">❌ เกิดข้อผิดพลาด: ' + error.message + '</div>';
+            }
+        }
+        
+        // ฟังก์ชันวิเคราะห์รูปแบบข้อมูล
+        async function analyzePatterns() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="debug">กำลังวิเคราะห์รูปแบบข้อมูล...</div>';
+            
+            try {
+                const response = await fetch('/api/debug-queue');
+                const data = await response.json();
+                
+                let html = '<div class="debug">📊 วิเคราะห์รูปแบบข้อมูล:\n\n';
+                
+                if (data.queueItems && data.queueItems.length > 0) {
+                    const items = data.queueItems;
+                    
+                    // นับข้อมูลที่มี
+                    const hasCustomerName = items.filter(item => item.customer_name).length;
+                    const hasRobloxUsername = items.filter(item => item.roblox_username).length;
+                    const hasContactInfo = items.filter(item => item.contact_info).length;
+                    
+                    html += `📈 สถิติข้อมูล:\n`;
+                    html += `   👤 มี Customer Name: ${hasCustomerName}/${items.length} รายการ\n`;
+                    html += `   🎮 มี Roblox Username: ${hasRobloxUsername}/${items.length} รายการ\n`;
+                    html += `   📝 มี Contact Info: ${hasContactInfo}/${items.length} รายการ\n\n`;
+                    
+                    // วิเคราะห์รูปแบบ contact_info
+                    const contactPatterns = {
+                        hasName: 0,
+                        hasPhone: 0,
+                        hasCode: 0,
+                        hasPassword: 0
+                    };
+                    
+                    items.forEach(item => {
+                        if (item.contact_info) {
+                            if (item.contact_info.includes('ชื่อ:') || item.contact_info.includes('Username:')) {
+                                contactPatterns.hasName++;
+                            }
+                            if (item.contact_info.includes('เบอร์โทร:') || item.contact_info.includes('Phone:')) {
+                                contactPatterns.hasPhone++;
+                            }
+                            if (item.contact_info.includes('Code:')) {
+                                contactPatterns.hasCode++;
+                            }
+                            if (item.contact_info.includes('Password:')) {
+                                contactPatterns.hasPassword++;
+                            }
+                        }
+                    });
+                    
+                    html += `📝 รูปแบบ Contact Info:\n`;
+                    html += `   มีชื่อ: ${contactPatterns.hasName} รายการ\n`;
+                    html += `   มีเบอร์โทร: ${contactPatterns.hasPhone} รายการ\n`;
+                    html += `   มีโค้ด: ${contactPatterns.hasCode} รายการ\n`;
+                    html += `   มีรหัสผ่าน: ${contactPatterns.hasPassword} รายการ\n\n`;
+                    
+                    // แสดงตัวอย่างข้อมูล
+                    html += `📋 ตัวอย่างข้อมูล:\n`;
+                    items.slice(0, 5).forEach((item, index) => {
+                        html += `${index + 1}. คิว #${item.queue_number}\n`;
+                        html += `   Customer Name: "${item.customer_name || 'ไม่มี'}"\n`;
+                        html += `   Roblox Username: "${item.roblox_username || 'ไม่มี'}"\n`;
+                        html += `   Contact Info: "${item.contact_info || 'ไม่มี'}"\n\n`;
+                    });
+                } else {
+                    html += '❌ ไม่พบข้อมูล\n';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<div class="error">❌ เกิดข้อผิดพลาด: ' + error.message + '</div>';
+            }
+        }
+        
+        // โหลดข้อมูลทั้งหมดทันทีเมื่อเปิดหน้า
+        window.onload = function() {
+            showAllData();
+        };
+    </script>
+</body>
+</html>
+

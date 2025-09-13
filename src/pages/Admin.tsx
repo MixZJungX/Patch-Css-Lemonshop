@@ -16,10 +16,11 @@ import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { Link } from 'react-router-dom';
 import { Upload, Search, X, Filter } from 'lucide-react';
 import QueueManager from '@/components/QueueManager';
+import { AdminChatPanel } from '@/components/AdminChatPanel';
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'chat'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
@@ -1104,11 +1105,12 @@ export default function Admin() {
               { key: 'rainbow', label: '🎮 Rainbow Six', count: rainbowRequests.length },
               { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 },
               { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length },
-              { key: 'queue', label: '🎯 ระบบคิว', count: 0 }
+              { key: 'queue', label: '🎯 ระบบคิว', count: 0 },
+              { key: 'chat', label: '💬 แชทลูกค้า', count: 0 }
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue')}
+                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'chat')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -2446,6 +2448,13 @@ RBX005,3600`;
       {activeTab === 'queue' && (
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20">
           <QueueManager />
+        </div>
+      )}
+
+      {/* ระบบแชท */}
+      {activeTab === 'chat' && (
+        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 h-[600px]">
+          <AdminChatPanel adminId={user?.id || 'admin'} />
         </div>
       )}
     </div>

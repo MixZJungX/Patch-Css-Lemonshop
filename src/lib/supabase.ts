@@ -23,6 +23,11 @@ const createSupabaseClient = () => {
         detectSessionInUrl: false,
         flowType: 'pkce'
       },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      },
       global: {
         headers: {
           'X-Client-Info': 'robux-exchange@1.0.0'

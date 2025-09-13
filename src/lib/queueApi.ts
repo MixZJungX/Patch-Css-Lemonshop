@@ -128,7 +128,10 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     .order('created_at', { ascending: true })
     .limit(10);
 
-  if (waitingError) throw waitingError;
+  if (waitingError) {
+    console.warn('⚠️ Error fetching waiting items:', waitingError);
+    // ไม่ throw error แต่ใช้ empty array แทน
+  }
 
   const { data: processingItem, error: processingError } = await supabase
     .from('queue_items')
@@ -136,9 +139,12 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     .eq('status', 'processing')
     .order('updated_at', { ascending: true })
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  if (processingError && processingError.code !== 'PGRST116') throw processingError;
+  if (processingError) {
+    console.warn('⚠️ Error fetching processing item:', processingError);
+    // ไม่ throw error แต่ใช้ null แทน
+  }
 
   // ดึงข้อมูล redemption requests
   const { data: redemptionData, error: redemptionError } = await supabase
@@ -211,7 +217,7 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
   };
 };
 
-// เช็คสถานะคิว
+// เช็คสถานะคิวจากหมายเลขคิว
 export const checkQueueStatus = async (queueNumber: number): Promise<QueueItem | null> => {
   const { data: queueData, error } = await supabase
     .from('queue_items')
@@ -229,7 +235,10 @@ export const checkQueueStatus = async (queueNumber: number): Promise<QueueItem |
     .from('app_284beb8f90_redemption_requests')
     .select('*');
 
-  if (redemptionError) throw redemptionError;
+  if (redemptionError) {
+    console.warn('⚠️ Error fetching redemption data:', redemptionError);
+    // ไม่ throw error แต่ใช้ empty array แทน
+  }
 
   // หา redemption request ที่ตรงกัน
   const matchingRedemption = redemptionData?.find(redemption => {
@@ -379,7 +388,10 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
     .select('*')
     .order('created_at', { ascending: true });
 
-  if (queueError) throw queueError;
+  if (queueError) {
+    console.warn('⚠️ Error fetching all queue items:', queueError);
+    return []; // return empty array instead of throwing
+  }
 
   // ดึงข้อมูล redemption requests
   const { data: redemptionData, error: redemptionError } = await supabase
@@ -387,7 +399,10 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
     .select('*')
     .order('created_at', { ascending: true });
 
-  if (redemptionError) throw redemptionError;
+  if (redemptionError) {
+    console.warn('⚠️ Error fetching redemption data in getAllQueueItems:', redemptionError);
+    return queueData || []; // return queue data only if redemption fails
+  }
 
   console.log('📊 ข้อมูลที่ดึงมา:', {
     queueData: queueData?.length,
@@ -457,4 +472,139 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
   }) || [];
   
   return enrichedData;
+};
+
+// เช็คสถานะคิวจากชื่อในเกมหรือโค้ด (ค้นหาจาก queue_items อย่างเดียว)
+export const searchQueueByGameInfo = async (searchTerm: string): Promise<QueueItem[]> => {
+  if (!searchTerm.trim()) return [];
+
+  // จัดการ search term ให้รองรับทั้งช่องว่างและ underscore
+  const normalizedSearchTerm = searchTerm.trim();
+  const searchLower = normalizedSearchTerm.toLowerCase();
+  
+  // สร้างรูปแบบการค้นหาหลายแบบ
+  const searchVariants = [
+    searchLower,
+    searchLower.replace(/\s+/g, '_'),  // แปลงช่องว่างเป็น underscore
+    searchLower.replace(/_/g, ' '),    // แปลง underscore เป็นช่องว่าง
+  ].filter((variant, index, self) => self.indexOf(variant) === index); // ลบตัวซ้ำ
+
+  console.log('🔍 ค้นหาคิวด้วยคำค้นหา:', searchTerm);
+  console.log('🔍 รูปแบบการค้นหา:', searchVariants);
+
+  // ค้นหาใน queue_items อย่างเดียว - เรียบง่าย
+  // แยกการค้นหาเพื่อหลีกเลี่ยง error
+  let queueData = [];
+  let error = null;
+
+  // ค้นหาด้วยชื่อเท่านั้น (ไม่ค้นจากหมายเลขคิว)
+  // เริ่มต้นด้วยการค้นหาด้วยข้อความทันที
+    try {
+      // ลองค้นหาแบบละเอียดด้วย variants ต่างๆ
+      const searchPromises = searchVariants.map(async (variant) => {
+        try {
+          // Escape special characters สำหรับ PostgreSQL
+          const escapedVariant = variant.replace(/[%_\\]/g, '\\$&');
+          
+          // ตรวจสอบว่า variant ไม่ว่างเปล่า
+          if (!escapedVariant || escapedVariant.trim() === '') {
+            return { data: [], error: null };
+          }
+          
+          const result = await supabase
+            .from('queue_items')
+            .select('*')
+            .or(`roblox_username.ilike.%${escapedVariant}%,contact_info.ilike.%${escapedVariant}%,assigned_code.ilike.%${escapedVariant}%,customer_name.ilike.%${escapedVariant}%`);
+          
+          // ตรวจสอบว่า result มี error หรือไม่
+          if (result.error) {
+            console.warn(`⚠️ Warning searching with variant "${variant}":`, result.error.message);
+            return { data: [], error: null }; // ไม่ส่ง error ต่อ
+          }
+          
+          return result;
+        } catch (err) {
+          console.warn(`⚠️ Warning searching with variant "${variant}":`, err.message);
+          return { data: [], error: null }; // ไม่ส่ง error ต่อ
+        }
+      });
+
+      const results = await Promise.all(searchPromises);
+      
+      // รวมผลลัพธ์จากทุกการค้นหา
+      const allResults = results
+        .filter(result => !result.error && result.data)
+        .flatMap(result => result.data || []);
+      
+      // ลบข้อมูลซ้ำ
+      const uniqueResults = allResults.filter((item, index, self) => 
+        index === self.findIndex(t => t.id === item.id)
+      );
+      
+      queueData = uniqueResults;
+      error = null;
+      
+      console.log(`✅ ค้นหาสำเร็จ: พบ ${uniqueResults.length} รายการ`);
+      
+      // ถ้ายังไม่พบ ให้ลองค้นหาแบบง่ายๆ
+      if (uniqueResults.length === 0) {
+        console.log('🔄 ลองค้นหาแบบง่ายๆ...');
+        try {
+          const simpleResult = await supabase
+            .from('queue_items')
+            .select('*')
+            .ilike('contact_info', `%${searchLower}%`);
+          
+          if (simpleResult.error) {
+            console.warn('⚠️ Warning in simple search:', simpleResult.error.message);
+          } else if (simpleResult.data && simpleResult.data.length > 0) {
+            queueData = simpleResult.data;
+            console.log(`✅ ค้นหาแบบง่ายสำเร็จ: พบ ${simpleResult.data.length} รายการ`);
+          }
+        } catch (simpleError) {
+          console.warn('⚠️ Warning in simple search:', simpleError.message);
+        }
+      }
+    } catch (textError) {
+      console.error('❌ Error in text search:', textError);
+      error = textError;
+      queueData = null;
+    }
+
+  if (error) {
+    console.warn('⚠️ Warning searching queue:', error.message || error);
+    return [];
+  }
+
+  console.log('✅ พบคิว:', queueData?.length || 0, 'รายการ');
+  
+  if (queueData && queueData.length > 0) {
+    console.log('📋 รายการคิวที่พบ:');
+    queueData.forEach((item, index) => {
+      console.log(`${index + 1}. คิว #${item.queue_number} - ${item.roblox_username || item.customer_name || 'ไม่ระบุชื่อ'}`);
+    });
+  }
+
+  // แปลงข้อมูลให้เป็น QueueItem format
+  const queueItems: QueueItem[] = (queueData || []).map(item => {
+    // ดึงข้อมูลจาก contact_info
+    const username = item.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim() || 
+                    item.contact_info.match(/Username:\s*([^|]+)/)?.[1]?.trim() ||
+                    item.roblox_username ||
+                    item.customer_name;
+    
+    const password = item.contact_info.match(/Password:\s*([^|]+)/)?.[1]?.trim();
+    const code = item.contact_info.match(/Code:\s*([^|]+)/)?.[1]?.trim();
+    const robux = item.contact_info.match(/Robux:\s*([^|]+)/)?.[1]?.trim();
+
+    return {
+      ...item,
+      roblox_username: username,
+      roblox_password: password,
+      assigned_code: item.assigned_code || code,
+      robux_amount: robux
+    };
+  });
+
+  return queueItems;
 };
