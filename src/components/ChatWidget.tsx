@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Send, X, MessageCircle, Image } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
+import { QuickReplyButtons } from './QuickReplyButtons'
 
 interface Message {
   id: string
@@ -54,9 +55,52 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
   const [isInitialized, setIsInitialized] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showQuickReply, setShowQuickReply] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const conversationRef = useRef<Conversation | null>(null)
+
+  // Auto bot states
+  const [botState, setBotState] = useState<'idle' | 'asking_name' | 'asking_password' | 'waiting_admin'>('idle')
+  const [customerRobloxName, setCustomerRobloxName] = useState('')
+  const [customerPassword, setCustomerPassword] = useState('')
+
+  // Check if there are any real admin messages (not bot messages)
+  const hasRealAdminMessage = messages.some(message => message.sender_type === 'admin' && message.sender_id !== 'bot')
+  const canCustomerType = hasRealAdminMessage || botState === 'asking_name' || botState === 'asking_password'
+
+  // Function to check if text is in English
+  const isEnglish = (text: string): boolean => {
+    const thaiRegex = /[\u0E00-\u0E7F]/;
+    return !thaiRegex.test(text);
+  }
+
+  // Function to send bot message
+  const sendBotMessage = async (messageText: string) => {
+    if (!conversation?.id) return
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversation.id,
+          sender_type: 'admin',
+          sender_id: 'bot',
+          message_text: messageText,
+          message_type: 'text',
+          is_read: false
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setMessages(prev => [...prev, data])
+    } catch (error) {
+      console.error('Error sending bot message:', error)
+    }
+  }
+
 
   // Auto scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -433,6 +477,27 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
       // Clear image
       setImageFile(null)
       setImagePreview(null)
+
+      // Handle bot automation
+      if (botState === 'asking_name') {
+        if (isEnglish(messageText)) {
+          setCustomerRobloxName(messageText)
+          setTimeout(async () => {
+            await sendBotMessage('ใส่รหัสผ่านครับ')
+            setBotState('asking_password')
+          }, 1000)
+        } else {
+          setTimeout(async () => {
+            await sendBotMessage('กรุณาส่งชื่อในเกม Roblox เป็นภาษาอังกฤษเท่านั้นครับ')
+          }, 1000)
+        }
+      } else if (botState === 'asking_password') {
+        setCustomerPassword(messageText)
+        setTimeout(async () => {
+          await sendBotMessage('ขอบคุณครับ รอจนกว่าแอดมินจะมาตอบ')
+          setBotState('waiting_admin')
+        }, 1000)
+      }
     } catch (error) {
       console.error('❌ Error sending message:', error)
       console.error('❌ Error details:', {
@@ -501,6 +566,64 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
+    }
+  }
+
+  const handleQuickReplyClick = async (button: { id: string; label: string; icon: string }) => {
+    if (!conversation) return
+    
+    const quickReplyMessage = `${button.icon} ${button.label}`
+    setShowQuickReply(false)
+    
+    // ส่งข้อความ Quick Reply ทันทีโดยไม่ต้องรอ setNewMessage
+    setIsSending(true)
+    
+    try {
+      const normalizedCustomerId = normalizeCustomerId(customerId)
+      
+      // สร้าง message data
+      const messageData = {
+        conversation_id: conversation.id,
+        sender_type: 'customer',
+        sender_id: normalizedCustomerId,
+        message_text: quickReplyMessage,
+        message_type: 'text',
+        is_read: false
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // เพิ่มข้อความใหม่เข้าไปใน state
+      setMessages(prev => [...prev, data])
+      
+      // อัปเดต conversation
+      await supabase
+        .from('conversations')
+        .update({ 
+          updated_at: new Date().toISOString(),
+          last_message: quickReplyMessage
+        })
+        .eq('id', conversation.id)
+
+      // เริ่มระบบบอทอัตโนมัติ (ยกเว้นปุ่ม "สอบถาม")
+      if (button.id !== 'inquiry') {
+        setTimeout(async () => {
+          await sendBotMessage('ส่งชื่อในเกม Roblox มาครับ (ภาษาอังกฤษเท่านั้น)')
+          setBotState('asking_name')
+        }, 1000)
+      }
+
+    } catch (error) {
+      console.error('❌ Error sending quick reply:', error)
+      toast.error('ไม่สามารถส่งข้อความได้')
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -588,21 +711,14 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
               </div>
             ) : (
               <div className="space-y-4 py-3">
+                {/* Quick Reply Buttons */}
+                <QuickReplyButtons
+                  onButtonClick={handleQuickReplyClick}
+                  isVisible={messages.length === 0}
+                />
+                
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-32 text-center">
-                    <div className="text-6xl mb-4">👋</div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">สวัสดี! ยินดีต้อนรับ</h3>
-                    <p className="text-sm text-gray-500 mb-4">เริ่มต้นการสนทนากับแอดมิน</p>
-                    <div className="text-xs text-gray-400 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-yellow-500">💡</span>
-                        <span>ทิป: ลองเลื่อนขึ้นเพื่อดูข้อความเก่า</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-500">📜</span>
-                        <span>หากมีข้อความมาก จะสามารถเลื่อนดูได้</span>
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div>
@@ -661,6 +777,15 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
 
           {/* Input Area */}
           <div className="flex-shrink-0 p-4 border-t bg-gradient-to-r from-white via-blue-50/50 to-purple-50/50 relative">
+            {/* Quick Reply Buttons in Input Area */}
+            {showQuickReply && (
+              <div className="mb-3">
+                <QuickReplyButtons
+                  onButtonClick={handleQuickReplyClick}
+                  isVisible={true}
+                />
+              </div>
+            )}
             
             <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-4 min-h-[70px] flex items-center gap-3 shadow-lg border border-white/20">
               {/* Image Preview in Input Bar */}
@@ -685,7 +810,8 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-14 h-14 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-2xl flex items-center justify-center shadow-md hover:scale-105 transition-all duration-200"
+                  disabled={!canCustomerType}
+                  className="w-14 h-14 bg-gradient-to-br from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 rounded-2xl flex items-center justify-center shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Image className="h-6 w-6 text-gray-600" />
                 </Button>
@@ -695,11 +821,22 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="พิมพ์ข้อความ..."
-                disabled={isSending || isLoading}
+                placeholder={canCustomerType ? "พิมพ์ข้อความ..." : "รอแอดมินตอบกลับก่อน..."}
+                disabled={isSending || isLoading || !canCustomerType}
                 className="flex-1 border-0 bg-transparent focus:ring-0 focus:outline-none text-gray-800 placeholder:text-gray-400 font-sans text-base placeholder:font-light"
                 style={{ fontFamily: 'Kanit, Prompt, Sarabun, -apple-system, BlinkMacSystemFont, sans-serif' }}
               />
+              
+              {/* Quick Reply Toggle Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowQuickReply(!showQuickReply)}
+                className="text-gray-500 hover:text-gray-700"
+                title="Quick Reply"
+              >
+                💬
+              </Button>
               
               {/* Hidden file input */}
               <input
@@ -712,7 +849,7 @@ export const ChatWidget: React.FC<ChatWidgetProps> = ({
               
               <Button
                 onClick={sendMessage}
-                disabled={isSending || isLoading}
+                disabled={isSending || isLoading || !canCustomerType}
                 size="sm"
                 className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-2xl shadow-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
               >

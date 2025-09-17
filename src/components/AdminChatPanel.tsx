@@ -7,6 +7,7 @@ import { Badge } from './ui/badge'
 import { Send, MessageCircle, Users, Clock, Trash2, Image, MoreVertical, AlertTriangle, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
+import { QuickReplyButtons } from './QuickReplyButtons'
 
 interface Message {
   id: string
@@ -56,6 +57,7 @@ export const AdminChatPanel: React.FC<AdminChatPanelProps> = ({ adminId }) => {
   const [deleteTarget, setDeleteTarget] = useState<{type: 'conversation' | 'message', id: string} | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [showQuickReply, setShowQuickReply] = useState(false)
 
   // ฟังก์ชันดึงหมายเลขคิวและข้อมูลลูกค้าจาก username
   const getQueueDataFromUsername = async (username: string): Promise<{queue_number: number | null, customer_info: any}> => {
@@ -307,13 +309,13 @@ export const AdminChatPanel: React.FC<AdminChatPanelProps> = ({ adminId }) => {
     
     // Prevent multiple rapid sends
     const sendTimestamp = Date.now()
-    if (window.lastAdminSendTime && sendTimestamp - window.lastAdminSendTime < 1000) {
+    if ((window as any).lastAdminSendTime && sendTimestamp - (window as any).lastAdminSendTime < 1000) {
       console.log('🚫 Admin message sent too quickly, preventing duplicate')
       setIsSending(false)
       setNewMessage(messageText) // Restore message
       return
     }
-    window.lastAdminSendTime = sendTimestamp
+    (window as any).lastAdminSendTime = sendTimestamp
 
     try {
       // ตรวจสอบว่า conversation มี ID หรือไม่ (ไม่ต้องตรวจสอบในฐานข้อมูล)
@@ -473,6 +475,54 @@ export const AdminChatPanel: React.FC<AdminChatPanelProps> = ({ adminId }) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
+    }
+  }
+
+  const handleQuickReplyClick = async (button: { id: string; label: string; icon: string }) => {
+    if (!selectedConversation) return
+    
+    const quickReplyMessage = `${button.icon} ${button.label}`
+    setShowQuickReply(false)
+    
+    // ส่งข้อความ Quick Reply ทันทีโดยไม่ต้องรอ setNewMessage
+    setIsSending(true)
+    
+    try {
+      // สร้าง message data
+      const messageData = {
+        conversation_id: selectedConversation.id,
+        sender_type: 'admin',
+        sender_id: adminId,
+        message_text: quickReplyMessage,
+        message_type: 'text',
+        is_read: false
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(messageData)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // เพิ่มข้อความใหม่เข้าไปใน state
+      setMessages(prev => [...prev, data])
+      
+      // อัปเดต conversation
+      await supabase
+        .from('conversations')
+        .update({ 
+          updated_at: new Date().toISOString(),
+          last_message: quickReplyMessage
+        })
+        .eq('id', selectedConversation.id)
+
+    } catch (error) {
+      console.error('❌ Error sending quick reply:', error)
+      toast.error('ไม่สามารถส่งข้อความได้')
+    } finally {
+      setIsSending(false)
     }
   }
 
@@ -775,6 +825,16 @@ export const AdminChatPanel: React.FC<AdminChatPanelProps> = ({ adminId }) => {
 
             {/* Input Area */}
             <div className="p-4 border-t bg-gradient-to-r from-white via-blue-50/50 to-purple-50/50 relative">
+              {/* Quick Reply Buttons */}
+              {showQuickReply && (
+                <div className="mb-4">
+                  <QuickReplyButtons
+                    onButtonClick={handleQuickReplyClick}
+                    isVisible={true}
+                  />
+                </div>
+              )}
+              
               {/* Image Preview */}
               {imagePreview && (
                 <div className="mb-3 relative">
@@ -803,6 +863,17 @@ export const AdminChatPanel: React.FC<AdminChatPanelProps> = ({ adminId }) => {
                   disabled={isSending}
                   className="flex-1 border-2 border-blue-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-400/20 rounded-2xl bg-white/80 backdrop-blur-sm transition-all duration-200"
                 />
+                
+                {/* Quick Reply Toggle Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowQuickReply(!showQuickReply)}
+                  className="border-blue-200 hover:bg-blue-50"
+                  title="Quick Reply"
+                >
+                  💬
+                </Button>
                 
                 {/* Image Upload Button */}
                 <input
