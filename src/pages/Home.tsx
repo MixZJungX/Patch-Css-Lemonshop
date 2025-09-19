@@ -72,6 +72,15 @@ export default function Home() {
   const [showQueueNumberPopup, setShowQueueNumberPopup] = useState(false);
   const [currentQueueNumber, setCurrentQueueNumber] = useState<number | null>(null);
 
+  // Roblox preparation guide
+  const [showRobloxGuide, setShowRobloxGuide] = useState(false);
+  const [hasReadGuide, setHasReadGuide] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showStepDialog, setShowStepDialog] = useState(false);
+  const [step1Completed, setStep1Completed] = useState(false);
+  const [step2Completed, setStep2Completed] = useState(false);
+  const [allStepsRead, setAllStepsRead] = useState(false);
+
   useEffect(() => {
     loadAvailableItems();
     loadAnnouncements();
@@ -211,6 +220,13 @@ export default function Home() {
       }
 
       setValidatedCode(codeData);
+      
+      // ตรวจสอบว่าอ่านคำแนะนำแล้วหรือยัง
+      if (!hasReadGuide) {
+        setShowRobloxGuide(true);
+        return;
+      }
+      
       setShowRedeemPopup(true);
       toast.success("โค้ดถูกต้อง! กรุณากรอกข้อมูลเพื่อรับ Robux");
 
@@ -480,6 +496,34 @@ export default function Home() {
     } finally {
       setIsRobuxButtonSubmitting(false);
     }
+  };
+
+  const handleGuideRead = () => {
+    // ตรวจสอบว่าทำขั้นตอนที่ 1 และ 2 เสร็จแล้วหรือยัง
+    if (!step1Completed || !step2Completed) {
+      toast.error("กรุณาทำตามขั้นตอนที่ 1 และ 2 ให้เสร็จก่อน");
+      return;
+    }
+    
+    // ตรวจสอบว่าอ่านทั้งหมดเสร็จแล้วหรือยัง
+    if (!allStepsRead) {
+      toast.error("กรุณายืนยันว่าอ่านทั้งหมดเสร็จแล้ว");
+      return;
+    }
+    
+    setHasReadGuide(true);
+    setShowRobloxGuide(false);
+    // หลังจากอ่านเสร็จ ให้เปิด modal แลกโค้ดต่อ
+    setShowRedeemPopup(true);
+  };
+
+  const handleStepClick = (stepNumber: number) => {
+    setCurrentStep(stepNumber);
+    setShowStepDialog(true);
+  };
+
+  const handleStepDialogClose = () => {
+    setShowStepDialog(false);
   };
 
   const handleRainbowRedeemCode = async () => {
@@ -1166,6 +1210,321 @@ export default function Home() {
                 className="w-full bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 rounded-full"
               >
                 🐔 เสร็จสิ้น
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Roblox Preparation Guide Dialog */}
+        <Dialog open={showRobloxGuide} onOpenChange={setShowRobloxGuide}>
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-blue-50/95 to-purple-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
+            <DialogHeader className="text-center pb-4 sm:pb-6">
+              <div className="relative mb-3 sm:mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full blur-2xl"></div>
+                <div className="relative bg-gradient-to-r from-blue-500 to-purple-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
+                  <span className="text-xl sm:text-2xl">🛡️</span>
+                </div>
+              </div>
+              
+              <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                วิธีเตรียมบัญชี Roblox ก่อนส่งร้านเติม Robux
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 text-sm sm:text-base mt-2">
+                เพื่อความปลอดภัยและป้องกันปัญหาติด OTP/อีเมลเก่า กรุณาทำตามขั้นตอนนี้ก่อนส่งรหัสให้ร้าน
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 sm:space-y-6">
+              {/* Step 1 - Clickable */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 cursor-pointer hover:bg-white/90 transition-all duration-200" onClick={() => handleStepClick(1)}>
+                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">1</span>
+                  เปลี่ยนรหัสผ่านใหม่
+                </h3>
+                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
+                  <p>1. เข้าสู่ระบบ roblox.com หรือแอป Roblox</p>
+                  <p>2. ไปที่ Settings → Account Info</p>
+                  <p>3. เลือก Change Password</p>
+                  <p>4. ใส่รหัสเดิม → รหัสใหม่ → ยืนยันรหัสใหม่ → Save</p>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
+                    <p className="text-yellow-800 text-xs sm:text-sm">
+                      💡 ใช้รหัสที่จำง่ายสำหรับตัวเอง แต่ต้องเดายาก (ผสมตัวใหญ่–เล็ก–ตัวเลข)
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-blue-600 text-sm font-medium">👆 คลิกเพื่อดูรายละเอียด</span>
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="step1-checkbox"
+                        checked={step1Completed}
+                        onCheckedChange={(checked) => setStep1Completed(checked as boolean)}
+                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <label htmlFor="step1-checkbox" className="text-sm font-medium text-green-600 cursor-pointer">
+                        ทำเสร็จแล้ว
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2 - Clickable */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 cursor-pointer hover:bg-white/90 transition-all duration-200" onClick={() => handleStepClick(2)}>
+                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">2</span>
+                  ทำให้ "เมลแดง" (Unverified Email)
+                </h3>
+                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
+                  <p>เลือกอย่างใดอย่างหนึ่ง:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li>ใส่อีเมลทั่ว ๆ ไป (ที่ไม่ใช้งานจริง) → ระบบจะขึ้นแดงทันที</li>
+                    <li>ใส่อีเมลใหม่แต่ยังไม่กดยืนยัน → ระบบก็จะขึ้นแดงเหมือนกัน</li>
+                  </ul>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
+                    <p className="text-green-800 text-xs sm:text-sm">
+                      ✅ จุดสำคัญ: ถ้าอีเมลขึ้นแดง = ร้านเติมได้แน่นอน ไม่ติด OTP ส่งเข้าอีเมลลูกค้า
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-blue-600 text-sm font-medium">👆 คลิกเพื่อดูรายละเอียด</span>
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="step2-checkbox"
+                        checked={step2Completed}
+                        onCheckedChange={(checked) => setStep2Completed(checked as boolean)}
+                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <label htmlFor="step2-checkbox" className="text-sm font-medium text-green-600 cursor-pointer">
+                        ทำเสร็จแล้ว
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
+                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">3</span>
+                  ปิดการยืนยันสองขั้นตอน (2-Step Verification)
+                </h3>
+                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
+                  <p>1. ไปที่ Settings → Security</p>
+                  <p>2. ปิด 2-Step Verification ทุกช่อง (Email/Authenticator/Phone)</p>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
+                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">4</span>
+                  ออกจากระบบอุปกรณ์อื่น
+                </h3>
+                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
+                  <p>• ไปที่ Settings → Security</p>
+                  <p>• กด Log out of All Other Sessions</p>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
+                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">5</span>
+                  ทดสอบรหัสใหม่
+                </h3>
+                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
+                  <p>• ออกจากระบบ แล้วลองล็อกอินใหม่ด้วยรหัสที่เพิ่งเปลี่ยน</p>
+                  <p>• ถ้าเข้าได้ = พร้อมส่งร้าน</p>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold text-green-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="text-xl sm:text-2xl">📋</span>
+                  สรุป
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-green-700 text-sm sm:text-base">
+                  <p>• รหัสใหม่</p>
+                  <p>• เมลแดง</p>
+                  <p>• ปิด 2-Step</p>
+                  <p>• ออกจากอุปกรณ์อื่น</p>
+                </div>
+              </div>
+
+              {/* After completion */}
+              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+                <h3 className="text-lg sm:text-xl font-bold text-orange-600 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span className="text-xl sm:text-2xl">⚠️</span>
+                  หลังจากร้านเติมเสร็จ ลูกค้าควร
+                </h3>
+                <div className="space-y-2 text-orange-700 text-sm sm:text-base">
+                  <p>• เปลี่ยนรหัสใหม่อีกครั้ง</p>
+                  <p>• ใส่อีเมลจริงที่ใช้งานได้</p>
+                  <p>• เปิด 2-Step Verification กลับมาเพื่อความปลอดภัย</p>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter className="pt-4 sm:pt-6">
+              <div className="w-full space-y-4">
+                {/* Progress indicator */}
+                <div className="flex items-center justify-center gap-4 text-sm">
+                  <div className={`flex items-center gap-2 ${step1Completed ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${step1Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
+                      {step1Completed ? '✓' : '1'}
+                    </span>
+                    <span>ขั้นตอนที่ 1</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${step2Completed ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${step2Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
+                      {step2Completed ? '✓' : '2'}
+                    </span>
+                    <span>ขั้นตอนที่ 2</span>
+                  </div>
+                </div>
+
+                {/* All steps read confirmation */}
+                {step1Completed && step2Completed && (
+                  <div className="flex items-center justify-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <Checkbox 
+                      id="all-steps-read"
+                      checked={allStepsRead}
+                      onCheckedChange={(checked) => setAllStepsRead(checked as boolean)}
+                      className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                    />
+                    <label htmlFor="all-steps-read" className="text-sm font-medium text-green-700 cursor-pointer">
+                      ยืนยันว่าอ่านทั้งหมดเสร็จแล้ว
+                    </label>
+                  </div>
+                )}
+                
+                <Button 
+                  onClick={handleGuideRead}
+                  disabled={!step1Completed || !step2Completed || !allStepsRead}
+                  className={`w-full h-12 sm:h-14 text-base sm:text-lg font-semibold shadow-lg transition-all transform hover:scale-105 rounded-full ${
+                    step1Completed && step2Completed && allStepsRead
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' 
+                      : 'bg-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-lg sm:text-xl">✅</span>
+                    <span>
+                      {step1Completed && step2Completed && allStepsRead
+                        ? 'อ่านเสร็จแล้ว' 
+                        : step1Completed && step2Completed
+                        ? 'กรุณายืนยันว่าอ่านทั้งหมดเสร็จแล้ว'
+                        : 'กรุณาทำตามขั้นตอนที่ 1 และ 2 ให้เสร็จก่อน'
+                      }
+                    </span>
+                  </div>
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Step Detail Dialog */}
+        <Dialog open={showStepDialog} onOpenChange={setShowStepDialog}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-blue-50/95 to-purple-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
+            <DialogHeader className="text-center pb-4 sm:pb-6">
+              <div className="relative mb-3 sm:mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full blur-2xl"></div>
+                <div className="relative bg-gradient-to-r from-blue-500 to-purple-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
+                  <span className="text-xl sm:text-2xl">📋</span>
+                </div>
+              </div>
+              
+              <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                {currentStep === 1 ? 'เปลี่ยนรหัสผ่านใหม่' : 'ทำให้ "เมลแดง" (Unverified Email)'}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 text-sm sm:text-base mt-2">
+                {currentStep === 1 ? 'ทำตามขั้นตอนนี้เพื่อเปลี่ยนรหัสผ่าน Roblox ของคุณ' : 'ทำตามขั้นตอนนี้เพื่อทำให้อีเมลขึ้นแดง (ไม่ยืนยัน)'}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 sm:space-y-6">
+              {currentStep === 1 ? (
+                /* Step 1 Detail */
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
+                  <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">1</span>
+                    เปลี่ยนรหัสผ่านใหม่
+                  </h3>
+                  <div className="space-y-3 sm:space-y-4 text-gray-700 text-sm sm:text-base">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 1: เข้าสู่ระบบ</h4>
+                      <p>เข้าสู่ระบบ roblox.com หรือแอป Roblox ด้วยบัญชีของคุณ</p>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 2: ไปที่ Settings</h4>
+                      <p>ไปที่ Settings → Account Info</p>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 3: เลือก Change Password</h4>
+                      <p>เลือก Change Password</p>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 4: เปลี่ยนรหัสผ่าน</h4>
+                      <p>ใส่รหัสเดิม → รหัสใหม่ → ยืนยันรหัสใหม่ → Save</p>
+                    </div>
+                    
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
+                        <span>💡</span>
+                        เคล็ดลับ
+                      </h4>
+                      <p className="text-yellow-800">
+                        ใช้รหัสที่จำง่ายสำหรับตัวเอง แต่ต้องเดายาก (ผสมตัวใหญ่–เล็ก–ตัวเลข)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Step 2 Detail */
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
+                  <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">2</span>
+                    ทำให้ "เมลแดง" (Unverified Email)
+                  </h3>
+                  <div className="space-y-3 sm:space-y-4 text-gray-700 text-sm sm:text-base">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">วิธีที่ 1: ใส่อีเมลทั่วไป</h4>
+                      <p>ใส่อีเมลทั่ว ๆ ไป (ที่ไม่ใช้งานจริง) → ระบบจะขึ้นแดงทันที</p>
+                    </div>
+                    
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">วิธีที่ 2: ใส่อีเมลใหม่</h4>
+                      <p>ใส่อีเมลใหม่แต่ยังไม่กดยืนยัน → ระบบก็จะขึ้นแดงเหมือนกัน</p>
+                    </div>
+                    
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+                      <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                        <span>✅</span>
+                        จุดสำคัญ
+                      </h4>
+                      <p className="text-green-800">
+                        ถ้าอีเมลขึ้นแดง = ร้านเติมได้แน่นอน ไม่ติด OTP ส่งเข้าอีเมลลูกค้า
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <DialogFooter className="pt-4 sm:pt-6">
+              <Button 
+                onClick={handleStepDialogClose}
+                className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg transition-all transform hover:scale-105 rounded-full"
+              >
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="text-lg sm:text-xl">✅</span>
+                  <span>เข้าใจแล้ว</span>
+                </div>
               </Button>
             </DialogFooter>
           </DialogContent>

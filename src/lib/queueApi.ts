@@ -146,6 +146,18 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     // ไม่ throw error แต่ใช้ null แทน
   }
 
+  // ดึงข้อมูลคิวที่มีปัญหา
+  const { data: problemItems, error: problemError } = await supabase
+    .from('queue_items')
+    .select('*')
+    .eq('status', 'problem')
+    .order('created_at', { ascending: true });
+
+  if (problemError) {
+    console.warn('⚠️ Error fetching problem items:', problemError);
+    // ไม่ throw error แต่ใช้ empty array แทน
+  }
+
   // ดึงข้อมูล redemption requests
   const { data: redemptionData, error: redemptionError } = await supabase
     .from('app_284beb8f90_redemption_requests')
@@ -203,8 +215,10 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
 
   const enrichedWaitingItems = enrichQueueData(waitingItems || []);
   const enrichedProcessingItem = processingItem ? enrichQueueData([processingItem])[0] : undefined;
+  const enrichedProblemItems = enrichQueueData(problemItems || []);
   const next3Items = enrichedWaitingItems.slice(0, 3);
   const totalWaiting = enrichedWaitingItems.length;
+  const totalProblems = enrichedProblemItems.length;
   
   // คำนวณเวลารอโดยประมาณ (เฉลี่ย 5 นาทีต่อคิว)
   const averageWaitTime = totalWaiting * 5;
@@ -213,6 +227,7 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     current_processing: enrichedProcessingItem,
     next_3_items: next3Items,
     total_waiting: totalWaiting,
+    total_problems: totalProblems,
     average_wait_time: averageWaitTime
   };
 };

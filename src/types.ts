@@ -62,5 +62,6 @@ export interface QueueDisplay {
   current_processing?: QueueItem;
   next_3_items: QueueItem[];
   total_waiting: number;
+  total_problems: number;
   average_wait_time: number;
 }
