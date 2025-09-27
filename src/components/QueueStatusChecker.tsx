@@ -10,6 +10,7 @@ import { testSimpleSearch } from '@/lib/testSearch';
 import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X, MessageCircle, Home, ArrowLeft } from 'lucide-react';
 import { ChatWidget } from './ChatWidget';
 import { Link } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export default function QueueStatusChecker() {
   const [queueNumber, setQueueNumber] = useState('');
@@ -20,6 +21,7 @@ export default function QueueStatusChecker() {
   const [queueDisplay, setQueueDisplay] = useState<QueueDisplay | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showLineQRPopup, setShowLineQRPopup] = useState(false);
   const [searchResults, setSearchResults] = useState<QueueItem[]>([]);
 
   // โหลดข้อมูลจอแสดงคิว
@@ -409,17 +411,51 @@ export default function QueueStatusChecker() {
                       <p className="text-xs text-blue-200 text-center">💡 {getStatusInfo(queueItem.status).description}</p>
                     </div>
 
+                    {/* ปุ่มติดต่อไลน์สำหรับสถานะอื่นๆ */}
+                    {(queueItem.status === 'cancelled' || queueItem.status === 'waiting') && (
+                      <div className="mt-3 bg-blue-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30">
+                        <div className="text-center space-y-3">
+                          <p className="text-xs text-blue-200">📞 ต้องการความช่วยเหลือ? ติดต่อแอดมินได้เลย</p>
+                          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                            <Button
+                              onClick={() => setIsChatOpen(true)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm"
+                            >
+                              <MessageCircle className="h-3 w-3 mr-1" />
+                              แชทในเว็บ
+                            </Button>
+                          </div>
+                          <Button
+                            onClick={() => setShowLineQRPopup(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm"
+                          >
+                            <MessageCircle className="h-3 w-3 mr-1" />
+                            ติดต่อไลน์ (mixzis)
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* ปุ่มติดต่อแอดมินเมื่อมีปัญหา */}
                     {queueItem.status === 'problem' && (
                       <div className="mt-3 bg-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-orange-400/30">
-                        <div className="text-center space-y-2">
+                        <div className="text-center space-y-3">
                           <p className="text-xs text-orange-200">⚠️ คิวของคุณมีปัญหา กรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ</p>
+                          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                            <Button
+                              onClick={() => setIsChatOpen(true)}
+                              className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2 text-sm"
+                            >
+                              <MessageCircle className="h-3 w-3 mr-1" />
+                              แชทในเว็บ
+                            </Button>
+                          </div>
                           <Button
-                            onClick={() => setIsChatOpen(true)}
-                            className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2 text-sm"
+                            onClick={() => setShowLineQRPopup(true)}
+                            className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm"
                           >
                             <MessageCircle className="h-3 w-3 mr-1" />
-                            ติดต่อแอดมิน
+                            ติดต่อไลน์ (mixzis)
                           </Button>
                         </div>
                       </div>
@@ -590,6 +626,49 @@ export default function QueueStatusChecker() {
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
       />
+
+      {/* Line QR Code Dialog */}
+      <Dialog open={showLineQRPopup} onOpenChange={setShowLineQRPopup}>
+        <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl">
+          <DialogHeader className="text-center pb-4">
+            <DialogTitle className="text-green-600 text-xl">📱 ติดต่อแอดมินทางไลน์</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              สแกน QR Code เพื่อเพิ่มเพื่อน หรือใช้ ID: mixzis
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="bg-white p-4 rounded-2xl shadow-lg border-2 border-gray-100">
+                <img 
+                  src="https://img5.pic.in.th/file/secure-sv1/412b63bf382aa3c421169d12ac8941d7.jpg" 
+                  alt="Line QR Code" 
+                  className="w-48 h-48 mx-auto"
+                />
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+              <p className="text-blue-800 text-sm font-medium">
+                💡 วิธีเพิ่มเพื่อน:
+              </p>
+              <div className="text-blue-700 text-xs mt-1 space-y-1">
+                <p>• สแกน QR Code ด้วยแอปไลน์</p>
+                <p>• หรือค้นหา ID: <span className="font-bold">mixzis</span></p>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="pt-4">
+            <Button 
+              onClick={() => setShowLineQRPopup(false)} 
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 rounded-full"
+            >
+              ปิด
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

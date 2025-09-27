@@ -247,14 +247,14 @@ export default function RainbowSixRedemption() {
           </p>
         </div>
 
-        <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20">
+        <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl">
           <CardHeader className="p-4 md:p-6">
-            <CardTitle className="text-xl md:text-2xl text-white text-center">แลกรับโค้ด Rainbow Six</CardTitle>
-            <CardDescription className="text-white/70 text-center text-sm md:text-base">
+            <CardTitle className="text-lg md:text-xl lg:text-2xl text-white text-center">แลกรับโค้ด Rainbow Six</CardTitle>
+            <CardDescription className="text-white/70 text-center text-xs md:text-sm lg:text-base">
               กรอกข้อมูลบัญชี Ubisoft ของคุณและโค้ดที่ได้รับ
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 md:p-6 space-y-6">
+          <CardContent className="p-4 md:p-6 space-y-4 md:space-y-6">
             {error && (
               <Alert variant="destructive" className="mb-4 border-red-500/50 bg-red-500/10 backdrop-blur-md">
                 <AlertCircle className="h-4 w-4" />
@@ -410,18 +410,18 @@ export default function RainbowSixRedemption() {
             
             <Button 
               onClick={handleRedeemCode} 
-              className="w-full mt-6 bg-gradient-to-r from-blue-600 via-orange-600 to-red-600 hover:from-blue-700 hover:via-orange-700 hover:to-red-700 text-white font-bold py-3 md:py-4 text-lg md:text-xl shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 hover:scale-105 rounded-xl" 
+              className="w-full mt-4 md:mt-6 bg-gradient-to-r from-blue-600 via-orange-600 to-red-600 hover:from-blue-700 hover:via-orange-700 hover:to-red-700 text-white font-bold py-3 md:py-4 text-base md:text-lg shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 hover:scale-105 rounded-xl" 
               disabled={loading}
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span className="text-sm md:text-base">กำลังตรวจสอบ...</span>
+                  <span className="text-sm">กำลังตรวจสอบ...</span>
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
                   <GamepadIcon className="w-4 h-4 md:w-5 md:h-5" />
-                  <span className="text-sm md:text-base">แลกรับโค้ด</span>
+                  <span className="text-sm">แลกรับโค้ด</span>
                 </div>
               )}
             </Button>
@@ -439,10 +439,10 @@ export default function RainbowSixRedemption() {
 
         {/* Available Codes Display */}
         {filteredCodes.length > 0 && (
-          <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20">
+          <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl">
             <CardHeader className="p-4 md:p-6">
-              <CardTitle className="text-xl md:text-2xl text-white text-center">🎮 โค้ดที่พร้อมใช้งาน</CardTitle>
-              <CardDescription className="text-white/70 text-center text-sm md:text-base">
+              <CardTitle className="text-lg md:text-xl lg:text-2xl text-white text-center">🎮 โค้ดที่พร้อมใช้งาน</CardTitle>
+              <CardDescription className="text-white/70 text-center text-xs md:text-sm lg:text-base">
                 เลือกโค้ดที่ต้องการแลกรับ
               </CardDescription>
             </CardHeader>

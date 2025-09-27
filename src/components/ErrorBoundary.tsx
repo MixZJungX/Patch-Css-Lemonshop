@@ -26,6 +26,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Log error to console for debugging
     console.error('Error caught by boundary:', error, errorInfo);
+    
+    // Check if it's a routing error or 404
+    if (error.message.includes('404') || error.message.includes('Not Found')) {
+      console.warn('404 or routing error detected, attempting to redirect to home');
+      // Don't show error boundary for 404s, let the router handle it
+      this.setState({ hasError: false });
+      return;
+    }
   }
 
   render() {

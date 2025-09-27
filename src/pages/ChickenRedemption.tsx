@@ -91,27 +91,27 @@ export default function ChickenRedemption() {
       {/* Background decoration */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%239C92AC%22%20fill-opacity%3D%220.05%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%224%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]"></div>
       
-      <div className="max-w-md mx-auto space-y-6 md:space-y-8 relative z-10">
+      <div className="max-w-md mx-auto space-y-4 md:space-y-6 px-4 relative z-10">
         {/* Header */}
-        <div className="text-center space-y-4 pt-6 md:pt-12 px-2">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl">
-              <Gift className="w-6 h-6 md:w-8 md:h-8 text-white" />
+        <div className="text-center space-y-3 md:space-y-4 pt-4 md:pt-6">
+          <div className="flex justify-center mb-3 md:mb-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl">
+              <Gift className="w-5 h-5 md:w-6 md:h-6 lg:w-8 lg:h-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 bg-clip-text text-transparent leading-tight">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-500 bg-clip-text text-transparent leading-tight">
             แลกบัญชีไก่ตัน
           </h1>
-          <p className="text-white/70 text-base md:text-xl max-w-2xl mx-auto leading-relaxed px-4">
+          <p className="text-white/70 text-sm md:text-base lg:text-xl max-w-2xl mx-auto leading-relaxed">
             กรอกรหัสของคุณเพื่อแลกรับบัญชีไก่ตัน
           </p>
         </div>
 
         {/* Main Card */}
-        <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20">
+        <Card className="shadow-2xl border-0 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl md:rounded-3xl">
           <CardHeader className="p-4 md:p-6 text-center">
-            <CardTitle className="text-xl md:text-2xl text-white flex items-center justify-center gap-2">
-              <Sparkles className="w-6 h-6 text-yellow-400" />
+            <CardTitle className="text-lg md:text-xl lg:text-2xl text-white flex items-center justify-center gap-2">
+              <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-yellow-400" />
               แลกรหัสบัญชี
             </CardTitle>
           </CardHeader>
@@ -139,24 +139,24 @@ export default function ChickenRedemption() {
                   value={redeemCode}
                   onChange={(e) => setRedeemCode(e.target.value)}
                   disabled={isSubmitting}
-                  className="border-white/20 bg-white/10 text-white placeholder:text-white/50 focus:border-yellow-500 focus:ring-yellow-500/50 h-11 md:h-12 text-sm md:text-base backdrop-blur-md text-center font-mono uppercase"
+                  className="border-white/20 bg-white/10 text-white placeholder:text-white/50 focus:border-yellow-500 focus:ring-yellow-500/50 h-12 text-base backdrop-blur-md text-center font-mono uppercase rounded-xl"
                 />
               </div>
               
               <Button 
                 type="submit" 
-                className="w-full bg-gradient-to-r from-yellow-600 via-orange-600 to-pink-600 hover:from-yellow-700 hover:via-orange-700 hover:to-pink-700 text-white font-bold py-3 md:py-4 text-lg md:text-xl shadow-2xl hover:shadow-yellow-500/25 transition-all duration-300 hover:scale-105 rounded-xl" 
+                className="w-full bg-gradient-to-r from-yellow-600 via-orange-600 to-pink-600 hover:from-yellow-700 hover:via-orange-700 hover:to-pink-700 text-white font-bold py-3 md:py-4 text-base md:text-lg shadow-2xl hover:shadow-yellow-500/25 transition-all duration-300 hover:scale-105 rounded-xl" 
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span className="text-sm md:text-base">กำลังตรวจสอบ...</span>
+                    <span className="text-sm">กำลังตรวจสอบ...</span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
                     <Gift className="w-5 h-5" />
-                    <span className="text-sm md:text-base">ยืนยันการแลก</span>
+                    <span className="text-sm">ยืนยันการแลก</span>
                   </div>
                 )}
               </Button>

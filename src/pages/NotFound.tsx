@@ -1,7 +1,30 @@
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Home } from 'lucide-react';
+import { ArrowLeft, Home, RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function NotFoundPage() {
+  useEffect(() => {
+    // Log 404 error for debugging
+    console.warn('404 Page Not Found:', window.location.pathname);
+    
+    // Try to redirect common misspelled URLs
+    const path = window.location.pathname.toLowerCase();
+    const commonRedirects: { [key: string]: string } = {
+      '/home': '/',
+      '/index': '/',
+      '/main': '/',
+      '/dashboard': '/admin',
+      '/queue': '/queue-status',
+      '/check': '/queue-status',
+      '/check-status': '/queue-status',
+    };
+    
+    if (commonRedirects[path]) {
+      console.log(`Redirecting ${path} to ${commonRedirects[path]}`);
+      window.location.replace(commonRedirects[path]);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 relative overflow-hidden">
       {/* Background decoration */}
@@ -45,6 +68,14 @@ export default function NotFoundPage() {
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               กลับไป
+            </Button>
+            <Button 
+              variant="outline" 
+              className="border-white/20 bg-white/10 text-white hover:bg-white/20 backdrop-blur-md px-6 py-3 text-base"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              รีเฟรช
             </Button>
           </div>
 

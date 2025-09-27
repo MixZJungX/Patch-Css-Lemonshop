@@ -56,3 +56,4 @@ SELECT COUNT(*) as message_count FROM messages;
 
 
 
+

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem } from '@/types';
-import { GamepadIcon, Settings, Megaphone } from 'lucide-react';
+import { GamepadIcon, Settings, Megaphone, MessageCircle } from 'lucide-react';
 import { addToQueue, testQueueConnection, testQueueNumberGeneration } from '@/lib/queueApi';
 import '@/styles/notifications.css';
 
@@ -80,6 +80,9 @@ export default function Home() {
   const [step1Completed, setStep1Completed] = useState(false);
   const [step2Completed, setStep2Completed] = useState(false);
   const [allStepsRead, setAllStepsRead] = useState(false);
+  
+  // Line QR Code popup
+  const [showLineQRPopup, setShowLineQRPopup] = useState(false);
 
   useEffect(() => {
     loadAvailableItems();
@@ -871,83 +874,121 @@ export default function Home() {
 
 
 
-        <div className="flex justify-center mb-8">
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-2 border border-white/20">
-            <Button
-              onClick={() => setActiveTab('redeem')}
-              className={`px-6 py-3 rounded-full transition-all ${
-                activeTab === 'redeem'
-                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
-                  : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              🎫 แลกโค้ด
-            </Button>
-            <Button
-              onClick={() => setActiveTab('chicken')}
-              className={`px-6 py-3 rounded-full transition-all ${
-                activeTab === 'chicken'
-                  ? 'bg-gradient-to-r from-orange-600 to-yellow-600 text-white shadow-lg'
-                  : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              🐔 แลกไก่ตัน
-            </Button>
-            
-            <Button
-              onClick={() => setActiveTab('rainbow')}
-              className={`px-6 py-3 rounded-full transition-all ${
-                activeTab === 'rainbow'
-                  ? 'bg-gradient-to-r from-blue-600 to-orange-600 text-white shadow-lg'
-                  : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              🎮 Rainbow Six
-            </Button>
+        <div className="flex justify-center mb-6 md:mb-8 px-4">
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl md:rounded-3xl p-1 md:p-2 border border-white/20 w-full max-w-md">
+            <div className="grid grid-cols-3 gap-1">
+              <Button
+                onClick={() => setActiveTab('redeem')}
+                className={`px-2 md:px-6 py-2 md:py-3 rounded-xl md:rounded-full transition-all text-xs md:text-sm ${
+                  activeTab === 'redeem'
+                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
+                    : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="hidden sm:inline">🎫 แลกโค้ด</span>
+                <span className="sm:hidden">🎫</span>
+              </Button>
+              <Button
+                onClick={() => setActiveTab('chicken')}
+                className={`px-2 md:px-6 py-2 md:py-3 rounded-xl md:rounded-full transition-all text-xs md:text-sm ${
+                  activeTab === 'chicken'
+                    ? 'bg-gradient-to-r from-orange-600 to-yellow-600 text-white shadow-lg'
+                    : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="hidden sm:inline">🐔 แลกไก่ตัน</span>
+                <span className="sm:hidden">🐔</span>
+              </Button>
+              
+              <Button
+                onClick={() => setActiveTab('rainbow')}
+                className={`px-2 md:px-6 py-2 md:py-3 rounded-xl md:rounded-full transition-all text-xs md:text-sm ${
+                  activeTab === 'rainbow'
+                    ? 'bg-gradient-to-r from-blue-600 to-orange-600 text-white shadow-lg'
+                    : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="hidden sm:inline">🎮 Rainbow Six</span>
+                <span className="sm:hidden">🎮</span>
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="max-w-4xl mx-auto">
           {(activeTab === 'redeem' || activeTab === 'chicken') && (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-8 rounded-3xl">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-3xl">{activeTab === 'redeem' ? '💳' : '🐔'}</span>
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-6 md:mb-8 rounded-2xl md:rounded-3xl">
+              <CardHeader className="text-center p-4 md:p-6">
+                <CardTitle className="text-lg md:text-2xl text-white flex items-center justify-center space-x-2">
+                  <span className="text-2xl md:text-3xl">{activeTab === 'redeem' ? '💳' : '🐔'}</span>
                   <span>{activeTab === 'redeem' ? 'แลกโค้ดรับ Robux' : 'แลกโค้ดรับบัญชีไก่ตัน'}</span>
                 </CardTitle>
-                <p className="text-blue-200">
+                <p className="text-blue-200 text-sm md:text-base">
                   {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับเพื่อแลกเป็น Robux' : 'ใส่โค้ดที่ได้รับเพื่อแลกบัญชีเกมไก่ตัน'}
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
+                {/* Warning Messages for Robux redemption */}
+                {activeTab === 'redeem' && (
+                  <div className="space-y-2 md:space-y-3">
+                    <Alert className="border-yellow-500/50 bg-yellow-500/10 backdrop-blur-md rounded-xl">
+                      <AlertDescription className="text-yellow-300 text-xs md:text-sm">
+                        🚫 ลูกค้าจะได้รับ ROBUX ภายใน 5 นาที - 3 ชม.
+                      </AlertDescription>
+                    </Alert>
+
+                    <Alert className="border-red-500/50 bg-red-500/10 backdrop-blur-md rounded-xl">
+                      <AlertDescription className="text-red-300 text-xs md:text-sm leading-relaxed">
+                        🚫🚫โดยกดแลกโค๊ดแล้วรบกวนออกจากระบบในมือถือเพราะแอดจะติดยืนยันมือถือและเข้าเติมไม่ได้ครับ🚫🚫
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-white text-sm font-medium mb-2">
                       {activeTab === 'redeem' ? 'โค้ดที่ได้รับ' : 'โค้ดที่ได้รับ'}
                     </label>
-                    <div className="flex space-x-3">
+                    <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
                       <Input
                         value={activeTab === 'redeem' ? redeemCode : chickenRedeemCode}
                         onChange={(e) => activeTab === 'redeem' ? setRedeemCode(e.target.value) : setChickenRedeemCode(e.target.value)}
                         placeholder="ใส่โค้ดที่ได้รับ"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1 rounded-2xl"
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1 rounded-xl md:rounded-2xl h-12 text-base"
                         onKeyPress={(e) => e.key === 'Enter' && (activeTab === 'redeem' ? validateCode() : handleChickenRedeemCode())}
                       />
                       <Button
                         onClick={activeTab === 'redeem' ? validateCode : handleChickenRedeemCode}
                         disabled={activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting}
-                        className={`bg-gradient-to-r rounded-full ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
+                        className={`bg-gradient-to-r rounded-xl md:rounded-full h-12 px-6 text-sm md:text-base ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
                       >
                         {(activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting) ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
                       </Button>
                     </div>
                   </div>
                   
-                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-2xl p-4">
-                    <p className="text-blue-100 text-sm">
+                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl md:rounded-2xl p-3 md:p-4">
+                    <p className="text-blue-100 text-xs md:text-sm leading-relaxed">
                       <strong>💡 วิธีใช้:</strong> {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง จะมีหน้าต่างขึ้นมาให้ใส่ชื่อผู้ใช้และรหัสผ่าน Roblox เพื่อรับ Robux' : 'โค้ดที่ได้รับจะถูกตรวจสอบและแสดงข้อมูลบัญชีที่สามารถใช้งานได้ กรุณาเก็บข้อมูลบัญชีอย่างปลอดภัยหลังจากได้รับ'}
                     </p>
+                  </div>
+
+                  {/* ปุ่มติดต่อไลน์ */}
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-xl md:rounded-2xl p-3 md:p-4">
+                    <div className="text-center space-y-2">
+                      <p className="text-green-200 text-xs md:text-sm">📞 ต้องการความช่วยเหลือ? ติดต่อแอดมินได้เลย</p>
+                      <div className="flex justify-center">
+                        <Button
+                          onClick={() => setShowLineQRPopup(true)}
+                          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm"
+                        >
+                          <MessageCircle className="h-3 w-3 mr-1" />
+                          ติดต่อไลน์ (mixzis)
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -1805,6 +1846,49 @@ export default function Home() {
             <Button 
               onClick={() => setShowQueueNumberPopup(false)}
               className="w-full bg-green-600 hover:bg-green-700 text-white"
+            >
+              ปิด
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Line QR Code Dialog */}
+      <Dialog open={showLineQRPopup} onOpenChange={setShowLineQRPopup}>
+        <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl">
+          <DialogHeader className="text-center pb-4">
+            <DialogTitle className="text-green-600 text-xl">📱 ติดต่อแอดมินทางไลน์</DialogTitle>
+            <DialogDescription className="text-gray-600">
+              สแกน QR Code เพื่อเพิ่มเพื่อน หรือใช้ ID: mixzis
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="bg-white p-4 rounded-2xl shadow-lg border-2 border-gray-100">
+                <img 
+                  src="https://img5.pic.in.th/file/secure-sv1/412b63bf382aa3c421169d12ac8941d7.jpg" 
+                  alt="Line QR Code" 
+                  className="w-48 h-48 mx-auto"
+                />
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+              <p className="text-blue-800 text-sm font-medium">
+                💡 วิธีเพิ่มเพื่อน:
+              </p>
+              <div className="text-blue-700 text-xs mt-1 space-y-1">
+                <p>• สแกน QR Code ด้วยแอปไลน์</p>
+                <p>• หรือค้นหา ID: <span className="font-bold">mixzis</span></p>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="pt-4">
+            <Button 
+              onClick={() => setShowLineQRPopup(false)} 
+              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 rounded-full"
             >
               ปิด
             </Button>

@@ -46,19 +46,19 @@ export default function Login() {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
       </div>
 
-      <Card className="w-full max-w-md bg-white/10 backdrop-blur-xl border-white/20 relative z-10">
-        <CardHeader className="text-center space-y-4">
-          <div className="w-20 h-20 bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
-            <span className="text-4xl">🔐</span>
+      <Card className="w-full max-w-md bg-white/10 backdrop-blur-xl border-white/20 relative z-10 rounded-2xl md:rounded-3xl">
+        <CardHeader className="text-center space-y-3 md:space-y-4 p-4 md:p-6">
+          <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-r from-red-500 to-pink-500 rounded-xl md:rounded-2xl flex items-center justify-center mx-auto shadow-2xl">
+            <span className="text-3xl md:text-4xl">🔐</span>
           </div>
-          <CardTitle className="text-3xl text-white bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">
+          <CardTitle className="text-2xl md:text-3xl text-white bg-gradient-to-r from-red-400 to-pink-400 bg-clip-text text-transparent">
             เข้าสู่ระบบแอดมิน
           </CardTitle>
           <p className="text-white/60">เข้าสู่ระบบเพื่อจัดการคำขอและข้อมูล</p>
         </CardHeader>
         
-        <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
+          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-white text-sm font-medium mb-2">
                 อีเมล
