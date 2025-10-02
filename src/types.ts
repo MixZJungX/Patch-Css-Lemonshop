@@ -43,10 +43,20 @@ export interface QueueItem {
   customer_name?: string;
   contact_info: string;
   product_type: 'robux' | 'chicken' | 'rainbow';
-  status: 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem';
+  // รวมสถานะ customer_fixed สำหรับลูกค้าที่แก้ไขปัญหาเอง
+  status: 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem' | 'customer_fixed';
   priority?: number;
   estimated_wait_time?: number;
   admin_notes?: string;
+  // ข้อมูลที่ลูกค้าอัปเดตใหม่ (เก็บแยกไม่ไปรบกวนข้อมูลเดิม)
+  customer_updated_credentials?: {
+    username?: string;
+    password?: string;
+    old_username?: string;
+    game_history_image?: string; // Base64 หรือ URL ของรูปภาพ
+    uploaded_at: string;
+    note?: string;
+  };
   // ข้อมูลเพิ่มเติมจาก redemption requests
   roblox_username?: string;
   roblox_password?: string;

@@ -4,11 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
 import { QueueItem, QueueDisplay } from '@/types';
 import { getQueuePosition, getQueueDisplay, searchQueueByGameInfo } from '@/lib/queueApi';
 import { testSimpleSearch } from '@/lib/testSearch';
 import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X, MessageCircle, Home, ArrowLeft } from 'lucide-react';
-import { ChatWidget } from './ChatWidget';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
@@ -20,9 +20,20 @@ export default function QueueStatusChecker() {
   const [error, setError] = useState('');
   const [queueDisplay, setQueueDisplay] = useState<QueueDisplay | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [showLineQRPopup, setShowLineQRPopup] = useState(false);
   const [searchResults, setSearchResults] = useState<QueueItem[]>([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  
+  // State สำหรับฟอร์มแก้ไขชื่อและรหัสผ่าน
+  const [showUpdateCredentialsForm, setShowUpdateCredentialsForm] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  
+  // State สำหรับอัพโหลดรูปภาพ
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // โหลดข้อมูลจอแสดงคิว
   const loadQueueDisplay = async () => {
@@ -85,6 +96,7 @@ export default function QueueStatusChecker() {
       case 'completed': return { icon: <CheckCircle className="w-5 h-5" />, color: 'bg-green-500', text: 'เสร็จสิ้น', description: 'การดำเนินการเสร็จสิ้นแล้ว' };
       case 'cancelled': return { icon: <XCircle className="w-5 h-5" />, color: 'bg-red-500', text: 'ยกเลิก', description: 'คิวนี้ถูกยกเลิกแล้ว' };
       case 'problem': return { icon: <AlertCircle className="w-5 h-5" />, color: 'bg-orange-500', text: 'มีปัญหา', description: 'คิวของคุณมีปัญหา กรุณาติดต่อแอดมิน' };
+      case 'customer_fixed': return { icon: <CheckCircle className="w-5 h-5" />, color: 'bg-emerald-500', text: 'ลูกค้าแก้ไขแล้ว', description: 'คุณได้แก้ไขปัญหาเรียบร้อยแล้ว กำลังดำเนินการต่อ' };
       case 'pending': return { icon: <Clock className="w-5 h-5" />, color: 'bg-yellow-500', text: 'รอการดำเนินการ', description: 'คิวของคุณอยู่ในรายการรอ กรุณารอการเรียก' };
       default: return { icon: <Clock className="w-5 h-5" />, color: 'bg-yellow-500', text: 'รอการดำเนินการ', description: 'คิวของคุณอยู่ในรายการรอ กรุณารอการเรียก' };
     }
@@ -96,6 +108,216 @@ export default function QueueStatusChecker() {
       case 'chicken': return { icon: '🐔', name: 'Chicken Account' };
       case 'rainbow': return { icon: '🌈', name: 'Rainbow Six' };
       default: return { icon: '📦', name: 'สินค้า' };
+    }
+  };
+
+  const handleCustomerFixedProblem = async () => {
+    if (!queueItem) return;
+
+    setUpdatingStatus(true);
+    try {
+      // Import supabase
+      const { supabase } = await import('@/lib/supabase');
+      
+      // อัปเดตสถานะเป็น customer_fixed และเพิ่มหมายเหตุ
+      const updatedNotes = queueItem.admin_notes ? 
+        `${queueItem.admin_notes} | ✅ ลูกค้าแก้ไขปัญหาเบื้องต้นด้วยตัวเองแล้ว` :
+        '✅ ลูกค้าแก้ไขปัญหาเบื้องต้นด้วยตัวเองแล้ว';
+
+      const { error } = await supabase
+        .from('queue_items')
+        .update({
+          status: 'customer_fixed',
+          admin_notes: updatedNotes
+        })
+        .eq('id', queueItem.id);
+
+      if (error) {
+        throw new Error('ไม่สามารถอัปเดตสถานะได้');
+      }
+
+      // อัปเดตสถานะใน state
+      setQueueItem(prev => prev ? {
+        ...prev,
+        status: 'customer_fixed',
+        admin_notes: updatedNotes
+      } : null);
+
+      // แสดงข้อความสำเร็จ
+      alert('✅ ขอบคุณครับ! ระบบได้รับข้อมูลแล้วว่าคุณได้แก้ไขปัญหาเรียบร้อย');
+      
+      // โหลดข้อมูลใหม่
+      loadQueueDisplay();
+      
+    } catch (error) {
+      console.error('Error updating queue status:', error);
+      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!queueItem || !imagePreview) {
+      alert('กรุณาเลือกรูปภาพก่อน');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      
+      console.log('📤 กำลังบันทึกรูปภาพ (Base64):', {
+        queueId: queueItem.id,
+        imageSize: imagePreview.length
+      });
+
+      // บันทึกรูปภาพเป็น Base64 ในฐานข้อมูลโดยตรง
+      const customerUpdateData = {
+        game_history_image: imagePreview, // บันทึก Base64 string
+        uploaded_at: new Date().toISOString(),
+        note: 'ลูกค้าอัพโหลดประวัติการเล่น'
+      };
+
+      const { error: dbError } = await supabase
+        .from('queue_items')
+        .update({
+          customer_updated_credentials: customerUpdateData,
+          status: 'customer_fixed'
+        })
+        .eq('id', queueItem.id);
+
+      if (dbError) {
+        console.error('❌ Database error:', dbError);
+        throw new Error('ไม่สามารถบันทึกข้อมูลได้: ' + dbError.message);
+      }
+
+      console.log('✅ บันทึกสำเร็จ');
+
+      alert('✅ ส่งรูปภาพสำเร็จ!\n\nคิวของคุณถูกย้ายไปที่ "ลูกค้าแก้ไขแล้ว"\nแอดมินจะตรวจสอบและดำเนินการให้ครับ');
+      setShowUploadForm(false);
+      setUploadedImage(null);
+      setImagePreview(null);
+      
+      await loadQueueDisplay();
+      
+    } catch (error: any) {
+      console.error('❌ Error uploading image:', error);
+      alert('เกิดข้อผิดพลาด: ' + (error.message || 'กรุณาลองใหม่อีกครั้ง'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // ตรวจสอบขนาดไฟล์ (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('ไฟล์มีขนาดใหญ่เกิน 5MB กรุณาเลือกไฟล์ใหม่');
+        return;
+      }
+
+      // ตรวจสอบประเภทไฟล์
+      if (!file.type.startsWith('image/')) {
+        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        return;
+      }
+
+      setUploadedImage(file);
+      
+      // สร้าง preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUpdateCredentials = async () => {
+    if (!queueItem || !newUsername.trim() || !newPassword.trim()) {
+      alert('กรุณากรอกชื่อผู้ใช้และรหัสผ่านให้ครบถ้วน');
+      return;
+    }
+
+    setUpdatingStatus(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      
+      // สร้าง contact_info ใหม่ทั้งหมด โดยแทนที่ส่วนที่เกี่ยวข้อง
+      let updatedContactInfo = queueItem.contact_info;
+      
+      // แทนที่ Username ทุกรูปแบบ
+      if (updatedContactInfo.includes('Username:')) {
+        updatedContactInfo = updatedContactInfo.replace(/Username:\s*[^|]+/gi, `Username: ${newUsername}`);
+      } else if (updatedContactInfo.includes('ชื่อ:')) {
+        updatedContactInfo = updatedContactInfo.replace(/ชื่อ:\s*[^|]+/gi, `ชื่อ: ${newUsername}`);
+      } else {
+        // ถ้าไม่มี ให้เพิ่มเข้าไปด้านหน้า
+        updatedContactInfo = `Username: ${newUsername} | ${updatedContactInfo}`;
+      }
+      
+      // แทนที่ Password ทุกรูปแบบ
+      if (updatedContactInfo.includes('Password:')) {
+        updatedContactInfo = updatedContactInfo.replace(/Password:\s*[^|]+/gi, `Password: ${newPassword}`);
+      } else if (updatedContactInfo.includes('รหัสผ่าน:')) {
+        updatedContactInfo = updatedContactInfo.replace(/รหัสผ่าน:\s*[^|]+/gi, `รหัสผ่าน: ${newPassword}`);
+      } else {
+        // ถ้าไม่มี ให้เพิ่มเข้าไป
+        updatedContactInfo = `${updatedContactInfo} | Password: ${newPassword}`;
+      }
+      
+      // สร้าง JSON object สำหรับเก็บข้อมูลที่ลูกค้าอัปเดต
+      const customerUpdateData = {
+        username: newUsername,
+        password: newPassword,
+        old_username: queueItem.roblox_username || queueItem.customer_name,
+        updated_at: new Date().toISOString(),
+        note: 'ลูกค้าส่งข้อมูลใหม่มาเอง'
+      };
+
+      console.log('🔄 กำลังอัปเดตข้อมูล:', {
+        oldUsername: queueItem.roblox_username,
+        newUsername,
+        queueId: queueItem.id,
+        customerUpdateData,
+        note: 'บันทึกในคอลัมน์แยก customer_updated_credentials'
+      });
+
+      const { error } = await supabase
+        .from('queue_items')
+        .update({
+          customer_updated_credentials: customerUpdateData,
+          status: 'customer_fixed' // เปลี่ยนสถานะเป็น "ลูกค้าแก้ไขแล้ว"
+          // เก็บข้อมูลใหม่ไว้ในคอลัมน์แยก
+          // ไม่แตะต้องข้อมูลเดิม (contact_info, roblox_username, etc.)
+        })
+        .eq('id', queueItem.id);
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw new Error('ไม่สามารถอัปเดตข้อมูลได้: ' + error.message);
+      }
+
+      console.log('✅ อัปเดตสำเร็จ');
+
+      // อัปเดต state (ไม่ต้องเปลี่ยนอะไร เพราะข้อมูลเก็บแยก)
+      // ไม่ต้อง setState เพราะไม่ได้แสดงผลข้อมูลนี้ในหน้าลูกค้า
+
+      alert(`✅ ส่งข้อมูลสำเร็จ!\n\nชื่อผู้ใช้ใหม่: ${newUsername}\nรหัสผ่านใหม่: ${newPassword}\n\nคิวของคุณถูกย้ายไปที่ "ลูกค้าแก้ไขแล้ว"\nแอดมินจะดำเนินการให้ครับ`);
+      setShowUpdateCredentialsForm(false);
+      setNewUsername('');
+      setNewPassword('');
+      
+      // โหลดข้อมูลใหม่
+      await loadQueueDisplay();
+      
+    } catch (error: any) {
+      console.error('❌ Error updating credentials:', error);
+      alert('เกิดข้อผิดพลาดในการอัปเดตข้อมูล: ' + (error.message || 'กรุณาลองใหม่อีกครั้ง'));
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -258,13 +480,13 @@ export default function QueueStatusChecker() {
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0">
                           <span className="text-xs sm:text-sm text-red-200">หากมีปัญหา กรุณาติดต่อแอดมิน</span>
                           <Button
-                            onClick={() => setIsChatOpen(true)}
+                            onClick={() => setShowLineQRPopup(true)}
                             size="sm"
                             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1 text-xs sm:text-sm"
                           >
                             <MessageCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                            <span className="hidden sm:inline">แชทกับแอดมิน</span>
-                            <span className="sm:hidden">แชท</span>
+                            <span className="hidden sm:inline">ติดต่อแอดมิน</span>
+                            <span className="sm:hidden">ติดต่อ</span>
                           </Button>
                         </div>
                       </div>
@@ -417,13 +639,6 @@ export default function QueueStatusChecker() {
                         <div className="text-center space-y-3">
                           <p className="text-xs text-blue-200">📞 ต้องการความช่วยเหลือ? ติดต่อแอดมินได้เลย</p>
                           <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                            <Button
-                              onClick={() => setIsChatOpen(true)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm"
-                            >
-                              <MessageCircle className="h-3 w-3 mr-1" />
-                              แชทในเว็บ
-                            </Button>
                           </div>
                           <Button
                             onClick={() => setShowLineQRPopup(true)}
@@ -436,20 +651,256 @@ export default function QueueStatusChecker() {
                       </div>
                     )}
 
-                    {/* ปุ่มติดต่อแอดมินเมื่อมีปัญหา */}
+                    {/* แสดงประเภทปัญหาและวิธีแก้ไข */}
                     {queueItem.status === 'problem' && (
-                      <div className="mt-3 bg-orange-500/20 backdrop-blur-sm rounded-xl p-3 border border-orange-400/30">
+                      <div className="mt-3 bg-orange-500/20 backdrop-blur-sm rounded-xl p-4 border border-orange-400/30">
+                        <div className="space-y-4">
+                          {/* แสดงประเภทปัญหา */}
+                          <div className="text-center">
+                            <div className="inline-flex items-center gap-2 bg-orange-600/50 px-3 py-2 rounded-lg mb-3">
+                              <span className="text-2xl">
+                                {queueItem.admin_notes?.includes('ติดยืนยันแมพ') && '🗺️'}
+                                {queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && '📱'}
+                                {queueItem.admin_notes?.includes('ติดยืนยันเมล') && '📧'}
+                                {queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && '🔒'}
+                                {!queueItem.admin_notes?.includes('ติดยืนยันแมพ') && 
+                                 !queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && 
+                                 !queueItem.admin_notes?.includes('ติดยืนยันเมล') && 
+                                 !queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && '❓'}
+                              </span>
+                              <span className="text-orange-200 font-semibold">
+                                {queueItem.admin_notes?.includes('ติดยืนยันแมพ') && 'ติดยืนยันแมพ'}
+                                {queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && 'ติดยืนยันโทรศัพท์'}
+                                {queueItem.admin_notes?.includes('ติดยืนยันเมล') && 'ติดยืนยันเมล'}
+                                {queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && 'ชื่อหรือรหัสผิด'}
+                                {!queueItem.admin_notes?.includes('ติดยืนยันแมพ') && 
+                                 !queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && 
+                                 !queueItem.admin_notes?.includes('ติดยืนยันเมล') && 
+                                 !queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && 'ปัญหาอื่นๆ'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* แสดงวิธีแก้ไขเบื้องต้น */}
+                          <div className="bg-white/10 rounded-lg p-3">
+                            <h4 className="text-orange-200 font-semibold mb-2 flex items-center gap-2">
+                              <span>💡</span>
+                              วิธีแก้ไขเบื้องต้น:
+                            </h4>
+                            <div className="text-orange-100 text-sm space-y-2">
+                              {queueItem.admin_notes?.includes('ติดยืนยันแมพ') && (
+                                <>
+                                  <p className="font-semibold text-orange-100 mb-2">📤 วิธีส่งประวัติการเล่น:</p>
+                                  <div className="space-y-1 pl-2 mb-3">
+                                    <p>1. เข้าเว็บ Roblox บนคอมพิวเตอร์หรือโทรศัพท์</p>
+                                    <p>2. ไปที่หน้าหลัก (Home)</p>
+                                    <p>3. กดไปที่ <strong>Continue</strong> (หน้าเกมที่เล่นล่าสุด)</p>
+                                    <p>4. แคปหน้าจอส่วนนี้ทั้งหมด</p>
+                                  </div>
+
+                                  <Button
+                                    onClick={() => setShowUploadForm(!showUploadForm)}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-2"
+                                  >
+                                    {showUploadForm ? '❌ ปิดฟอร์ม' : '📤 อัพโหลดรูปภาพที่นี่'}
+                                  </Button>
+
+                                  {showUploadForm && (
+                                    <div className="bg-white/10 rounded-lg p-4 space-y-3">
+                                      <div>
+                                        <Label className="text-orange-200 text-sm mb-2 block">เลือกรูปภาพประวัติการเล่น:</Label>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={handleImageSelect}
+                                          className="w-full text-sm text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                                        />
+                                        <p className="text-xs text-orange-200/70 mt-1">รองรับไฟล์: JPG, PNG (ขนาดไม่เกิน 5MB)</p>
+                                      </div>
+
+                                      {imagePreview && (
+                                        <div className="space-y-2">
+                                          <Label className="text-orange-200 text-sm">ตัวอย่างรูปภาพ:</Label>
+                                          <img
+                                            src={imagePreview}
+                                            alt="Preview"
+                                            className="w-full max-h-60 object-contain rounded-lg border-2 border-orange-400/50"
+                                          />
+                                        </div>
+                                      )}
+
+                                      <Button
+                                        onClick={handleImageUpload}
+                                        disabled={uploading || !uploadedImage}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                      >
+                                        {uploading ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            กำลังอัพโหลด...
+                                          </>
+                                        ) : (
+                                          '✅ ส่งรูปภาพ'
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  <p className="text-xs mt-2 bg-orange-600/30 px-2 py-1 rounded text-orange-100">
+                                    💡 หมายเหตุ: นี้คือประวัติการเล่นทั้งหมดของคุณ ต้องเห็นเกมที่เล่นชัดเจน
+                                  </p>
+                                </>
+                              )}
+                              {queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && (
+                                <>
+                                  <p className="font-semibold text-orange-100 mb-2">📱 วิธีแก้ไขปัญหาการยืนยันโทรศัพท์:</p>
+                                  
+                                  <div className="bg-blue-500/20 border border-blue-400/50 rounded-lg p-4 mb-3">
+                                    <p className="text-white font-semibold mb-2 flex items-center gap-2">
+                                      <span>🔓</span>
+                                      วิธีแก้ไข:
+                                    </p>
+                                    <div className="space-y-2 text-sm">
+                                      <p className="bg-white/10 p-2 rounded">
+                                        <span className="font-semibold text-yellow-300">⚠️ สำคัญ:</span> ให้คุณ<span className="font-bold text-yellow-200"> ล็อคเอาท์ (Log Out) ออกจาก Roblox ในโทรศัพท์</span>ของคุณ
+                                      </p>
+                                      <p className="pl-2">1. เข้าแอป Roblox ในโทรศัพท์</p>
+                                      <p className="pl-2">2. กดที่เมนู (3 จุด) หรือไอคอนโปรไฟล์</p>
+                                      <p className="pl-2">3. เลือก "Log Out" หรือ "ออกจากระบบ"</p>
+                                      <p className="pl-2">4. ยืนยันการออกจากระบบ</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-1 pl-2 text-sm">
+                                    <p className="font-semibold">ขั้นตอนสรุป:</p>
+                                    <p>1. ล็อคเอาท์ออกจาก Roblox ในโทรศัพท์</p>
+                                    <p>2. หากมั่นใจว่าล็อคเอาท์แล้ว กดปุ่ม "แก้ไขปัญหาแล้ว" ด้านล่าง</p>
+                                    <p>3. หากมีปัญหา สอบถาม/ทักมาทางไลน์</p>
+                                  </div>
+                                </>
+                              )}
+                              {queueItem.admin_notes?.includes('ติดยืนยันเมล') && (
+                                <>
+                                  <p className="font-semibold text-orange-100 mb-2">📧 วิธีทำเมลแดง:</p>
+                                  
+                                  <div className="bg-red-500/20 border border-red-400/50 rounded-lg p-3 mb-3">
+                                    <p className="text-white font-semibold mb-2 flex items-center gap-2">
+                                      <span>🎥</span>
+                                      ดูคลิปสอนทำเมลแดง:
+                                    </p>
+                                    <a
+                                      href="https://youtu.be/uw2N7kl5ZbU?si=3bCCzPxt0A4ffBlV"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg text-center font-semibold transition-all"
+                                    >
+                                      ▶️ คลิกดูวิดีโอสอนทำเมลแดง
+                                    </a>
+                                    <p className="text-xs text-orange-100 mt-2">💡 ดูคลิปแล้วทำตามขั้นตอนให้ครบถ้วน</p>
+                                  </div>
+
+                                  <div className="space-y-1 pl-2 text-sm">
+                                    <p className="font-semibold">ขั้นตอนสรุป:</p>
+                                    <p>1. ดูคลิปสอนด้านบน</p>
+                                    <p>2. ทำตามขั้นตอนในคลิปให้ครบถ้วน</p>
+                                    <p>3. หากทำเสร็จแล้ว กดปุ่ม "แก้ไขปัญหาแล้ว" ด้านล่าง</p>
+                                    <p>4. หากมีปัญหา สอบถาม/ทักมาทางไลน์</p>
+                                  </div>
+                                </>
+                              )}
+                              {queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && (
+                                <>
+                                  <p className="text-orange-200 font-semibold mb-2">📝 คุณสามารถแก้ไขข้อมูลได้ที่นี่:</p>
+                                  <Button
+                                    onClick={() => setShowUpdateCredentialsForm(!showUpdateCredentialsForm)}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white mb-2"
+                                  >
+                                    {showUpdateCredentialsForm ? '❌ ปิดฟอร์ม' : '✏️ กรอกชื่อและรหัสผ่านใหม่'}
+                                  </Button>
+                                  
+                                  {showUpdateCredentialsForm && (
+                                    <div className="bg-white/10 rounded-lg p-3 space-y-3 mt-2">
+                                      <div>
+                                        <Label className="text-orange-200 text-sm mb-1 block">ชื่อผู้ใช้ (Username):</Label>
+                                        <Input
+                                          value={newUsername}
+                                          onChange={(e) => setNewUsername(e.target.value)}
+                                          placeholder="กรอกชื่อผู้ใช้ใหม่"
+                                          className="bg-white/20 text-white border-orange-300/50 placeholder:text-gray-400"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-orange-200 text-sm mb-1 block">รหัสผ่าน (Password):</Label>
+                                        <Input
+                                          value={newPassword}
+                                          onChange={(e) => setNewPassword(e.target.value)}
+                                          placeholder="กรอกรหัสผ่านใหม่"
+                                          type="text"
+                                          className="bg-white/20 text-white border-orange-300/50 placeholder:text-gray-400"
+                                        />
+                                      </div>
+                                      <Button
+                                        onClick={handleUpdateCredentials}
+                                        disabled={updatingStatus || !newUsername.trim() || !newPassword.trim()}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                                      >
+                                        {updatingStatus ? (
+                                          <>
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                                            กำลังอัปเดต...
+                                          </>
+                                        ) : (
+                                          '✅ ส่งข้อมูลใหม่'
+                                        )}
+                                      </Button>
+                                      <p className="text-xs text-orange-200/70">
+                                        หมายเหตุ: ข้อมูลนี้จะถูกส่งให้แอดมินเป็นหมายเหตุ แอดมินจะดำเนินการอัปเดตให้คุณ
+                                      </p>
+                                    </div>
+                                  )}
+                                  
+                                  <p className="text-xs mt-2 text-orange-100/70">หรือลองวิธีแก้ไขเหล่านี้:</p>
+                                  <p>1. ตรวจสอบชื่อผู้ใช้และรหัสผ่านให้ถูกต้อง</p>
+                                  <p>2. ดูว่าตัวพิมพ์เล็ก-ใหญ่ถูกต้อง</p>
+                                  <p>3. ลองกดแสดงรหัสผ่านเพื่อดู</p>
+                                </>
+                              )}
+                              {!queueItem.admin_notes?.includes('ติดยืนยันแมพ') && 
+                               !queueItem.admin_notes?.includes('ติดยืนยันโทรศัพท์') && 
+                               !queueItem.admin_notes?.includes('ติดยืนยันเมล') && 
+                               !queueItem.admin_notes?.includes('ชื่อหรือรหัสผิด') && (
+                                <>
+                                  <p>1. ตรวจสอบข้อมูลที่ส่งมาทั้งหมด</p>
+                                  <p>2. ลองดำเนินการใหม่อีกครั้ง</p>
+                                  <p>3. หากยังไม่ได้ กรุณาติดต่อแอดมิน</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ปุ่มติดต่อแอดมินและปุ่มแก้ไขปัญหาแล้ว */}
                         <div className="text-center space-y-3">
-                          <p className="text-xs text-orange-200">⚠️ คิวของคุณมีปัญหา กรุณาติดต่อแอดมินเพื่อขอความช่วยเหลือ</p>
+                            <p className="text-orange-200 text-xs">
+                              หากยังแก้ไขไม่ได้ กรุณาติดต่อแอดมิน
+                            </p>
                           <div className="flex flex-col sm:flex-row gap-2 justify-center">
                             <Button
-                              onClick={() => setIsChatOpen(true)}
-                              className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-4 py-2 text-sm"
-                            >
-                              <MessageCircle className="h-3 w-3 mr-1" />
-                              แชทในเว็บ
+                                onClick={handleCustomerFixedProblem}
+                                disabled={updatingStatus}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50"
+                              >
+                                {updatingStatus ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                    กำลังอัปเดต...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    ✅ แก้ไขปัญหาแล้ว
+                                  </>
+                                )}
                             </Button>
-                          </div>
                           <Button
                             onClick={() => setShowLineQRPopup(true)}
                             className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm"
@@ -457,6 +908,29 @@ export default function QueueStatusChecker() {
                             <MessageCircle className="h-3 w-3 mr-1" />
                             ติดต่อไลน์ (mixzis)
                           </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* แสดงเมื่อลูกค้าแก้ไขปัญหาแล้ว */}
+                    {queueItem.status === 'customer_fixed' && (
+                      <div className="mt-3 bg-emerald-500/20 backdrop-blur-sm rounded-xl p-4 border border-emerald-400/30">
+                        <div className="text-center space-y-3">
+                          <div className="inline-flex items-center gap-2 bg-emerald-600/50 px-3 py-2 rounded-lg">
+                            <span className="text-2xl">✅</span>
+                            <span className="text-emerald-200 font-semibold">ลูกค้าแก้ไขปัญหาแล้ว</span>
+                          </div>
+                          <p className="text-emerald-200 text-sm">
+                            ขอบคุณครับ! คุณได้แก้ไขปัญหาเบื้องต้นด้วยตัวเองเรียบร้อยแล้ว<br/>
+                            ระบบกำลังดำเนินการต่อ กรุณารอสักครู่
+                          </p>
+                          <div className="bg-white/10 rounded-lg p-3">
+                            <p className="text-emerald-100 text-xs">
+                              💡 ระบบจะอัปเดตสถานะเป็น "กำลังดำเนินการ" ในไม่ช้า
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -619,13 +1093,6 @@ export default function QueueStatusChecker() {
         </div>
       </div>
 
-      {/* Chat Widget */}
-      <ChatWidget
-        customerId={queueItem?.queue_number?.toString() || (queueNumber || 'GUEST').trim().toLowerCase()}
-        customerName={`ลูกค้าคิว #${queueItem?.queue_number || (queueNumber || 'GUEST').trim()}`}
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-      />
 
       {/* Line QR Code Dialog */}
       <Dialog open={showLineQRPopup} onOpenChange={setShowLineQRPopup}>

@@ -17,7 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 export default function QueueManager() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<QueueItem[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'waiting' | 'processing' | 'completed' | 'cancelled' | 'problem' | 'customer_fixed'>('all');
+  const [problemTypeFilter, setProblemTypeFilter] = useState<'all' | 'map_verification' | 'phone_verification' | 'email_verification' | 'wrong_password'>('all');
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -35,6 +36,11 @@ export default function QueueManager() {
   const [bulkStatus, setBulkStatus] = useState<string>('');
   const [bulkNotes, setBulkNotes] = useState<string>('');
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  
+  // Edit problem type states
+  const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<QueueItem | null>(null);
+  const [newProblemType, setNewProblemType] = useState<string>('');
 
   const loadQueueItems = async () => {
     try {
@@ -62,6 +68,7 @@ export default function QueueManager() {
       case 'completed': return { icon: <CheckCircle className="w-4 h-4" />, color: 'bg-green-500', text: 'เสร็จสิ้น' };
       case 'cancelled': return { icon: <XCircle className="w-4 h-4" />, color: 'bg-red-500', text: 'ยกเลิก' };
       case 'problem': return { icon: <AlertCircle className="w-4 h-4" />, color: 'bg-orange-500', text: 'มีปัญหา' };
+      case 'customer_fixed': return { icon: <CheckCircle className="w-4 h-4" />, color: 'bg-emerald-500', text: 'ลูกค้าแก้ไขแล้ว' };
       default: return { icon: <Clock className="w-4 h-4" />, color: 'bg-gray-500', text: 'ไม่ทราบ' };
     }
   };
@@ -89,14 +96,44 @@ export default function QueueManager() {
   const completedCount = queueItems.filter(item => item.status === 'completed').length;
   const cancelledCount = queueItems.filter(item => item.status === 'cancelled').length;
   const problemCount = queueItems.filter(item => item.status === 'problem').length;
+  const customerFixedCount = queueItems.filter((item: any) => item.status === 'customer_fixed').length;
+  
+  // นับจำนวนปัญหาตามประเภท
+  const mapVerificationCount = queueItems.filter(item => 
+    item.status === 'problem' && item.admin_notes?.includes('ติดยืนยันแมพ')
+  ).length;
+  const phoneVerificationCount = queueItems.filter(item => 
+    item.status === 'problem' && item.admin_notes?.includes('ติดยืนยันโทรศัพท์')
+  ).length;
+  const emailVerificationCount = queueItems.filter(item => 
+    item.status === 'problem' && item.admin_notes?.includes('ติดยืนยันเมล')
+  ).length;
+  const wrongPasswordCount = queueItems.filter(item => 
+    item.status === 'problem' && item.admin_notes?.includes('ชื่อหรือรหัสผิด')
+  ).length;
 
-  // Filter items based on active filter and search term
+  // Filter items based on active filter, problem type filter and search term
   useEffect(() => {
     let filtered = queueItems;
     
     // Apply status filter
     if (activeFilter !== 'all') {
       filtered = filtered.filter(item => item.status === activeFilter);
+    }
+    
+    // Apply problem type filter (only when status is 'problem')
+    if (activeFilter === 'problem' && problemTypeFilter !== 'all') {
+      filtered = filtered.filter(item => {
+        if (item.status !== 'problem' || !item.admin_notes) return false;
+        
+        switch (problemTypeFilter) {
+          case 'map_verification': return item.admin_notes.includes('ติดยืนยันแมพ');
+          case 'phone_verification': return item.admin_notes.includes('ติดยืนยันโทรศัพท์');
+          case 'email_verification': return item.admin_notes.includes('ติดยืนยันเมล');
+          case 'wrong_password': return item.admin_notes.includes('ชื่อหรือรหัสผิด');
+          default: return true;
+        }
+      });
     }
     
     // Apply search filter
@@ -141,7 +178,7 @@ export default function QueueManager() {
     }
     
     setFilteredItems(filtered);
-  }, [queueItems, activeFilter, searchTerm]);
+  }, [queueItems, activeFilter, problemTypeFilter, searchTerm]);
 
   const handleEditItem = (item: QueueItem) => {
     setSelectedItem(item);
@@ -150,8 +187,67 @@ export default function QueueManager() {
     setEditDialogOpen(true);
   };
 
+  const handleEditProblemType = (item: QueueItem) => {
+    setEditingItem(item);
+    
+    // ตรวจสอบประเภทปัญหาปัจจุบัน
+    const currentProblemType = getCurrentProblemType(item.admin_notes || '');
+    setNewProblemType(currentProblemType);
+    
+    setEditProblemDialogOpen(true);
+  };
+
+  const getCurrentProblemType = (adminNotes: string) => {
+    if (adminNotes.includes('ติดยืนยันแมพ')) return 'map_verification';
+    if (adminNotes.includes('ติดยืนยันโทรศัพท์')) return 'phone_verification';
+    if (adminNotes.includes('ติดยืนยันเมล')) return 'email_verification';
+    if (adminNotes.includes('ชื่อหรือรหัสผิด')) return 'wrong_password';
+    return '';
+  };
+
+  const getProblemDescription = (problemType: string) => {
+    switch (problemType) {
+      case 'map_verification': return 'ติดยืนยันแมพ';
+      case 'phone_verification': return 'ติดยืนยันโทรศัพท์';
+      case 'email_verification': return 'ติดยืนยันเมล';
+      case 'wrong_password': return 'ชื่อหรือรหัสผิด';
+      default: return 'ปัญหาอื่นๆ';
+    }
+  };
+
+  const handleUpdateProblemType = async () => {
+    if (!editingItem || !newProblemType) return;
+
+    setUpdating(true);
+    try {
+      const problemDescription = getProblemDescription(newProblemType);
+      const newAdminNotes = `🚨 ประเภทปัญหา: ${problemDescription}`;
+      
+      await updateQueueStatus(editingItem.id, 'problem' as any, newAdminNotes);
+      
+      toast.success(`แก้ไขประเภทปัญหาเป็น: ${problemDescription}`);
+      setEditProblemDialogOpen(false);
+      setEditingItem(null);
+      loadQueueItems();
+    } catch (error) {
+      console.error('Error updating problem type:', error);
+      toast.error('เกิดข้อผิดพลาดในการแก้ไขประเภทปัญหา');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleUpdateStatus = async () => {
     if (!selectedItem || !newStatus) return;
+
+    // ถ้าเลือกสถานะ "มีปัญหา" ให้เปิด Dialog เลือกประเภทปัญหา
+    if (newStatus === 'problem') {
+      setEditDialogOpen(false); // ปิด dialog แก้ไขสถานะปัจจุบัน
+      setEditingItem(selectedItem); // เก็บข้อมูลไว้
+      setNewProblemType(''); // รีเซ็ตการเลือกปัญหา
+      setEditProblemDialogOpen(true); // เปิด dialog เลือกประเภทปัญหา
+      return;
+    }
 
     setUpdating(true);
     try {
@@ -479,8 +575,85 @@ export default function QueueManager() {
             >
               ⚠️ มีปัญหา ({problemCount})
             </Button>
+            <Button
+              onClick={() => setActiveFilter('customer_fixed')}
+              variant={activeFilter === 'customer_fixed' ? 'default' : 'outline'}
+              className={`${
+                activeFilter === 'customer_fixed'
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  : 'text-white border-emerald-400/50 hover:bg-emerald-500/20'
+              } transition-all duration-200`}
+            >
+              ✅ ลูกค้าแก้ไขแล้ว ({customerFixedCount})
+            </Button>
             </div>
           </div>
+          
+          {/* Problem Type Filter - แสดงเฉพาะเมื่อเลือก filter 'problem' */}
+          {activeFilter === 'problem' && (
+            <div className="mt-4 pt-4 border-t border-white/20">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-white font-medium">🔍 กรองตามประเภทปัญหา:</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setProblemTypeFilter('all')}
+                  variant={problemTypeFilter === 'all' ? 'default' : 'outline'}
+                  className={`${
+                    problemTypeFilter === 'all'
+                      ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                      : 'text-white border-purple-400/50 hover:bg-purple-500/20'
+                  } transition-all duration-200 text-xs px-3 py-1`}
+                >
+                  ทั้งหมด ({problemCount})
+                </Button>
+                <Button
+                  onClick={() => setProblemTypeFilter('map_verification')}
+                  variant={problemTypeFilter === 'map_verification' ? 'default' : 'outline'}
+                  className={`${
+                    problemTypeFilter === 'map_verification'
+                      ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                      : 'text-white border-blue-400/50 hover:bg-blue-500/20'
+                  } transition-all duration-200 text-xs px-3 py-1`}
+                >
+                  🗺️ ติดยืนยันแมพ ({mapVerificationCount})
+                </Button>
+                <Button
+                  onClick={() => setProblemTypeFilter('phone_verification')}
+                  variant={problemTypeFilter === 'phone_verification' ? 'default' : 'outline'}
+                  className={`${
+                    problemTypeFilter === 'phone_verification'
+                      ? 'bg-green-500 hover:bg-green-600 text-white'
+                      : 'text-white border-green-400/50 hover:bg-green-500/20'
+                  } transition-all duration-200 text-xs px-3 py-1`}
+                >
+                  📱 ติดยืนยันโทรศัพท์ ({phoneVerificationCount})
+                </Button>
+                <Button
+                  onClick={() => setProblemTypeFilter('email_verification')}
+                  variant={problemTypeFilter === 'email_verification' ? 'default' : 'outline'}
+                  className={`${
+                    problemTypeFilter === 'email_verification'
+                      ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                      : 'text-white border-purple-400/50 hover:bg-purple-500/20'
+                  } transition-all duration-200 text-xs px-3 py-1`}
+                >
+                  📧 ติดยืนยันเมล ({emailVerificationCount})
+                </Button>
+                <Button
+                  onClick={() => setProblemTypeFilter('wrong_password')}
+                  variant={problemTypeFilter === 'wrong_password' ? 'default' : 'outline'}
+                  className={`${
+                    problemTypeFilter === 'wrong_password'
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'text-white border-red-400/50 hover:bg-red-500/20'
+                  } transition-all duration-200 text-xs px-3 py-1`}
+                >
+                  🔒 ชื่อหรือรหัสผิด ({wrongPasswordCount})
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -581,6 +754,7 @@ export default function QueueManager() {
                     <TableHead className="text-white font-semibold">👤 ข้อมูลลูกค้า</TableHead>
                     <TableHead className="text-white font-semibold text-center">📦 ประเภท</TableHead>
                     <TableHead className="text-white font-semibold text-center">🏷️ สถานะ</TableHead>
+                    <TableHead className="text-white font-semibold text-center">🚨 ประเภทปัญหา</TableHead>
                     <TableHead className="text-white font-semibold text-center">📅 วันที่สร้าง</TableHead>
                     <TableHead className="text-white font-semibold text-center">⚙️ การดำเนินการ</TableHead>
                   </TableRow>
@@ -668,6 +842,34 @@ export default function QueueManager() {
                               <span className="font-medium">{statusInfo.text}</span>
                             </div>
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.status === 'problem' && item.admin_notes ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <div className="text-xs px-3 py-2 rounded-lg text-orange-300 bg-orange-900/30 border border-orange-500/30">
+                                {item.admin_notes.includes('ติดยืนยันแมพ') && '🗺️ ติดยืนยันแมพ'}
+                                {item.admin_notes.includes('ติดยืนยันโทรศัพท์') && '📱 ติดยืนยันโทรศัพท์'}
+                                {item.admin_notes.includes('ติดยืนยันเมล') && '📧 ติดยืนยันเมล'}
+                                {item.admin_notes.includes('ชื่อหรือรหัสผิด') && '🔒 ชื่อหรือรหัสผิด'}
+                                {!item.admin_notes.includes('ติดยืนยันแมพ') && 
+                                 !item.admin_notes.includes('ติดยืนยันโทรศัพท์') && 
+                                 !item.admin_notes.includes('ติดยืนยันเมล') && 
+                                 !item.admin_notes.includes('ชื่อหรือรหัสผิด') && 
+                                 '❓ ปัญหาอื่นๆ'}
+                              </div>
+                              <Button
+                                onClick={() => handleEditProblemType(item)}
+                                size="sm"
+                                variant="outline"
+                                className="h-6 w-6 p-0 border-orange-400 text-orange-400 hover:bg-orange-500 hover:text-white"
+                                title="แก้ไขประเภทปัญหา"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
@@ -798,6 +1000,43 @@ export default function QueueManager() {
                   )}
                   {selectedItem.roblox_password && (
                     <p><strong>รหัสผ่าน:</strong> {selectedItem.roblox_password}</p>
+                  )}
+                  
+                  {/* แสดงข้อมูลที่ลูกค้าส่งมาใหม่ (ถ้ามี) */}
+                  {selectedItem.customer_updated_credentials && (
+                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <h5 className="font-semibold text-blue-300 mb-2 flex items-center gap-2">
+                        <span>📝</span>
+                        ข้อมูลใหม่ที่ลูกค้าส่งมา:
+                      </h5>
+                      <div className="space-y-2 text-blue-200">
+                        {selectedItem.customer_updated_credentials.username && (
+                          <p><strong>ชื่อผู้ใช้ใหม่:</strong> {selectedItem.customer_updated_credentials.username}</p>
+                        )}
+                        {selectedItem.customer_updated_credentials.password && (
+                          <p><strong>รหัสผ่านใหม่:</strong> {selectedItem.customer_updated_credentials.password}</p>
+                        )}
+                        {(selectedItem.customer_updated_credentials as any)?.game_history_image && (
+                          <div className="space-y-2">
+                            <p className="font-semibold text-blue-300">🖼️ รูปภาพประวัติการเล่น:</p>
+                            <img
+                              src={(selectedItem.customer_updated_credentials as any).game_history_image}
+                              alt="Game History"
+                              className="w-full max-h-96 object-contain rounded-lg border-2 border-blue-400/50 cursor-pointer hover:border-blue-400"
+                              onClick={() => window.open((selectedItem.customer_updated_credentials as any)?.game_history_image, '_blank')}
+                              title="คลิกเพื่อดูรูปเต็มขนาด"
+                            />
+                            <p className="text-xs text-blue-300/70">💡 คลิกที่รูปเพื่อดูขนาดเต็ม</p>
+                          </div>
+                        )}
+                        {selectedItem.customer_updated_credentials.old_username && (
+                          <p className="text-xs opacity-70"><strong>ชื่อเดิม:</strong> {selectedItem.customer_updated_credentials.old_username}</p>
+                        )}
+                        <p className="text-xs opacity-70">
+                          <strong>ส่งมาเมื่อ:</strong> {new Date(selectedItem.customer_updated_credentials.uploaded_at).toLocaleString('th-TH')}
+                        </p>
+                      </div>
+                    </div>
                   )}
                   
                   {/* แยกข้อมูลจาก contact_info */}
@@ -976,6 +1215,131 @@ export default function QueueManager() {
                 <div className="flex items-center gap-2">
                   <CheckSquare className="w-4 h-4" />
                   อัปเดต {selectedItems.size} รายการ
+                </div>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Problem Type Dialog */}
+      <Dialog open={editProblemDialogOpen} onOpenChange={setEditProblemDialogOpen}>
+        <DialogContent className="sm:max-w-lg bg-gradient-to-br from-gray-900 to-gray-800 border border-orange-500/30">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl font-semibold flex items-center gap-2">
+              <Edit className="w-5 h-5 text-orange-400" />
+              แก้ไขประเภทปัญหา
+            </DialogTitle>
+            <DialogDescription className="text-gray-300">
+              กรุณาเลือกประเภทปัญหาที่ถูกต้องสำหรับคิว #{editingItem?.queue_number}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            <Button
+              onClick={() => setNewProblemType('map_verification')}
+              variant="outline"
+              className={`w-full px-5 py-4 h-auto text-left justify-start border-2 transition-all ${
+                newProblemType === 'map_verification' 
+                  ? 'border-blue-500 bg-blue-500/10 text-white' 
+                  : 'border-gray-700 hover:border-blue-400 text-gray-300 hover:bg-blue-500/20 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">🗺️</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base mb-1">ติดยืนยันแมพ</div>
+                  <div className="text-xs opacity-70 leading-relaxed">ปัญหาการยืนยันตัวตนผ่านแมพในเกม</div>
+                </div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={() => setNewProblemType('phone_verification')}
+              variant="outline"
+              className={`w-full px-5 py-4 h-auto text-left justify-start border-2 transition-all ${
+                newProblemType === 'phone_verification' 
+                  ? 'border-green-500 bg-green-500/10 text-white' 
+                  : 'border-gray-700 hover:border-green-400 text-gray-300 hover:bg-green-500/20 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">📱</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base mb-1">ติดยืนยันโทรศัพท์</div>
+                  <div className="text-xs opacity-70 leading-relaxed">ปัญหาการยืนยันหมายเลขโทรศัพท์</div>
+                </div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={() => setNewProblemType('email_verification')}
+              variant="outline"
+              className={`w-full px-5 py-4 h-auto text-left justify-start border-2 transition-all ${
+                newProblemType === 'email_verification' 
+                  ? 'border-purple-500 bg-purple-500/10 text-white' 
+                  : 'border-gray-700 hover:border-purple-400 text-gray-300 hover:bg-purple-500/20 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">📧</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base mb-1">ติดยืนยันเมล</div>
+                  <div className="text-xs opacity-70 leading-relaxed">ปัญหาการยืนยันอีเมล</div>
+                </div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={() => setNewProblemType('wrong_password')}
+              variant="outline"
+              className={`w-full px-5 py-4 h-auto text-left justify-start border-2 transition-all ${
+                newProblemType === 'wrong_password' 
+                  ? 'border-red-500 bg-red-500/10 text-white' 
+                  : 'border-gray-700 hover:border-red-400 text-gray-300 hover:bg-red-500/20 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">🔒</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-base mb-1">ชื่อหรือรหัสผิด</div>
+                  <div className="text-xs opacity-70 leading-relaxed">ปัญหาการใส่รหัสผ่านไม่ถูกต้อง</div>
+                </div>
+              </div>
+            </Button>
+          </div>
+          
+          <DialogFooter className="gap-2">
+            <Button
+              onClick={() => setEditProblemDialogOpen(false)}
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              disabled={updating}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              onClick={handleUpdateProblemType}
+              disabled={updating || !newProblemType}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {updating ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  กำลังบันทึก...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  บันทึกการเปลี่ยนแปลง
                 </div>
               )}
             </Button>
