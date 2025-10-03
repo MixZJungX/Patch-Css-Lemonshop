@@ -83,10 +83,21 @@ export default function Home() {
   
   // Line QR Code popup
   const [showLineQRPopup, setShowLineQRPopup] = useState(false);
+  
+  // Advertisement popup
+  const [showAdPopup, setShowAdPopup] = useState(false);
+  const [adData, setAdData] = useState<{
+    id: string;
+    title: string;
+    image_url: string;
+    link_url?: string;
+    is_active: boolean;
+  } | null>(null);
 
   useEffect(() => {
     loadAvailableItems();
     loadAnnouncements();
+    loadAdvertisement();
     
     // ทดสอบการเชื่อมต่อระบบคิว
     testQueueConnection().then(isConnected => {
@@ -195,6 +206,52 @@ export default function Home() {
       setAnnouncements(mapped);
     } catch (_e) {
       setAnnouncements([]);
+    }
+  };
+
+  const loadAdvertisement = async () => {
+    try {
+      // ตรวจสอบว่าเคยปิด popup นี้แล้วหรือไม่
+      const adClosed = localStorage.getItem('ad_popup_closed');
+      if (adClosed) {
+        return; // ไม่แสดง popup ถ้าเคยปิดแล้ว
+      }
+
+      // โหลดโฆษณาจาก Supabase
+      const { data, error } = await supabase
+        .from('app_284beb8f90_advertisements')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.log('ไม่มีโฆษณาแสดง');
+        return;
+      }
+
+      setAdData(data);
+      
+      // แสดง popup หลังจาก 1 วินาที
+      setTimeout(() => {
+        setShowAdPopup(true);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error loading advertisement:', error);
+    }
+  };
+
+  const handleCloseAdPopup = () => {
+    setShowAdPopup(false);
+    // จำการปิด popup นี้ไว้ 24 ชั่วโมง
+    localStorage.setItem('ad_popup_closed', Date.now().toString());
+  };
+
+  const handleAdClick = () => {
+    if (adData?.link_url) {
+      window.open(adData.link_url, '_blank');
     }
   };
 
@@ -774,12 +831,16 @@ export default function Home() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-3xl flex items-center justify-center">
-              <span className="text-white text-2xl">💎</span>
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center">
+              <img 
+                src="https://img5.pic.in.th/file/secure-sv1/2318a16a76694dc8dccbd75362a64368deb68b00127501b51b1a9a0588ca2f42.png" 
+                alt="Lemon Shop Logo" 
+                className="w-16 h-16 object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-white text-xl font-bold">ระบบแลกของรางวัล</h1>
-              <p className="text-purple-200 text-sm">Robux & Chicken Accounts Exchange</p>
+              <h1 className="text-white text-xl font-bold">Lemon Shop</h1>
+              <p className="text-purple-200 text-sm">ระบบแลกของรางวัล - Robux & Chicken Accounts</p>
             </div>
           </div>
           
@@ -1673,143 +1734,22 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
-        {/* Additional Products Section */}
-        <div className="mt-16 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
-            <h3 className="text-2xl font-bold text-white mb-4">🛒 สินค้าเพิ่มเติม</h3>
-            <p className="text-purple-200 mb-6">เยี่ยมชมร้านค้าออนไลน์ของเราเพื่อดูสินค้าอื่นๆ เพิ่มเติม ไก่ตัน Robux โค้ด Rainbow Six</p>
-            
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl mb-2">🐔</div>
-                <h4 className="text-white font-semibold mb-2">ไก่ตัน</h4>
-                <p className="text-purple-200 text-sm">บัญชีเกมไก่ตัน</p>
-              </div>
-              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl mb-2">💎</div>
-                <h4 className="text-white font-semibold mb-2">Robux</h4>
-                <p className="text-purple-200 text-sm">โค้ดแลก Robux</p>
-              </div>
-              <div className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                <div className="text-3xl mb-2">🌈</div>
-                <h4 className="text-white font-semibold mb-2">Rainbow Six</h4>
-                <p className="text-purple-200 text-sm">โค้ดเกม Rainbow Six</p>
-              </div>
-            </div>
-            
+        {/* Shop Promotion Section */}
+        <div className="mt-8 text-center">
+          <div className="bg-gradient-to-r from-orange-500/20 to-yellow-500/20 backdrop-blur-xl rounded-3xl p-6 border border-orange-400/30">
+            <h3 className="text-xl font-bold text-white mb-3">🛒 ต้องการซื้อเพิ่มเติม?</h3>
+            <p className="text-orange-200 mb-4">
+              ถ้าอยากเติมโรบัคหรือซื้อไก่ตันถูกๆ ซื้อได้ที่เว็บ
+            </p>
             <Button 
               onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
-              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105 mb-8"
+              className="bg-gradient-to-r from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700 text-white px-6 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
             >
               🛒 ไปยังร้านค้าออนไลน์
             </Button>
           </div>
         </div>
 
-        {/* Contact Section */}
-        <div className="mt-8 text-center">
-          <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10">
-            <h3 className="text-2xl font-bold text-white mb-4">📞 ต้องการความช่วยเหลือ?</h3>
-            <p className="text-purple-200 mb-6">ติดต่อเราได้ผ่าน Facebook เพื่อรับบริการและคำแนะนำ</p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Button 
-                onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
-                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-                📱 ติดต่อ Lemon Shop
-              </Button>
-              
-
-              
-              <Button 
-                onClick={() => window.open('/queue-status', '_blank')}
-                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔍 เช็คสถานะคิว
-              </Button>
-              
-              <Button 
-                onClick={async () => {
-                  try {
-                    console.log('🧪 เริ่มทดสอบระบบ...');
-                    
-                    // ทดสอบการเชื่อมต่อฐานข้อมูล
-                    const isConnected = await testQueueConnection();
-                    if (!isConnected) {
-                      toast.error('❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
-                      return;
-                    }
-                    
-                    // ทดสอบการสร้างหมายเลขคิว
-                    const canGenerate = await testQueueNumberGeneration();
-                    if (!canGenerate) {
-                      toast.error('❌ ไม่สามารถสร้างหมายเลขคิวได้');
-                      return;
-                    }
-                    
-                    // ทดสอบการสร้างคิวจริง
-                    console.log('🧪 ทดสอบการสร้างคิว...');
-                    const testQueueData = {
-                      contact_info: 'ชื่อ: Test User | เบอร์โทร: 0123456789',
-                      product_type: 'robux',
-                      status: 'waiting',
-                      estimated_wait_time: 15
-                    };
-                    
-                    const { data: testQueue, error: testQueueError } = await supabase
-                      .from('queue_items')
-                      .insert(testQueueData)
-                      .select()
-                      .single();
-                      
-                    if (testQueueError) {
-                      console.error('❌ การสร้างคิวทดสอบล้มเหลว:', testQueueError);
-                      toast.error(`❌ การสร้างคิวล้มเหลว: ${testQueueError.message}`);
-                      return;
-                    }
-                    
-                    console.log('✅ สร้างคิวทดสอบสำเร็จ:', testQueue);
-                    toast.success(`✅ ระบบคิวพร้อมใช้งาน! ทดสอบสร้างคิว #${testQueue.queue_number} สำเร็จ`);
-                    
-                    // ลบคิวทดสอบทันที
-                    setTimeout(async () => {
-                      try {
-                        const { error: deleteError } = await supabase
-                          .from('queue_items')
-                          .delete()
-                          .eq('id', testQueue.id);
-                          
-                        if (deleteError) {
-                          console.error('❌ ไม่สามารถลบคิวทดสอบได้:', deleteError);
-                        } else {
-                          console.log('🗑️ ลบคิวทดสอบสำเร็จ');
-                        }
-                      } catch (deleteError) {
-                        console.error('❌ ไม่สามารถลบคิวทดสอบได้:', deleteError);
-                      }
-                    }, 2000);
-                    
-                  } catch (error) {
-                    console.error('❌ ข้อผิดพลาดในการทดสอบ:', error);
-                    toast.error(`❌ ข้อผิดพลาด: ${error instanceof Error ? error.message : 'ไม่ทราบสาเหตุ'}`);
-                  }
-                }}
-                className="bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white px-8 py-3 rounded-full shadow-lg transition-all transform hover:scale-105"
-              >
-                🔧 ทดสอบระบบคิว
-              </Button>
-              
-              <div className="text-purple-200 text-sm">
-                <p>⏰ เปิดบริการ: 24 ชั่วโมง</p>
-                <p>💬 ตอบกลับภายใน 5-10 นาที</p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Popup แสดงหมายเลขคิว */}
@@ -1893,6 +1833,40 @@ export default function Home() {
               ปิด
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advertisement Popup */}
+      <Dialog open={showAdPopup} onOpenChange={setShowAdPopup}>
+        <DialogContent className="sm:max-w-lg bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl p-0 overflow-hidden">
+          <div className="relative">
+            {/* Close Button */}
+            <button
+              onClick={handleCloseAdPopup}
+              className="absolute top-4 right-4 z-10 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-all"
+            >
+              ✕
+            </button>
+            
+            {/* Ad Content */}
+            {adData && (
+              <div 
+                className="cursor-pointer"
+                onClick={handleAdClick}
+              >
+                <img 
+                  src={adData.image_url} 
+                  alt={adData.title}
+                  className="w-full h-auto object-cover"
+                />
+                {adData.title && (
+                  <div className="p-4 bg-gradient-to-r from-orange-500 to-yellow-500 text-white">
+                    <h3 className="font-bold text-lg text-center">{adData.title}</h3>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

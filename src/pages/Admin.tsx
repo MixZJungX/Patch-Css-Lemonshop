@@ -19,7 +19,7 @@ import QueueManager from '@/components/QueueManager';
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'advertisements'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
@@ -46,6 +46,11 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Array<{ id: string; title?: string; content: string; type?: 'info' | 'warning' | 'critical'; link?: string; is_active?: boolean; created_at?: string }>>([]);
   const [newAnnouncement, setNewAnnouncement] = useState<{ title: string; content: string; type: 'info' | 'warning' | 'critical'; link: string; is_active: boolean }>({ title: '', content: '', type: 'info', link: '', is_active: true });
+  
+  // Advertisement states
+  const [advertisements, setAdvertisements] = useState<Array<{ id: string; title: string; image_url: string; link_url?: string; is_active: boolean; created_at?: string }>>([]);
+  const [newAd, setNewAd] = useState({ title: '', image_url: '', link_url: '' });
+  const [uploadingAd, setUploadingAd] = useState(false);
 
   // Form states
   const [newCode, setNewCode] = useState({ code: '', robux_value: '' });
@@ -233,11 +238,12 @@ export default function Admin() {
     try {
       // Try to load from Supabase first
       try {
-        const [requestsRes, codesRes, accountsRes, rainbowCodesRes] = await Promise.all([
+        const [requestsRes, codesRes, accountsRes, rainbowCodesRes, adsRes] = await Promise.all([
           supabase.from('app_284beb8f90_redemption_requests').select('*').order('created_at', { ascending: false }),
           supabase.from('app_284beb8f90_redemption_codes').select('*').order('created_at', { ascending: false }),
           supabase.from('app_284beb8f90_chicken_accounts').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_284beb8f90_rainbow_codes').select('*').order('created_at', { ascending: false })
+          supabase.from('app_284beb8f90_rainbow_codes').select('*').order('created_at', { ascending: false }),
+          supabase.from('app_284beb8f90_advertisements').select('*').order('created_at', { ascending: false })
         ]);
 
         setRequests(requestsRes.data || []);
@@ -259,6 +265,7 @@ export default function Admin() {
         }
 
         setCodes(allCodes);
+        setAdvertisements(adsRes.data || []);
 
         // Load announcements (active and inactive)
         try {
@@ -1104,11 +1111,12 @@ export default function Admin() {
               { key: 'rainbow', label: '🎮 Rainbow Six', count: rainbowRequests.length },
               { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 },
               { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length },
+              { key: 'advertisements', label: '🎨 โฆษณา', count: advertisements.filter(a => a.is_active).length },
               { key: 'queue', label: '🎯 ระบบคิว', count: 0 },
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue')}
+                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'advertisements' | 'queue')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -2446,6 +2454,198 @@ RBX005,3600`;
       {activeTab === 'queue' && (
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20">
           <QueueManager />
+        </div>
+      )}
+
+      {/* Advertisements Tab */}
+      {activeTab === 'advertisements' && (
+        <div className="space-y-6">
+          {/* Add Advertisement Form */}
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+            <CardHeader>
+              <CardTitle className="text-white">🎨 เพิ่มโฆษณาใหม่</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-white">ชื่อโฆษณา</Label>
+                <Input
+                  value={newAd.title}
+                  onChange={(e) => setNewAd({ ...newAd, title: e.target.value })}
+                  placeholder="เช่น: โปรโมชั่นพิเศษ"
+                  className="bg-white/10 border-white/20 text-white"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-white">URL รูปภาพ</Label>
+                <Input
+                  value={newAd.image_url}
+                  onChange={(e) => setNewAd({ ...newAd, image_url: e.target.value })}
+                  placeholder="https://example.com/image.png"
+                  className="bg-white/10 border-white/20 text-white"
+                />
+                {newAd.image_url && (
+                  <div className="mt-2">
+                    <img src={newAd.image_url} alt="Preview" className="max-w-xs rounded-lg border border-white/20" />
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <Label className="text-white">ลิงก์เมื่อคลิก (ไม่บังคับ)</Label>
+                <Input
+                  value={newAd.link_url}
+                  onChange={(e) => setNewAd({ ...newAd, link_url: e.target.value })}
+                  placeholder="https://lemonshop.rdcw.xyz/"
+                  className="bg-white/10 border-white/20 text-white"
+                />
+              </div>
+              
+              <Button
+                onClick={async () => {
+                  if (!newAd.title || !newAd.image_url) {
+                    toast.error('กรุณากรอกชื่อและ URL รูปภาพ');
+                    return;
+                  }
+                  
+                  setUploadingAd(true);
+                  try {
+                    const { error } = await supabase
+                      .from('app_284beb8f90_advertisements')
+                      .insert({
+                        title: newAd.title,
+                        image_url: newAd.image_url,
+                        link_url: newAd.link_url || null,
+                        is_active: true
+                      });
+                    
+                    if (error) throw error;
+                    
+                    toast.success('เพิ่มโฆษณาสำเร็จ');
+                    setNewAd({ title: '', image_url: '', link_url: '' });
+                    loadData();
+                  } catch (error) {
+                    console.error('Error adding advertisement:', error);
+                    toast.error('เกิดข้อผิดพลาดในการเพิ่มโฆษณา');
+                  } finally {
+                    setUploadingAd(false);
+                  }
+                }}
+                disabled={uploadingAd}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600"
+              >
+                {uploadingAd ? 'กำลังเพิ่ม...' : '➕ เพิ่มโฆษณา'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Advertisements List */}
+          <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+            <CardHeader>
+              <CardTitle className="text-white">รายการโฆษณา ({advertisements.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-white">ภาพตัวอย่าง</TableHead>
+                      <TableHead className="text-white">ชื่อ</TableHead>
+                      <TableHead className="text-white">ลิงก์</TableHead>
+                      <TableHead className="text-white">สถานะ</TableHead>
+                      <TableHead className="text-white">วันที่สร้าง</TableHead>
+                      <TableHead className="text-white">จัดการ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {advertisements.map((ad) => (
+                      <TableRow key={ad.id}>
+                        <TableCell>
+                          <img 
+                            src={ad.image_url} 
+                            alt={ad.title}
+                            className="w-20 h-20 object-cover rounded-lg border border-white/20"
+                          />
+                        </TableCell>
+                        <TableCell className="text-white">{ad.title}</TableCell>
+                        <TableCell className="text-white/70 text-xs">
+                          {ad.link_url ? (
+                            <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
+                              {ad.link_url.substring(0, 30)}...
+                            </a>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={ad.is_active ? 'bg-green-600' : 'bg-gray-600'}>
+                            {ad.is_active ? '✅ เปิดใช้งาน' : '❌ ปิดใช้งาน'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-white/70 text-xs">
+                          {ad.created_at ? new Date(ad.created_at).toLocaleDateString('th-TH') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase
+                                    .from('app_284beb8f90_advertisements')
+                                    .update({ is_active: !ad.is_active })
+                                    .eq('id', ad.id);
+                                  
+                                  if (error) throw error;
+                                  
+                                  toast.success(ad.is_active ? 'ปิดใช้งานโฆษณา' : 'เปิดใช้งานโฆษณา');
+                                  loadData();
+                                } catch (error) {
+                                  toast.error('เกิดข้อผิดพลาด');
+                                }
+                              }}
+                              className={ad.is_active ? 'bg-yellow-600' : 'bg-green-600'}
+                            >
+                              {ad.is_active ? '⏸️ ปิด' : '▶️ เปิด'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                if (!confirm('ต้องการลบโฆษณานี้?')) return;
+                                
+                                try {
+                                  const { error } = await supabase
+                                    .from('app_284beb8f90_advertisements')
+                                    .delete()
+                                    .eq('id', ad.id);
+                                  
+                                  if (error) throw error;
+                                  
+                                  toast.success('ลบโฆษณาสำเร็จ');
+                                  loadData();
+                                } catch (error) {
+                                  toast.error('เกิดข้อผิดพลาดในการลบ');
+                                }
+                              }}
+                              className="bg-red-600"
+                            >
+                              🗑️ ลบ
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              
+              {advertisements.length === 0 && (
+                <div className="text-center text-white/70 py-8">
+                  ยังไม่มีโฆษณา กรุณาเพิ่มโฆษณาใหม่
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
