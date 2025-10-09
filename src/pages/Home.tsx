@@ -266,19 +266,31 @@ export default function Home() {
     setIsSubmitting(true);
     
     try {
-      // Check in Supabase directly for accurate status
-      const { data: codeData, error: codeError } = await supabase
+      // First, check if the code exists at all (regardless of status)
+      const { data: codeCheck, error: checkError } = await supabase
         .from('app_284beb8f90_redemption_codes')
         .select('*')
         .ilike('code', redeemCode.trim())
-        .eq('status', 'available')
-        .single();
+        .maybeSingle();
 
-      if (codeError || !codeData) {
-        toast.error("โค้ดไม่ถูกต้องหรือถูกใช้แล้ว");
+      if (checkError) {
+        throw checkError;
+      }
+
+      // If code doesn't exist in the system at all
+      if (!codeCheck) {
+        toast.error("ไม่พบโค้ดในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์");
         return;
       }
 
+      // Code exists, check if it's already used
+      if (codeCheck.status !== 'available') {
+        toast.error("โค้ดนี้ถูกใช้งานไปแล้ว - ไม่สามารถใช้ซ้ำได้");
+        return;
+      }
+
+      // Code exists and is available
+      const codeData = codeCheck;
       setValidatedCode(codeData);
       
       // ตรวจสอบว่าอ่านคำแนะนำแล้วหรือยัง
@@ -743,7 +755,7 @@ export default function Home() {
       }
 
       if (!foundAccount) {
-        toast.error("โค้ดไม่ถูกต้องหรือไม่พบ", { id: toastId });
+        toast.error("ไม่พบโค้ดในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์", { id: toastId });
         return;
       }
 

@@ -144,22 +144,33 @@ export default function RainbowSixRedemption() {
     setSuccess(false);
     
     try {
-      // First check if the code exists and is not used
-      const { data: codeData, error: fetchError } = await supabase
+      // First, check if the code exists at all (regardless of is_used status)
+      const { data: codeCheck, error: checkError } = await supabase
         .from("rainbow_six_redeem_codes")
         .select("*")
         .eq("code", redeemCode)
-        .eq("is_used", false)
-        .single();
+        .maybeSingle();
 
-      if (fetchError) {
-        if (fetchError.code === "PGRST116") {
-          setError("โค้ดไม่ถูกต้องหรือถูกใช้งานไปแล้ว");
-        } else {
-          throw fetchError;
-        }
+      if (checkError) {
+        throw checkError;
+      }
+
+      // If code doesn't exist in the system at all
+      if (!codeCheck) {
+        setError("ไม่พบโค้ดในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์");
+        setLoading(false);
         return;
       }
+
+      // Code exists, check if it's already used
+      if (codeCheck.is_used) {
+        setError("โค้ดนี้ถูกใช้งานไปแล้ว - ไม่สามารถใช้ซ้ำได้");
+        setLoading(false);
+        return;
+      }
+
+      // Code exists and is not used - proceed with redemption
+      const codeData = codeCheck;
 
       // Get current user information
       const { data: { user } } = await supabase.auth.getUser();
@@ -256,16 +267,16 @@ export default function RainbowSixRedemption() {
           </CardHeader>
           <CardContent className="p-4 md:p-6 space-y-4 md:space-y-6">
             {error && (
-              <Alert variant="destructive" className="mb-4 border-red-500/50 bg-red-500/10 backdrop-blur-md">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-red-300">{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-4 border-2 border-red-500 bg-red-500/20 backdrop-blur-md shadow-lg">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <AlertDescription className="text-white font-semibold text-base">{error}</AlertDescription>
               </Alert>
             )}
             
             {success && !showCodeDialog && (
-              <Alert className="mb-4 border-green-500/50 bg-green-500/10 backdrop-blur-md">
-                <CheckCircle2 className="h-4 w-4 text-green-400" />
-                <AlertDescription className="text-green-300">
+              <Alert className="mb-4 border-2 border-green-500 bg-green-500/20 backdrop-blur-md shadow-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-400" />
+                <AlertDescription className="text-white font-semibold text-base">
                   แลกรับโค้ดสำเร็จ!
                 </AlertDescription>
               </Alert>

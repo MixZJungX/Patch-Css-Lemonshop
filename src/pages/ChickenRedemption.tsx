@@ -38,6 +38,37 @@ export default function ChickenRedemption() {
     try {
       console.log("Searching for code:", redeemCode.trim());
       
+      // First, check if the code exists at all (regardless of status)
+      const { data: codeCheck, error: checkError } = await supabase
+        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+        .select("*")
+        .eq("code", redeemCode.trim())
+        .limit(1);
+
+      console.log("Code check result:", { codeCheck, checkError });
+
+      if (checkError) {
+        console.error("Check error:", checkError);
+        throw checkError;
+      }
+
+      // If code doesn't exist in the system at all
+      if (!codeCheck || codeCheck.length === 0) {
+        setError('ไม่พบรหัสในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Code exists, check its status
+      const existingCode = codeCheck[0];
+      
+      if (existingCode.status !== 'available') {
+        setError('รหัสนี้ถูกใช้งานไปแล้ว - ไม่สามารถใช้ซ้ำได้');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Now get the available account
       const { data: matchingAccount, error: findError } = await supabase
         .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
         .select("*")
@@ -53,7 +84,7 @@ export default function ChickenRedemption() {
       }
 
       if (!matchingAccount || matchingAccount.length === 0) {
-        setError('รหัสแลกบัญชีไม่ถูกต้องหรือถูกใช้งานไปแล้ว');
+        setError('เกิดข้อผิดพลาดในการดึงข้อมูล โปรดลองอีกครั้ง');
         setIsSubmitting(false);
         return;
       }
@@ -117,16 +148,16 @@ export default function ChickenRedemption() {
           </CardHeader>
           <CardContent className="p-4 md:p-6">
             {error && (
-              <Alert variant="destructive" className="mb-4 border-red-500/50 bg-red-500/10 backdrop-blur-md">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-red-300">{error}</AlertDescription>
+              <Alert variant="destructive" className="mb-4 border-2 border-red-500 bg-red-500/20 backdrop-blur-md shadow-lg">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <AlertDescription className="text-white font-semibold text-base">{error}</AlertDescription>
               </Alert>
             )}
 
             {success && (
-              <Alert className="mb-4 border-green-500/50 bg-green-500/10 backdrop-blur-md">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                <AlertDescription className="text-green-300">
+              <Alert className="mb-4 border-2 border-green-500 bg-green-500/20 backdrop-blur-md shadow-lg">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <AlertDescription className="text-white font-semibold text-base">
                   แลกบัญชีสำเร็จ! กรุณาเก็บข้อมูลบัญชีไว้เป็นความลับ
                 </AlertDescription>
               </Alert>
