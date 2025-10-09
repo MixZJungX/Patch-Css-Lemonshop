@@ -1,6 +1,7 @@
 import { showCustomerData, searchCustomerData, analyzeDataPatterns } from './showCustomerData';
 import { showSearchableNames, searchSpecificName } from './showSearchableNames';
 import { debugTammamConol78, findSimilarNames } from './debugTammamConol78';
+import { searchCode100RLJHF210F } from './searchCode';
 
 // ฟังก์ชันสำหรับเรียกใช้ใน console
 export const setupConsoleHelpers = () => {
@@ -12,6 +13,7 @@ export const setupConsoleHelpers = () => {
   (window as any).searchSpecificName = searchSpecificName;
   (window as any).debugTammamConol78 = debugTammamConol78;
   (window as any).findSimilarNames = findSimilarNames;
+  (window as any).searchCode100RLJHF210F = searchCode100RLJHF210F;
   
   console.log('🔧 Console helpers loaded!');
   console.log('📋 Available functions:');
@@ -22,6 +24,7 @@ export const setupConsoleHelpers = () => {
   console.log('   - searchSpecificName("searchTerm") - ค้นหาชื่อเฉพาะ');
   console.log('   - debugTammamConol78() - ตรวจสอบข้อมูล TammamConol78');
   console.log('   - findSimilarNames() - ค้นหาชื่อที่คล้ายกัน');
+  console.log('   - searchCode100RLJHF210F() - ค้นหาโค้ด 100RLJHF210F ในทุกตาราง');
   console.log('');
   console.log('💡 Example usage:');
   console.log('   showCustomerData()');
@@ -29,6 +32,7 @@ export const setupConsoleHelpers = () => {
   console.log('   analyzeDataPatterns()');
   console.log('   debugTammamConol78()');
   console.log('   findSimilarNames()');
+  console.log('   searchCode100RLJHF210F()');
 };
 
 // เรียกใช้ทันทีเมื่อ import
