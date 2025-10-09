@@ -24,6 +24,9 @@ export default function Admin() {
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
   const [activeRainbowFilter, setActiveRainbowFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
+  const [accountSearchTerm, setAccountSearchTerm] = useState('');
+  const [activeAccountFilter, setActiveAccountFilter] = useState<'all' | 'available' | 'used'>('all');
+  const [filteredAccounts, setFilteredAccounts] = useState<ChickenAccount[]>([]);
   const [requests, setRequests] = useState<RedemptionRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<RedemptionRequest[]>([]);
   const [codes, setCodes] = useState<RedemptionCode[]>([]);
@@ -232,6 +235,28 @@ export default function Admin() {
 
     setFilteredRainbowRequests(filtered);
   }, [rainbowRequests, activeRainbowFilter, rainbowSearchTerm]);
+
+  // Filter accounts based on search and filter
+  useEffect(() => {
+    let filtered = accounts;
+    
+    // Apply status filter
+    if (activeAccountFilter !== 'all') {
+      filtered = filtered.filter(acc => acc.status === activeAccountFilter);
+    }
+    
+    // Apply search
+    if (accountSearchTerm.trim()) {
+      const searchLower = accountSearchTerm.toLowerCase();
+      filtered = filtered.filter(acc =>
+        acc.code?.toLowerCase().includes(searchLower) ||
+        acc.username?.toLowerCase().includes(searchLower) ||
+        acc.description?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    setFilteredAccounts(filtered);
+  }, [accounts, activeAccountFilter, accountSearchTerm]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1440,6 +1465,43 @@ export default function Admin() {
 
         {activeTab === 'accounts' && (
           <div className="space-y-6">
+            {/* Search and Filter Bar */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50 w-4 h-4" />
+                    <Input
+                      placeholder="ค้นหาโค้ด, ชื่อผู้ใช้, คำอธิบาย..."
+                      value={accountSearchTerm}
+                      onChange={(e) => setAccountSearchTerm(e.target.value)}
+                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setActiveAccountFilter('all')}
+                      className={`${activeAccountFilter === 'all' ? 'bg-purple-600' : 'bg-white/10'} border-white/20 text-white`}
+                    >
+                      ทั้งหมด ({accounts.length})
+                    </Button>
+                    <Button
+                      onClick={() => setActiveAccountFilter('available')}
+                      className={`${activeAccountFilter === 'available' ? 'bg-green-600' : 'bg-white/10'} border-white/20 text-white`}
+                    >
+                      ✅ พร้อมใช้ ({accounts.filter(a => a.status === 'available').length})
+                    </Button>
+                    <Button
+                      onClick={() => setActiveAccountFilter('used')}
+                      className={`${activeAccountFilter === 'used' ? 'bg-gray-600' : 'bg-white/10'} border-white/20 text-white`}
+                    >
+                      ❌ ใช้แล้ว ({accounts.filter(a => a.status === 'used').length})
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Add New Account */}
             <Card className="bg-white/10 backdrop-blur-xl border-white/20">
               <CardHeader>
@@ -1562,31 +1624,11 @@ export default function Admin() {
             {/* Accounts List */}
             <Card className="bg-white/10 backdrop-blur-xl border-white/20">
               <CardHeader>
-                <CardTitle className="text-white">🐔 รายการบัญชีไก่ตัน</CardTitle>
+                <CardTitle className="text-white">
+                  🐔 รายการบัญชีไก่ตัน ({filteredAccounts.length} / {accounts.length})
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Search Bar */}
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50 w-4 h-4" />
-                    <Input
-                      placeholder="ค้นหาบัญชีไก่ตัน (รหัส, ชื่อผู้ใช้, รหัสผ่าน, ประเภท, หรือสถานะ)"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  {searchTerm && (
-                    <Button
-                      onClick={() => setSearchTerm('')}
-                      variant="outline"
-                      size="sm"
-                      className="border-white/20 text-white hover:bg-white/10"
-                    >
-                      ล้างการค้นหา
-                    </Button>
-                  )}
-                </div>
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -1600,17 +1642,7 @@ export default function Admin() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {accounts.filter(account => {
-                        if (!searchTerm) return true;
-                        const searchLower = searchTerm.toLowerCase();
-                        return (
-                          account.code.toLowerCase().includes(searchLower) ||
-                          account.username.toLowerCase().includes(searchLower) ||
-                          account.password.toLowerCase().includes(searchLower) ||
-                          (account.product_type && account.product_type.toLowerCase().includes(searchLower)) ||
-                          account.status.toLowerCase().includes(searchLower)
-                        );
-                      }).map(account => (
+                      {filteredAccounts.map(account => (
                         <TableRow key={account.id} className="border-white/10">
                           <TableCell className="text-white font-mono text-xs">{account.code}</TableCell>
                           <TableCell className="text-white">{account.username}</TableCell>
