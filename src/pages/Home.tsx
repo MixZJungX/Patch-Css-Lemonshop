@@ -1766,7 +1766,7 @@ export default function Home() {
 
       {/* Popup แสดงหมายเลขคิว */}
       <Dialog open={showQueueNumberPopup} onOpenChange={setShowQueueNumberPopup}>
-        <DialogContent className="sm:max-w-md bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+        <DialogContent className="sm:max-w-lg bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-green-800 text-center">
               🎉 แลกโค้ดสำเร็จ!
@@ -1776,30 +1776,82 @@ export default function Home() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="text-center py-6">
-            <div className="text-8xl font-bold text-green-600 mb-4">
+          <div className="text-center py-4">
+            <div className="text-7xl sm:text-8xl font-bold text-green-600 mb-4">
               #{currentQueueNumber}
             </div>
-            <p className="text-green-700 mb-4">
+            <p className="text-green-700 mb-2 font-semibold">
               กรุณาจดหมายเลขคิวนี้ไว้เพื่อตรวจสอบสถานะ
             </p>
-            
-            <div className="space-y-3">
-              <Button 
-                onClick={() => window.open('/queue-status', '_blank')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                🔍 เช็คสถานะคิว
-              </Button>
+          </div>
+
+          {/* คำเตือนสำคัญ */}
+          <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl p-4 mb-4 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="text-3xl flex-shrink-0">⚠️</div>
+              <div className="space-y-2">
+                <p className="font-bold text-lg">📢 สำคัญมาก! กรุณาอ่าน</p>
+                <div className="text-sm space-y-1 bg-white/20 rounded-lg p-3">
+                  <p className="font-semibold">✋ กรุณาอย่ารีบรีวิว หรือไปแสดงความคิดเห็นใน TikTok</p>
+                  <p className="font-semibold">👉 ต้องติดตามสถานะคิวของคุณก่อน!</p>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* เหตุผลที่ต้องติดตาม */}
+          <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-4">
+            <div className="flex items-start gap-2 mb-2">
+              <span className="text-2xl">🔍</span>
+              <h3 className="font-bold text-yellow-800 text-lg">ทำไมต้องติดตามคิว?</h3>
+            </div>
+            <div className="space-y-2 text-sm text-yellow-900 pl-8">
+              <p>• <span className="font-bold">บัญชีอาจติดยืนยันเมล</span> - ต้องแก้ไขก่อนจะได้ Robux</p>
+              <p>• <span className="font-bold">บัญชีอาจติดยืนยันโทรศัพท์</span> - ต้องล็อคเอาท์</p>
+              <p>• <span className="font-bold">ชื่อหรือรหัสผ่านอาจผิด</span> - ต้องส่งใหม่</p>
+              <p>• <span className="font-bold">คิวอาจมีปัญหา</span> - ระบบจะแจ้งวิธีแก้ไข</p>
+            </div>
+          </div>
+
+          {/* คำแนะนำ */}
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 mb-4">
+            <div className="flex items-start gap-2 mb-2">
+              <span className="text-2xl">💡</span>
+              <h3 className="font-bold text-blue-800 text-lg">สิ่งที่คุณควรทำ:</h3>
+            </div>
+            <div className="space-y-2 text-sm text-blue-900 pl-8">
+              <p className="font-bold">1️⃣ กดปุ่ม "เช็คสถานะคิว" ด้านล่าง</p>
+              <p className="font-bold">2️⃣ ใส่หมายเลขคิว #{currentQueueNumber} เพื่อตรวจสอบ</p>
+              <p className="font-bold">3️⃣ ติดตามสถานะทุก 10-15 นาที</p>
+              <p className="font-bold">4️⃣ หากมีปัญหา ระบบจะแจ้งวิธีแก้ไข</p>
+              <p className="font-bold">5️⃣ หลังได้รับ Robux แล้ว ค่อยรีวิว</p>
+            </div>
+          </div>
+
+          {/* ปุ่มเช็คสถานะ */}
+          <div className="space-y-3">
+            <Button 
+              onClick={() => {
+                setShowQueueNumberPopup(false);
+                window.open('/queue-status', '_blank');
+              }}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 text-lg shadow-lg"
+            >
+              🔍 เช็คสถานะคิวตอนนี้เลย
+            </Button>
+            
+            <p className="text-center text-xs text-gray-600">
+              💬 หากมีปัญหา กรุณาติดต่อแอดมินทางไลน์: <span className="font-bold">mixzis</span>
+            </p>
+          </div>
           
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button 
               onClick={() => setShowQueueNumberPopup(false)}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              variant="outline"
+              className="w-full border-gray-300 text-gray-700 hover:bg-gray-100"
             >
-              ปิด
+              ปิดหน้าต่าง (แต่อย่าลืมเช็คสถานะนะ!)
             </Button>
           </DialogFooter>
         </DialogContent>
