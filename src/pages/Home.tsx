@@ -945,8 +945,6 @@ export default function Home() {
           </Card>
         </div>
 
-
-
         <div className="flex justify-center mb-6 md:mb-8 px-4">
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl md:rounded-3xl p-1 md:p-2 border border-white/20 w-full max-w-md">
             <div className="grid grid-cols-3 gap-1">
@@ -1759,6 +1757,188 @@ export default function Home() {
             >
               🛒 ไปยังร้านค้าออนไลน์
             </Button>
+          </div>
+        </div>
+
+        {/* Video Tutorial Section */}
+        <div className="mt-8 mb-8 max-w-3xl mx-auto">
+          <Card className="bg-gradient-to-r from-red-500/20 to-pink-500/20 backdrop-blur-xl border-red-400/30 rounded-3xl overflow-hidden">
+            <CardHeader className="text-center pb-3">
+              <CardTitle className="text-xl text-white flex items-center justify-center gap-2">
+                <span>📹</span>
+                <span>วิดีโอสอนใช้งานสินค้า</span>
+              </CardTitle>
+              <p className="text-red-100 text-sm">
+                ดูวิธีการใช้งานระบบแลกของรางวัลและวิธีรับสินค้าอย่างละเอียด
+              </p>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="relative w-full" style={{ paddingBottom: '42%' }}>
+                <iframe
+                  className="absolute top-0 left-0 w-full h-full rounded-xl shadow-lg"
+                  src="https://www.youtube.com/embed/MTK518hacII"
+                  title="วิดีโอสอนใช้งานสินค้า Lemon Shop"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+              <div className="mt-3 text-center">
+                <Button 
+                  onClick={() => window.open('https://youtu.be/MTK518hacII', '_blank')}
+                  className="bg-red-600/80 hover:bg-red-700 text-white px-4 py-2 rounded-full text-xs transition-all"
+                >
+                  <svg className="w-4 h-4 mr-1 inline" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+                  </svg>
+                  เปิดดูบน YouTube
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Articles Section */}
+        <div className="mt-8 mb-8">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+              <span>📚</span>
+              <span>บทความและคำแนะนำ</span>
+            </h2>
+            <p className="text-purple-200 text-sm">อ่านเพิ่มเติมเพื่อใช้งานระบบได้อย่างมีประสิทธิภาพ</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Article 1 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">🎮</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  วิธีการเตรียมบัญชี Roblox ก่อนรับ Robux
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  คำแนะนำสำคัญในการเตรียมบัญชี Roblox ให้พร้อมสำหรับการรับ Robux เพื่อป้องกันปัญหาติด OTP หรือการยืนยันตัวตน
+                </p>
+                <div className="space-y-2 text-xs text-purple-300">
+                  <p>✓ เปลี่ยนรหัสผ่านใหม่</p>
+                  <p>✓ ทำให้อีเมลขึ้นแดง</p>
+                  <p>✓ ปิด 2-Step Verification</p>
+                  <p>✓ ออกจากอุปกรณ์อื่น</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Article 2 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">⏱️</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  ระยะเวลาในการรับสินค้า
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  ทำความเข้าใจเกี่ยวกับระยะเวลาในการดำเนินการและการรับสินค้าแต่ละประเภท
+                </p>
+                <div className="space-y-2 text-xs text-purple-300">
+                  <p>🎮 Robux: 5 นาที - 3 ชั่วโมง</p>
+                  <p>🐔 บัญชีไก่ตัน: ทันที</p>
+                  <p>🌈 Rainbow Six: 24 ชั่วโมง</p>
+                  <p>📱 ติดตามสถานะผ่านระบบคิว</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Article 3 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">🔐</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  การรักษาความปลอดภัยบัญชี
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  คำแนะนำในการรักษาความปลอดภัยของบัญชีหลังจากได้รับสินค้าแล้ว
+                </p>
+                <div className="space-y-2 text-xs text-purple-300">
+                  <p>✓ เปลี่ยนรหัสผ่านทันทีหลังได้ Robux</p>
+                  <p>✓ ใส่อีเมลจริงที่ใช้งานได้</p>
+                  <p>✓ เปิด 2-Step Verification</p>
+                  <p>✓ อย่าแชร์ข้อมูลบัญชีกับผู้อื่น</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Article 4 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">❓</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  แก้ไขปัญหาที่พบบ่อย
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  วิธีแก้ไขปัญหาที่พบบ่อยในการใช้งานระบบแลกของรางวัล
+                </p>
+                <div className="space-y-3 text-xs text-purple-300">
+                  <div className="bg-white/5 p-3 rounded-lg">
+                    <p className="font-semibold text-yellow-300 mb-1">💡 ไม่พบโค้ดในระบบ</p>
+                    <p className="ml-4 leading-relaxed">
+                      <span className="block">• แอดมินยังไม่ได้ลงของหรือ</span>
+                      <span className="block">• ความผิดพลาดจากระบบ</span>
+                      <span className="block">• ลูกค้าใส่โค้ดผิด/เข้าใจตัวอักษรผิด</span>
+                      <span className="block text-green-300 mt-1">→ กรุณาติดต่อไลน์: mixzis</span>
+                    </p>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg">
+                    <p className="font-semibold text-red-300 mb-1">💡 โค้ดถูกใช้งานแล้ว</p>
+                    <p className="ml-4 leading-relaxed">
+                      โค้ดนี้ถูกใช้ไปแล้ว ไม่สามารถใช้ซ้ำได้
+                    </p>
+                  </div>
+                  <div className="bg-white/5 p-3 rounded-lg">
+                    <p className="font-semibold text-orange-300 mb-1">💡 บัญชีติดยืนยันตัวตน</p>
+                    <p className="ml-4 leading-relaxed">
+                      ต้องทำตามขั้นตอนเตรียมบัญชี Roblox ก่อนแลกโค้ด
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Article 5 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">📋</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  ระบบคิวและการติดตามสถานะ
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  เรียนรู้วิธีการใช้งานระบบคิวและการติดตามสถานะคำขอของคุณ
+                </p>
+                <div className="space-y-2 text-xs text-purple-300">
+                  <p>✓ จดหมายเลขคิวให้ดี</p>
+                  <p>✓ ตรวจสอบสถานะทุก 10-15 นาที</p>
+                  <p>✓ ติดตามผ่านหน้า "เช็คสถานะคิว"</p>
+                  <p>✓ ระบบจะแจ้งหากมีปัญหา</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Article 6 */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20 hover:bg-white/15 transition-all cursor-pointer rounded-3xl overflow-hidden group">
+              <CardContent className="p-6">
+                <div className="text-4xl mb-4 text-center">⭐</div>
+                <h3 className="text-lg font-bold text-white mb-3 group-hover:text-purple-300 transition-colors">
+                  ทำไมต้องรีวิวหลังได้รับสินค้า
+                </h3>
+                <p className="text-purple-200 text-sm leading-relaxed mb-4">
+                  ความสำคัญของการให้คะแนนรีวิวหลังจากได้รับสินค้าเรียบร้อยแล้ว
+                </p>
+                <div className="space-y-2 text-xs text-purple-300">
+                  <p>⭐ ช่วยพัฒนาบริการให้ดีขึ้น</p>
+                  <p>⭐ สร้างความเชื่อมั่นให้ลูกค้าใหม่</p>
+                  <p>⭐ รีวิวบน Facebook Page</p>
+                  <p>⭐ ใช้เวลาไม่ถึง 1 นาที</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
