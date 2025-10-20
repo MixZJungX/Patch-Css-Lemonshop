@@ -168,7 +168,8 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
   // ฟังก์ชันรวมข้อมูล
   const enrichQueueData = (queueItems: any[]) => {
     return queueItems?.map(queueItem => {
-      const matchingRedemption = redemptionData?.find(redemption => {
+      // หา redemption requests ทั้งหมดที่ match
+      const allMatchingRedemptions = redemptionData?.filter(redemption => {
         const queueUsername = queueItem.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
         
         // จับคู่แบบหลายวิธี
@@ -180,7 +181,17 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
                 redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
                (queueItem.contact_info.includes('Code:') && redemption.assigned_code && 
                 queueItem.contact_info.includes(redemption.assigned_code));
-      });
+      }) || [];
+
+      // เลือก redemption ที่เวลาใกล้เคียงที่สุด
+      const matchingRedemption = allMatchingRedemptions.length > 0
+        ? allMatchingRedemptions.reduce((closest, current) => {
+            const queueTime = new Date(queueItem.created_at).getTime();
+            const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
+            const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
+            return currentTimeDiff < closestTimeDiff ? current : closest;
+          })
+        : null;
 
       // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
       // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"
@@ -255,8 +266,8 @@ export const checkQueueStatus = async (queueNumber: number): Promise<QueueItem |
     // ไม่ throw error แต่ใช้ empty array แทน
   }
 
-  // หา redemption request ที่ตรงกัน
-  const matchingRedemption = redemptionData?.find(redemption => {
+  // หา redemption requests ทั้งหมดที่ตรงกัน
+  const allMatchingRedemptions = redemptionData?.filter(redemption => {
     const queueUsername = queueData.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
     
     // จับคู่แบบหลายวิธี
@@ -268,7 +279,17 @@ export const checkQueueStatus = async (queueNumber: number): Promise<QueueItem |
             redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
            (queueData.contact_info.includes('Code:') && redemption.assigned_code && 
             queueData.contact_info.includes(redemption.assigned_code));
-  });
+  }) || [];
+
+  // เลือก redemption ที่เวลาใกล้เคียงที่สุด
+  const matchingRedemption = allMatchingRedemptions.length > 0
+    ? allMatchingRedemptions.reduce((closest, current) => {
+        const queueTime = new Date(queueData.created_at).getTime();
+        const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
+        const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
+        return currentTimeDiff < closestTimeDiff ? current : closest;
+      })
+    : null;
 
   // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
   // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"
@@ -428,8 +449,8 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
 
   // รวมข้อมูลโดยการจับคู่จาก contact_info หรือ customer_name
   const enrichedData = queueData?.map(queueItem => {
-    // หา redemption request ที่ตรงกัน - ใช้วิธีที่เร็วขึ้น
-    const matchingRedemption = redemptionData?.find(redemption => {
+    // หา redemption requests ทั้งหมดที่ตรงกัน
+    const allMatchingRedemptions = redemptionData?.filter(redemption => {
       // จับคู่จาก username ใน contact_info
       const queueUsername = queueItem.contact_info?.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
       
@@ -449,7 +470,17 @@ export const getAllQueueItems = async (): Promise<QueueItem[]> => {
         (queueItem.contact_info?.includes('Code:') && redemption.assigned_code && 
          queueItem.contact_info.includes(redemption.assigned_code))
       );
-    });
+    }) || [];
+
+    // เลือก redemption ที่เวลาใกล้เคียงที่สุด
+    const matchingRedemption = allMatchingRedemptions.length > 0
+      ? allMatchingRedemptions.reduce((closest, current) => {
+          const queueTime = new Date(queueItem.created_at).getTime();
+          const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
+          const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
+          return currentTimeDiff < closestTimeDiff ? current : closest;
+        })
+      : null;
 
     // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
     // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"

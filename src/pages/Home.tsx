@@ -15,7 +15,7 @@ import { addToQueue, testQueueConnection, testQueueNumberGeneration } from '@/li
 import '@/styles/notifications.css';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'redeem' | 'chicken' | 'rainbow'>('redeem');
+  const [activeTab, setActiveTab] = useState<'redeem' | 'rainbow'>('redeem');
   type Announcement = {
     id: string;
     title?: string;
@@ -266,41 +266,87 @@ export default function Home() {
     setIsSubmitting(true);
     
     try {
-      // First, check if the code exists at all (regardless of status)
-      const { data: codeCheck, error: checkError } = await supabase
-        .from('app_284beb8f90_redemption_codes')
-        .select('*')
-        .ilike('code', redeemCode.trim())
-        .maybeSingle();
+      console.log('🔍 กำลังค้นหาโค้ด:', redeemCode.trim());
+      
+      // ค้นหาจากทั้ง 2 ตารางพร้อมกัน (Robux และ Chicken)
+      const [robuxResult, chickenResult] = await Promise.all([
+        // 1. ค้นหาใน Robux codes
+        supabase
+          .from('app_284beb8f90_redemption_codes')
+          .select('*')
+          .ilike('code', redeemCode.trim())
+          .maybeSingle(),
+        
+        // 2. ค้นหาใน Chicken accounts
+        supabase
+          .from('app_284beb8f90_chicken_accounts')
+          .select('*')
+          .ilike('code', redeemCode.trim())
+          .limit(1)
+      ]);
 
-      if (checkError) {
-        throw checkError;
+      console.log('📊 ผลการค้นหา:', {
+        robux: robuxResult.data ? '✅ เจอ' : '❌ ไม่เจอ',
+        chicken: (chickenResult.data && chickenResult.data.length > 0) ? '✅ เจอ' : '❌ ไม่เจอ'
+      });
+
+      // ตรวจสอบว่าเจอโค้ดในตารางไหน
+      let codeData = null;
+      let codeType = null;
+
+      if (robuxResult.data) {
+        console.log('✅ พบโค้ด Robux');
+        codeData = robuxResult.data;
+        codeType = 'robux';
+        
+        // Check if Robux code has been used
+        if (codeData.status !== 'available') {
+          toast.error("โค้ด Robux นี้ถูกใช้งานไปแล้ว");
+          return;
+        }
+      } else if (chickenResult.data && chickenResult.data.length > 0) {
+        console.log('✅ พบโค้ดไก่ตัน');
+        codeData = chickenResult.data[0];
+        codeType = 'chicken';
+        
+        // ไก่ตัน: ไม่เช็ค status - ให้ใช้ได้ไม่จำกัดรอบ
+        console.log('🐔 ไก่ตันใช้ได้ไม่จำกัดรอบ - status:', codeData.status);
       }
 
-      // If code doesn't exist in the system at all
-      if (!codeCheck) {
+      // If code doesn't exist in either table
+      if (!codeData) {
         toast.error("ไม่พบโค้ดในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์");
         return;
       }
 
-      // Code exists, check if it's already used
-      if (codeCheck.status !== 'available') {
-        toast.error("โค้ดนี้ถูกใช้งานไปแล้ว - ไม่สามารถใช้ซ้ำได้");
-        return;
+      // ถ้าเป็นโค้ดไก่ตัน ให้แสดงข้อมูลบัญชีเลย
+      if (codeType === 'chicken') {
+        setValidatedChickenAccount(codeData);
+        setShowChickenRedeemPopup(true);
+        
+        // อัพเดทสถานะเป็น used
+        await supabase
+          .from('app_284beb8f90_chicken_accounts')
+          .update({ 
+            status: 'used',
+            used_by: 'anonymous_user',
+            used_at: new Date().toISOString()
+          })
+          .eq('id', codeData.id);
+        
+        toast.success("🐔 พบบัญชีไก่ตัน! กรุณาบันทึกข้อมูลทันที");
+      } else {
+        // ถ้าเป็น Robux ให้แสดงฟอร์มกรอกข้อมูล
+        setValidatedCode(codeData);
+        
+        if (!hasReadGuide) {
+          setShowRobloxGuide(true);
+          return;
+        }
+        
+        setShowRedeemPopup(true);
+        toast.success("โค้ดถูกต้อง! กรุณากรอกข้อมูลเพื่อรับ Robux");
       }
-
-      // Code exists and is available
-      const codeData = codeCheck;
-      setValidatedCode(codeData);
-      
-      // ตรวจสอบว่าอ่านคำแนะนำแล้วหรือยัง
-      if (!hasReadGuide) {
-        setShowRobloxGuide(true);
-        return;
-      }
-      
-      setShowRedeemPopup(true);
-      toast.success("โค้ดถูกต้อง! กรุณากรอกข้อมูลเพื่อรับ Robux");
 
     } catch (error) {
       console.error('Error validating code:', error);
@@ -947,7 +993,7 @@ export default function Home() {
 
         <div className="flex justify-center mb-6 md:mb-8 px-4">
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl md:rounded-3xl p-1 md:p-2 border border-white/20 w-full max-w-md">
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-2 gap-1">
               <Button
                 onClick={() => setActiveTab('redeem')}
                 className={`px-2 md:px-6 py-2 md:py-3 rounded-xl md:rounded-full transition-all text-xs md:text-sm ${
@@ -956,19 +1002,8 @@ export default function Home() {
                     : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <span className="hidden sm:inline">🎫 แลกโค้ด</span>
-                <span className="sm:hidden">🎫</span>
-              </Button>
-              <Button
-                onClick={() => setActiveTab('chicken')}
-                className={`px-2 md:px-6 py-2 md:py-3 rounded-xl md:rounded-full transition-all text-xs md:text-sm ${
-                  activeTab === 'chicken'
-                    ? 'bg-gradient-to-r from-orange-600 to-yellow-600 text-white shadow-lg'
-                    : 'bg-transparent text-white/70 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <span className="hidden sm:inline">🐔 แลกไก่ตัน</span>
-                <span className="sm:hidden">🐔</span>
+                <span className="hidden sm:inline">🎫 Robux & ไก่ตัน</span>
+                <span className="sm:hidden">🎫🐔</span>
               </Button>
               
               <Button
@@ -988,15 +1023,15 @@ export default function Home() {
 
         {/* Main Content Area */}
         <div className="max-w-4xl mx-auto">
-          {(activeTab === 'redeem' || activeTab === 'chicken') && (
+          {activeTab === 'redeem' && (
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-6 md:mb-8 rounded-2xl md:rounded-3xl">
               <CardHeader className="text-center p-4 md:p-6">
                 <CardTitle className="text-lg md:text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-2xl md:text-3xl">{activeTab === 'redeem' ? '💳' : '🐔'}</span>
-                  <span>{activeTab === 'redeem' ? 'แลกโค้ดรับ Robux' : 'แลกโค้ดรับบัญชีไก่ตัน'}</span>
+                  <span className="text-2xl md:text-3xl">💳🐔</span>
+                  <span>แลกโค้ดรับ Robux หรือไก่ตัน</span>
                 </CardTitle>
                 <p className="text-blue-200 text-sm md:text-base">
-                  {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับเพื่อแลกเป็น Robux' : 'ใส่โค้ดที่ได้รับเพื่อแลกบัญชีเกมไก่ตัน'}
+                  ใส่โค้ดที่ได้รับ - ระบบจะค้นหาอัตโนมัติ
                 </p>
               </CardHeader>
               <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
@@ -1020,29 +1055,29 @@ export default function Home() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-white text-sm font-medium mb-2">
-                      {activeTab === 'redeem' ? 'โค้ดที่ได้รับ' : 'โค้ดที่ได้รับ'}
+                      โค้ดที่ได้รับ (Robux หรือไก่ตัน)
                     </label>
                     <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
                       <Input
-                        value={activeTab === 'redeem' ? redeemCode : chickenRedeemCode}
-                        onChange={(e) => activeTab === 'redeem' ? setRedeemCode(e.target.value) : setChickenRedeemCode(e.target.value)}
-                        placeholder="ใส่โค้ดที่ได้รับ"
+                        value={redeemCode}
+                        onChange={(e) => setRedeemCode(e.target.value)}
+                        placeholder="ใส่โค้ดที่ได้รับ (รองรับทั้ง Robux และไก่ตัน)"
                         className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1 rounded-xl md:rounded-2xl h-12 text-base"
-                        onKeyPress={(e) => e.key === 'Enter' && (activeTab === 'redeem' ? validateCode() : handleChickenRedeemCode())}
+                        onKeyPress={(e) => e.key === 'Enter' && validateCode()}
                       />
                       <Button
-                        onClick={activeTab === 'redeem' ? validateCode : handleChickenRedeemCode}
-                        disabled={activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting}
-                        className={`bg-gradient-to-r rounded-xl md:rounded-full h-12 px-6 text-sm md:text-base ${activeTab === 'redeem' ? 'from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' : 'from-orange-600 to-yellow-600 hover:from-orange-700 hover:to-yellow-700'}`}
+                        onClick={validateCode}
+                        disabled={isSubmitting}
+                        className="bg-gradient-to-r rounded-xl md:rounded-full h-12 px-6 text-sm md:text-base from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                       >
-                        {(activeTab === 'redeem' ? isSubmitting : isChickenButtonSubmitting) ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
+                        {isSubmitting ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
                       </Button>
                     </div>
                   </div>
                   
                   <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl md:rounded-2xl p-3 md:p-4">
                     <p className="text-blue-100 text-xs md:text-sm leading-relaxed">
-                      <strong>💡 วิธีใช้:</strong> {activeTab === 'redeem' ? 'ใส่โค้ดที่ได้รับและกดตรวจสอบ หากโค้ดถูกต้อง จะมีหน้าต่างขึ้นมาให้ใส่ชื่อผู้ใช้และรหัสผ่าน Roblox เพื่อรับ Robux' : 'โค้ดที่ได้รับจะถูกตรวจสอบและแสดงข้อมูลบัญชีที่สามารถใช้งานได้ กรุณาเก็บข้อมูลบัญชีอย่างปลอดภัยหลังจากได้รับ'}
+                      <strong>💡 วิธีใช้:</strong> ใส่โค้ดที่ได้รับและกดตรวจสอบ ระบบจะหาอัตโนมัติว่าเป็นโค้ด Robux หรือไก่ตัน
                     </p>
                   </div>
 
