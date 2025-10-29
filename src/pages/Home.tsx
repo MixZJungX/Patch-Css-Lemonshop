@@ -2009,7 +2009,7 @@ export default function Home() {
                     </p>
                     <div className="bg-white rounded-lg p-3 border border-purple-200 mb-3">
                       <img 
-                        src="https://img5.pic.in.th/file/secure-sv1/Log-out-all-seesion.png"
+                        src="https://img2.pic.in.th/pic/Logout-all-seesion-.jpg"
                         alt="Log out all session Roblox"
                         className="w-full rounded-lg shadow-md mb-3"
                       />
@@ -2812,7 +2812,7 @@ export default function Home() {
                     </p>
                     <div className="bg-white rounded-lg p-3 border border-purple-200 mb-3">
                       <img 
-                        src="https://img5.pic.in.th/file/secure-sv1/Log-out-all-seesion.png"
+                        src="https://img2.pic.in.th/pic/Logout-all-seesion-.jpg"
                         alt="Log out all session Roblox"
                         className="w-full rounded-lg shadow-md mb-3"
                       />
