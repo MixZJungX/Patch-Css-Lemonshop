@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RedemptionRequest, RedemptionCode, ChickenAccount, QueueItem } from '@/types';
-import { GamepadIcon, Settings, Megaphone, MessageCircle } from 'lucide-react';
+import { GamepadIcon, Settings, Megaphone, MessageCircle, Menu, X } from 'lucide-react';
 import { addToQueue, testQueueConnection, testQueueNumberGeneration } from '@/lib/queueApi';
 import '@/styles/notifications.css';
 
@@ -86,6 +86,9 @@ export default function Home() {
   
   // Prepare ID/Password guide popup
   const [showPrepareGuide, setShowPrepareGuide] = useState(false);
+  
+  // Mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Line QR Code popup
   const [showLineQRPopup, setShowLineQRPopup] = useState(false);
@@ -997,8 +1000,8 @@ export default function Home() {
               <span className="text-white font-bold text-lg hidden sm:inline-block">Lemon Shop</span>
             </Link>
             
-            {/* Navigation Menu */}
-            <div className="flex items-center space-x-1 md:space-x-2">
+            {/* Desktop Navigation Menu */}
+            <div className="hidden lg:flex items-center space-x-1 md:space-x-2">
               <Link to="/">
                 <Button 
                   variant="ghost" 
@@ -1059,8 +1062,128 @@ export default function Home() {
                 </Button>
               </Link>
             </div>
+            
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-6 h-6" />
+              ) : (
+                <Menu className="w-6 h-6" />
+              )}
+            </button>
           </div>
         </div>
+        
+        {/* Mobile Menu Slide-in */}
+        <div
+          className={`lg:hidden fixed inset-y-0 left-0 w-72 bg-purple-900/98 backdrop-blur-xl border-r border-white/10 transform transition-transform duration-300 ease-in-out z-50 ${
+            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="flex flex-col h-full">
+            {/* Mobile Menu Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center space-x-2">
+                <img 
+                  src="https://img5.pic.in.th/file/secure-sv1/2318a16a76694dc8dccbd75362a64368deb68b00127501b51b1a9a0588ca2f42.png" 
+                  alt="Lemon Shop Logo" 
+                  className="w-8 h-8 object-contain"
+                />
+                <span className="text-white font-bold text-lg">Lemon Shop</span>
+              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Mobile Menu Items */}
+            <div className="flex-1 overflow-y-auto py-4">
+              <div className="space-y-1 px-3">
+                <Link to="/" onClick={() => setIsMobileMenuOpen(false)}>
+                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3">
+                    <span className="text-xl">🏠</span>
+                    <span>หน้าหลัก</span>
+                  </button>
+                </Link>
+                
+                <Link to="/queue-status" onClick={() => setIsMobileMenuOpen(false)}>
+                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3">
+                    <span className="text-xl">🔍</span>
+                    <span>เช็คคิว</span>
+                  </button>
+                </Link>
+                
+                <button
+                  onClick={() => {
+                    window.open('https://www.facebook.com/LemonShopStore/', '_blank');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                >
+                  <span className="text-xl">📞</span>
+                  <span>ติดต่อร้าน</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    window.open('https://lemonshop.rdcw.xyz/', '_blank');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                >
+                  <span className="text-xl">🛒</span>
+                  <span>ซื้อสินค้าเพิ่มเติม</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    window.open('https://youtu.be/caiYmzge0lk', '_blank');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                >
+                  <span className="text-xl">📖</span>
+                  <span>วิธีการใช้สินค้า</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowPrepareGuide(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                >
+                  <span className="text-xl">📝</span>
+                  <span>เตรียมไอดี/รหัส</span>
+                </button>
+                
+                <div className="my-3 border-t border-white/10"></div>
+                
+                <Link to="/admin" onClick={() => setIsMobileMenuOpen(false)}>
+                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3 border border-white/20">
+                    <Settings className="w-5 h-5" />
+                    <span>แอดมิน</span>
+                  </button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Overlay */}
+        {isMobileMenuOpen && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+        )}
       </nav>
 
       <div className="container mx-auto px-4 py-8">
