@@ -65,8 +65,14 @@ export default function Home() {
   const [redeemForm, setRedeemForm] = useState({
     username: '',
     password: '',
-    contact: ''
+    facebookName: '',
+    lineId: ''
   });
+
+  // Anti-spam / Code brute force protection
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [cooldownEndTime, setCooldownEndTime] = useState<number | null>(null);
+  const [remainingCooldownTime, setRemainingCooldownTime] = useState<string>('');
 
   // ระบบคิว
   const [showQueueNumberPopup, setShowQueueNumberPopup] = useState(false);
@@ -75,11 +81,11 @@ export default function Home() {
   // Roblox preparation guide
   const [showRobloxGuide, setShowRobloxGuide] = useState(false);
   const [hasReadGuide, setHasReadGuide] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [showStepDialog, setShowStepDialog] = useState(false);
-  const [step1Completed, setStep1Completed] = useState(false);
   const [step2Completed, setStep2Completed] = useState(false);
-  const [allStepsRead, setAllStepsRead] = useState(false);
+  const [step3Completed, setStep3Completed] = useState(false);
+  
+  // Prepare ID/Password guide popup
+  const [showPrepareGuide, setShowPrepareGuide] = useState(false);
   
   // Line QR Code popup
   const [showLineQRPopup, setShowLineQRPopup] = useState(false);
@@ -99,6 +105,9 @@ export default function Home() {
     loadAnnouncements();
     loadAdvertisement();
     
+    // โหลดข้อมูล anti-spam จาก localStorage
+    loadAntiSpamData();
+    
     // ทดสอบการเชื่อมต่อระบบคิว
     testQueueConnection().then(isConnected => {
       if (!isConnected) {
@@ -107,6 +116,27 @@ export default function Home() {
       }
     });
   }, []);
+
+  // อัปเดต countdown timer ทุกวินาที
+  useEffect(() => {
+    if (cooldownEndTime) {
+      const interval = setInterval(() => {
+        const now = Date.now();
+        if (now >= cooldownEndTime) {
+          // หมดเวลา cooldown
+          resetCooldown();
+        } else {
+          // อัปเดตเวลาที่เหลือ
+          const remaining = cooldownEndTime - now;
+          const minutes = Math.floor(remaining / 60000);
+          const seconds = Math.floor((remaining % 60000) / 1000);
+          setRemainingCooldownTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+        }
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [cooldownEndTime]);
 
   // Calculate statistics when data changes
   useEffect(() => {
@@ -257,10 +287,126 @@ export default function Home() {
 
   const getAlertVariant = (type?: string) => (type === 'critical' ? 'destructive' : 'default');
 
+  // ระบบป้องกันการสุ่มโค้ด (Anti-Brute Force)
+  const STORAGE_KEY_ATTEMPTS = 'lemonshop_failed_attempts';
+  const STORAGE_KEY_COOLDOWN = 'lemonshop_cooldown_end';
+  const MAX_FAILED_ATTEMPTS = 10; // จำนวนครั้งสูงสุดที่ลองผิดได้
+  const COOLDOWN_DURATION = 30 * 60 * 1000; // 30 นาที (ในหน่วย milliseconds)
+
+  const loadAntiSpamData = () => {
+    try {
+      const attempts = localStorage.getItem(STORAGE_KEY_ATTEMPTS);
+      const cooldown = localStorage.getItem(STORAGE_KEY_COOLDOWN);
+      
+      if (attempts) {
+        setFailedAttempts(parseInt(attempts));
+      }
+      
+      if (cooldown) {
+        const cooldownEnd = parseInt(cooldown);
+        const now = Date.now();
+        
+        if (now < cooldownEnd) {
+          // ยังอยู่ใน cooldown
+          setCooldownEndTime(cooldownEnd);
+        } else {
+          // หมดเวลา cooldown แล้ว - รีเซ็ต
+          resetCooldown();
+        }
+      }
+    } catch (error) {
+      console.error('Error loading anti-spam data:', error);
+    }
+  };
+
+  const resetCooldown = () => {
+    setFailedAttempts(0);
+    setCooldownEndTime(null);
+    setRemainingCooldownTime('');
+    localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+    localStorage.removeItem(STORAGE_KEY_COOLDOWN);
+    toast.success('✅ คุณสามารถลองใส่โค้ดได้อีกครั้ง');
+  };
+
+  const recordFailedAttempt = () => {
+    const newAttempts = failedAttempts + 1;
+    setFailedAttempts(newAttempts);
+    localStorage.setItem(STORAGE_KEY_ATTEMPTS, newAttempts.toString());
+    
+    console.log(`⚠️ ใส่โค้ดผิด: ${newAttempts}/${MAX_FAILED_ATTEMPTS} ครั้ง`);
+    
+    if (newAttempts >= MAX_FAILED_ATTEMPTS) {
+      startCooldown();
+    } else {
+      const remaining = MAX_FAILED_ATTEMPTS - newAttempts;
+      toast.warning(`⚠️ โค้ดไม่ถูกต้อง (เหลือโอกาสอีก ${remaining} ครั้ง)`);
+    }
+  };
+
+  const startCooldown = () => {
+    const endTime = Date.now() + COOLDOWN_DURATION;
+    setCooldownEndTime(endTime);
+    localStorage.setItem(STORAGE_KEY_COOLDOWN, endTime.toString());
+    
+    toast.error(
+      '🚫 คุณพยายามใส่โค้ดผิดมากเกินไป! กรุณารอ 30 นาทีก่อนลองใหม่',
+      { duration: 5000 }
+    );
+  };
+
+  const checkCooldown = (): boolean => {
+    if (cooldownEndTime && Date.now() < cooldownEndTime) {
+      toast.error(
+        `🚫 กรุณารออีก ${remainingCooldownTime} นาที ก่อนลองใส่โค้ดใหม่`,
+        { duration: 3000 }
+      );
+      return true; // อยู่ใน cooldown
+    }
+    return false; // ไม่อยู่ใน cooldown
+  };
+
+  // ฟังก์ชันแปลงวันที่เป็นภาษาไทย
+  const formatAnnouncementDate = (dateString?: string) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    // ถ้าเป็นวันเดียวกัน
+    if (diffDays === 0) {
+      if (diffMins < 1) return 'เมื่อสักครู่';
+      if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
+      if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
+    }
+    
+    // ถ้าเป็นเมื่อวาน
+    if (diffDays === 1) return 'เมื่อวาน';
+    
+    // ถ้าน้อยกว่า 7 วัน
+    if (diffDays < 7) return `${diffDays} วันที่แล้ว`;
+    
+    // แสดงวันที่เต็ม
+    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 
+                        'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const day = date.getDate();
+    const month = thaiMonths[date.getMonth()];
+    const year = date.getFullYear() + 543; // แปลงเป็น พ.ศ.
+    return `${day} ${month} ${year}`;
+  };
+
   const validateCode = async () => {
     if (!redeemCode.trim()) {
       toast.error("กรุณากรอกโค้ดที่ได้รับ");
       return;
+    }
+
+    // ตรวจสอบ cooldown ก่อน
+    if (checkCooldown()) {
+      return; // ถ้ายังอยู่ใน cooldown ให้หยุด
     }
 
     setIsSubmitting(true);
@@ -315,8 +461,16 @@ export default function Home() {
 
       // If code doesn't exist in either table
       if (!codeData) {
-        toast.error("ไม่พบโค้ดในระบบ - กรุณาตรวจสอบและพิมพ์ใหม่ หรือติดต่อไลน์");
+        // บันทึกการพยายามที่ผิด
+        recordFailedAttempt();
         return;
+      }
+
+      // โค้ดถูกต้อง - รีเซ็ต failed attempts
+      if (failedAttempts > 0) {
+        setFailedAttempts(0);
+        localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+        console.log('✅ รีเซ็ตตัวนับ - โค้ดถูกต้อง');
       }
 
       // ถ้าเป็นโค้ดไก่ตัน ให้แสดงข้อมูลบัญชีเลย
@@ -360,15 +514,14 @@ export default function Home() {
   const handleRobuxSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!redeemForm.username.trim() || !redeemForm.password.trim() || !redeemForm.contact.trim()) {
-      toast.error("กรุณากรอกข้อมูลให้ครบถ้วน");
+    if (!redeemForm.username.trim() || !redeemForm.password.trim()) {
+      toast.error("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน");
       return;
     }
 
-    // Validate phone number format (basic validation)
-    const phoneRegex = /^0[0-9]{8,9}$/;
-    if (!phoneRegex.test(redeemForm.contact.replace(/\s|-/g, ''))) {
-      toast.error("กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (เช่น 0812345678)");
+    // ต้องกรอกอย่างน้อย 1 ช่อง (Facebook หรือ Line)
+    if (!redeemForm.facebookName.trim() && !redeemForm.lineId.trim()) {
+      toast.error("กรุณากรอกชื่อเฟสหรือไอดีไลน์อย่างน้อย 1 ช่อง");
       return;
     }
 
@@ -376,12 +529,18 @@ export default function Home() {
     const toastId = toast.loading('กำลังดำเนินการแลกโค้ด...');
 
     try {
+      // สร้างข้อมูลติดต่อ
+      const contactInfo = [];
+      if (redeemForm.facebookName.trim()) contactInfo.push(`FB: ${redeemForm.facebookName}`);
+      if (redeemForm.lineId.trim()) contactInfo.push(`LINE: ${redeemForm.lineId}`);
+      const contactString = contactInfo.join(' | ');
+
       // First, update the code status to 'used' in Supabase
       const { error: updateError } = await supabase
         .from('app_284beb8f90_redemption_codes')
         .update({ 
           status: 'used',
-          used_by: redeemForm.contact,
+          used_by: contactString,
           used_at: new Date().toISOString()
         })
         .eq('id', validatedCode!.id);
@@ -398,8 +557,8 @@ export default function Home() {
           roblox_username: redeemForm.username,
           roblox_password: redeemForm.password,
           robux_amount: validatedCode!.robux_value || 0,
-          contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
-          phone: redeemForm.contact,
+          contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
+          phone: contactString,
           status: 'pending',
           assigned_code: validatedCode!.code,
           code_id: validatedCode!.id,
@@ -454,7 +613,7 @@ export default function Home() {
             const simpleRequestData = {
               roblox_username: redeemForm.username,
               robux_amount: validatedCode!.robux_value || 0,
-              contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | Phone: ${redeemForm.contact}`,
+              contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | ${contactString}`,
               status: 'pending',
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
@@ -489,7 +648,7 @@ export default function Home() {
         try {
           const queueData = {
             // ใช้เฉพาะคอลัมน์ที่มีอยู่จริงในตาราง queue_items
-            contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
+            contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
             product_type: 'robux',
             status: 'waiting',
             estimated_wait_time: 15
@@ -554,7 +713,7 @@ export default function Home() {
             
             const simpleQueueData = {
               queue_number: nextQueueNumber,
-              contact_info: `ชื่อ: ${redeemForm.username} | เบอร์โทร: ${redeemForm.contact}`,
+              contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
               product_type: 'robux',
               status: 'waiting',
               estimated_wait_time: 15
@@ -604,7 +763,7 @@ export default function Home() {
       setShowRedeemPopup(false);
       setValidatedCode(null);
       setRedeemCode('');
-      setRedeemForm({ username: '', password: '', contact: '' });
+      setRedeemForm({ username: '', password: '', facebookName: '', lineId: '' });
       
       loadAvailableItems();
 
@@ -617,31 +776,19 @@ export default function Home() {
   };
 
   const handleGuideRead = () => {
-    // ตรวจสอบว่าทำขั้นตอนที่ 1 และ 2 เสร็จแล้วหรือยัง
-    if (!step1Completed || !step2Completed) {
-      toast.error("กรุณาทำตามขั้นตอนที่ 1 และ 2 ให้เสร็จก่อน");
-      return;
-    }
-    
-    // ตรวจสอบว่าอ่านทั้งหมดเสร็จแล้วหรือยัง
-    if (!allStepsRead) {
-      toast.error("กรุณายืนยันว่าอ่านทั้งหมดเสร็จแล้ว");
+    // ตรวจสอบว่าทำขั้นตอนที่ 2 และ 3 เสร็จแล้วหรือยัง
+    if (!step2Completed || !step3Completed) {
+      toast.error("กรุณาทำตามขั้นตอนที่ 2 และ 3 ให้เสร็จก่อน");
       return;
     }
     
     setHasReadGuide(true);
     setShowRobloxGuide(false);
+    // รีเซ็ต state สำหรับครั้งถัดไป
+    setStep2Completed(false);
+    setStep3Completed(false);
     // หลังจากอ่านเสร็จ ให้เปิด modal แลกโค้ดต่อ
     setShowRedeemPopup(true);
-  };
-
-  const handleStepClick = (stepNumber: number) => {
-    setCurrentStep(stepNumber);
-    setShowStepDialog(true);
-  };
-
-  const handleStepDialogClose = () => {
-    setShowStepDialog(false);
   };
 
   const handleRainbowRedeemCode = async () => {
@@ -836,120 +983,179 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative">
-      <div className="container mx-auto px-4 py-8">
-        {announcements.length > 0 && (
-          <div className="mb-6 announcement-marquee">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Megaphone className="w-5 h-5 text-yellow-300" />
-                <span className="text-white font-semibold">ประกาศ</span>
-              </div>
-              <div className="overflow-hidden">
-                <div className="announcement-track" style={{ ['--marquee-duration' as any]: `${Math.max(18, announcements.length * 6)}s` }}>
-                  {announcements.map((a) => (
-                    <span key={a.id} className={`announcement-pill ${a.type || 'info'}`}>
-                      <span className="text-sm">
-                        {a.type === 'critical' || a.type === 'warning' ? '⚠️' : '📣'}
-                      </span>
-                      {a.title && <span className="hidden sm:inline">{a.title}:</span>}
-                      <span className="opacity-90">{a.content}</span>
-                      {a.link && (
-                        <button
-                          onClick={() => window.open(a.link!, '_blank')}
-                          className="announcement-cta ml-2 text-xs"
-                        >
-                          ดูเพิ่มเติม
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                  {/* Duplicate for seamless loop */}
-                  {announcements.map((a) => (
-                    <span key={`${a.id}-dup`} className={`announcement-pill ${a.type || 'info'}`}>
-                      <span className="text-sm">
-                        {a.type === 'critical' || a.type === 'warning' ? '⚠️' : '📣'}
-                      </span>
-                      {a.title && <span className="hidden sm:inline">{a.title}:</span>}
-                      <span className="opacity-90">{a.content}</span>
-                      {a.link && (
-                        <button
-                          onClick={() => window.open(a.link!, '_blank')}
-                          className="announcement-cta ml-2 text-xs"
-                        >
-                          ดูเพิ่มเติม
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center space-x-3">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center">
+      {/* Top Navigation Bar */}
+      <nav className="bg-purple-800/30 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link to="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
               <img 
                 src="https://img5.pic.in.th/file/secure-sv1/2318a16a76694dc8dccbd75362a64368deb68b00127501b51b1a9a0588ca2f42.png" 
                 alt="Lemon Shop Logo" 
-                className="w-16 h-16 object-contain"
+                className="w-10 h-10 object-contain"
               />
-            </div>
-            <div>
-              <h1 className="text-white text-xl font-bold">Lemon Shop</h1>
-              <p className="text-purple-200 text-sm">ระบบแลกของรางวัล - Robux & Chicken Accounts</p>
-            </div>
-          </div>
-          
-          <div className="flex space-x-3">
-            <Link to="/queue-status">
-              <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 backdrop-blur-xl border border-green-500/30 text-white transition-all rounded-full">
-                🔍 เช็คสถานะคิว
-              </Button>
+              <span className="text-white font-bold text-lg hidden sm:inline-block">Lemon Shop</span>
             </Link>
-            <Link to="/admin">
-              <Button className="bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20 transition-all rounded-full">
-                <Settings className="w-4 h-4 mr-2" />
-                👑 แอดมิน
+            
+            {/* Navigation Menu */}
+            <div className="flex items-center space-x-1 md:space-x-2">
+              <Link to="/">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+                >
+                  🏠 หน้าหลัก
+                </Button>
+              </Link>
+              
+              <Link to="/queue-status">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+                >
+                  🔍 เช็คคิว
+                </Button>
+              </Link>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📞 ติดต่อร้าน
               </Button>
-            </Link>
-            <Button 
-              onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
-              className="bg-gradient-to-r from-blue-600 to-blue-700 backdrop-blur-xl border border-blue-500/30 text-white hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg rounded-full"
-            >
-              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-              📞 ติดต่อร้าน
-            </Button>
-            <Button 
-              onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
-              className="bg-gradient-to-r from-orange-600 to-yellow-600 backdrop-blur-xl border border-orange-500/30 text-white hover:from-orange-700 hover:to-yellow-700 transition-all shadow-lg rounded-full"
-            >
-              🛒 ร้านค้าออนไลน์
-            </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                🛒 ซื้อสินค้าเพิ่มเติม
+              </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://youtu.be/caiYmzge0lk', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📖 วิธีการใช้สินค้า
+              </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => setShowPrepareGuide(true)}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📝 เตรียมไอดี/รหัส
+              </Button>
+              
+              <Link to="/admin">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-2 md:px-3 ml-2 border border-white/20"
+                >
+                  <Settings className="w-4 h-4 md:mr-1" />
+                  <span className="hidden md:inline">แอดมิน</span>
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
+      </nav>
 
-        {/* แจ้งเตือนระบบคิว */}
-        <div className="mb-6">
-          <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-400/30 rounded-3xl p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="text-2xl">📺</div>
-                <div>
-                  <h3 className="text-white font-semibold">ระบบคิวพร้อมใช้งาน</h3>
-                  <p className="text-green-200 text-sm">หลังจากแลกโค้ดเสร็จ คุณสามารถเช็คสถานะคิวได้</p>
+      <div className="container mx-auto px-4 py-8">
+        {announcements.length > 0 && (
+          <div className="mb-6">
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Megaphone className="w-5 h-5 text-yellow-300" />
+                <span className="text-white font-semibold">ประกาศ</span>
+                <span className="text-xs text-white/60 ml-auto">{announcements.length} รายการ</span>
+              </div>
+              <style>{`
+                .announcement-scroll::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .announcement-scroll::-webkit-scrollbar-track {
+                  background: transparent;
+                }
+                .announcement-scroll::-webkit-scrollbar-thumb {
+                  background: rgba(255, 255, 255, 0.3);
+                  border-radius: 3px;
+                }
+                .announcement-scroll::-webkit-scrollbar-thumb:hover {
+                  background: rgba(255, 255, 255, 0.5);
+                }
+              `}</style>
+              <div 
+                className="announcement-scroll space-y-2 pr-2" 
+                style={{ 
+                  maxHeight: '16rem', 
+                  overflowY: 'auto',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'rgba(255, 255, 255, 0.3) transparent'
+                }}
+              >
+                {announcements.map((a) => {
+                  const typeColors = {
+                    critical: 'bg-red-500/20 border-red-400/40 text-red-100',
+                    warning: 'bg-yellow-500/20 border-yellow-400/40 text-yellow-100',
+                    info: 'bg-blue-500/20 border-blue-400/40 text-blue-100'
+                  };
+                  const colorClass = typeColors[a.type || 'info'];
+                  
+                  return (
+                    <div 
+                      key={a.id} 
+                      className={`${colorClass} border backdrop-blur-sm rounded-2xl p-3 transition-all hover:scale-[1.02] hover:shadow-lg`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg flex-shrink-0 mt-0.5">
+                        {a.type === 'critical' || a.type === 'warning' ? '⚠️' : '📣'}
+                      </span>
+                        <div className="flex-1 min-w-0">
+                          {a.title && (
+                            <div className="font-semibold text-sm mb-1">
+                              {a.title}
+                            </div>
+                          )}
+                          <div className="text-sm leading-relaxed">
+                            {a.content}
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            {a.created_at && (
+                              <span className="text-xs opacity-75 flex items-center gap-1">
+                                🕐 {formatAnnouncementDate(a.created_at)}
+                    </span>
+                            )}
+                      {a.link && (
+                        <button
+                          onClick={() => window.open(a.link!, '_blank')}
+                                className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-all font-medium"
+                        >
+                                ดูเพิ่มเติม →
+                        </button>
+                      )}
                 </div>
               </div>
-                             <Link to="/queue-status">
-                 <Button className="bg-green-600 hover:bg-green-700 text-white rounded-full">
-                   เช็คสถานะคิว
-                 </Button>
-               </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {announcements.length > 3 && (
+                <div className="text-center mt-2 text-xs text-white/50">
+                  👆 เลื่อนเพื่อดูประกาศทั้งหมด
+                </div>
+              )}
             </div>
           </div>
+        )}
+
+        {/* Welcome Section */}
+        <div className="text-center mb-8">
+          <h1 className="text-white text-3xl md:text-4xl font-bold mb-2">ยินดีต้อนรับสู่ Lemon Shop</h1>
+          <p className="text-purple-200 text-sm md:text-base">ระบบแลกของรางวัล - Robux & Chicken Accounts</p>
         </div>
 
         {/* Statistics Cards */}
@@ -1024,76 +1230,198 @@ export default function Home() {
         {/* Main Content Area */}
         <div className="max-w-4xl mx-auto">
           {activeTab === 'redeem' && (
-            <Card className="bg-white/10 backdrop-blur-xl border-white/20 mb-6 md:mb-8 rounded-2xl md:rounded-3xl">
-              <CardHeader className="text-center p-4 md:p-6">
-                <CardTitle className="text-lg md:text-2xl text-white flex items-center justify-center space-x-2">
-                  <span className="text-2xl md:text-3xl">💳🐔</span>
-                  <span>แลกโค้ดรับ Robux หรือไก่ตัน</span>
-                </CardTitle>
-                <p className="text-blue-200 text-sm md:text-base">
-                  ใส่โค้ดที่ได้รับ - ระบบจะค้นหาอัตโนมัติ
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4 md:space-y-6 p-4 md:p-6">
-                {/* Warning Messages for Robux redemption */}
-                {activeTab === 'redeem' && (
-                  <div className="space-y-2 md:space-y-3">
-                    <Alert className="border-yellow-500/50 bg-yellow-500/10 backdrop-blur-md rounded-xl">
-                      <AlertDescription className="text-yellow-300 text-xs md:text-sm">
-                        🚫 ลูกค้าจะได้รับ ROBUX ภายใน 5 นาที - 3 ชม.
-                      </AlertDescription>
-                    </Alert>
+            <Card className="bg-white/5 backdrop-blur-sm border border-white/10 mb-8 rounded-xl shadow-lg overflow-hidden">
+              
+              <CardHeader className="px-8 py-10 md:px-12 md:py-14">
+                <div className="max-w-3xl mx-auto text-center space-y-8">
+                  
+                  {/* Simple icon */}
+                  <div className="inline-flex items-center justify-center">
+                    <div className="text-6xl opacity-90">💎</div>
+                  </div>
 
-                    <Alert className="border-red-500/50 bg-red-500/10 backdrop-blur-md rounded-xl">
-                      <AlertDescription className="text-red-300 text-xs md:text-sm leading-relaxed">
-                        🚫🚫โดยกดแลกโค๊ดแล้วรบกวนออกจากระบบในมือถือเพราะแอดจะติดยืนยันมือถือและเข้าเติมไม่ได้ครับ🚫🚫
-                      </AlertDescription>
-                    </Alert>
+                  {/* Minimal title */}
+                  <div>
+                    <h1 className="text-4xl md:text-5xl font-semibold text-white mb-2">
+                      แลกรับสินค้า
+                    </h1>
+                    <p className="text-base text-gray-400 font-light">
+                      ใส่โค้ดที่ได้รับ — ระบบจะค้นหาอัตโนมัติ
+                    </p>
+                  </div>
+
+                  {/* Simple badges */}
+                  <div className="flex justify-center gap-2 text-xs">
+                    <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300">
+                      🎮 Robux
+                    </span>
+                    <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300">
+                      🐔 ไก่ตัน
+                    </span>
+                    <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300">
+                      ⚡ รวดเร็ว
+                    </span>
+                  </div>
+                  
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 p-6">
+                {/* Minimal cooldown warning */}
+                {cooldownEndTime && Date.now() < cooldownEndTime && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="text-2xl">🔒</div>
+                      <div className="flex-1">
+                        <div className="text-red-300 font-medium mb-2 text-base">
+                          ระบบถูกล็อกชั่วคราว
+                        </div>
+                        <div className="text-red-200/80 text-sm mb-2">
+                          คุณใส่โค้ดผิดเกินกำหนด กรุณารอจนกว่าเวลาจะหมด
+                        </div>
+                        <div className="inline-block bg-red-500/20 border border-red-500/30 rounded px-3 py-1.5 font-mono text-base text-red-100">
+                          {remainingCooldownTime}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-white text-sm font-medium mb-2">
-                      โค้ดที่ได้รับ (Robux หรือไก่ตัน)
-                    </label>
-                    <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                {/* Minimal failed attempts warning */}
+                {failedAttempts > 0 && failedAttempts < MAX_FAILED_ATTEMPTS && !cooldownEndTime && (
+                  <div className={`${
+                    failedAttempts >= 7 
+                      ? 'bg-red-500/10 border-red-500/20' 
+                      : 'bg-yellow-500/10 border-yellow-500/20'
+                  } border rounded-lg p-4`}>
+                    <div className="flex items-start gap-3">
+                      <div className="text-xl">{failedAttempts >= 7 ? '🚨' : '⚠️'}</div>
+                      <div className="flex-1">
+                        <div className={`${
+                          failedAttempts >= 7 ? 'text-red-300' : 'text-yellow-300'
+                        } font-medium mb-2 text-base`}>
+                          {failedAttempts >= 7 ? 'คำเตือนสุดท้าย' : 'คำเตือน'}
+                        </div>
+                        <div className={`${
+                          failedAttempts >= 7 ? 'text-red-200/80' : 'text-yellow-200/80'
+                        } text-sm`}>
+                          ใส่โค้ดผิดไปแล้ว {failedAttempts}/{MAX_FAILED_ATTEMPTS} ครั้ง
+                          {failedAttempts >= 7 && (
+                            <span className="block mt-1 text-orange-200/70">
+                              เหลือโอกาสอีก {MAX_FAILED_ATTEMPTS - failedAttempts} ครั้ง
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Minimal warnings */}
+                {activeTab === 'redeem' && (
+                  <div className="space-y-3">
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                      <div className="text-blue-300 font-medium mb-2 text-base">
+                        ⏱️ ระยะเวลาการรับ Robux
+                      </div>
+                      <div className="text-blue-200/80 text-sm">
+                        ลูกค้าจะได้รับ Robux ภายใน 5 นาที - 3 ชั่วโมง
+                      </div>
+                    </div>
+
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                      <div className="text-red-300 font-medium mb-2 text-base">
+                        ⚠️ สำคัญ — กรุณาอ่าน
+                      </div>
+                      <div className="text-red-200/80 text-sm leading-relaxed space-y-1">
+                        <div>📱 หลังกดแลกโค้ดแล้ว กรุณาออกจากระบบในมือถือทันที</div>
+                        <div className="text-orange-200/70">
+                          เหตุผล: แอดจะติดยืนยันมือถือและไม่สามารถเข้าเติม Robux ได้
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-6">
+                  {/* Minimal code input */}
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-6">
+                    {/* Header */}
+                    <div className="mb-4">
+                      <label className="text-base text-gray-400 font-light">
+                        โค้ดที่ได้รับ
+                      </label>
+                    </div>
+                    
+                    {/* Input area */}
+                    <div className="flex flex-col sm:flex-row gap-3">
                       <Input
                         value={redeemCode}
                         onChange={(e) => setRedeemCode(e.target.value)}
-                        placeholder="ใส่โค้ดที่ได้รับ (รองรับทั้ง Robux และไก่ตัน)"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50 flex-1 rounded-xl md:rounded-2xl h-12 text-base"
-                        onKeyPress={(e) => e.key === 'Enter' && validateCode()}
+                        placeholder="ใส่โค้ด..."
+                        className="flex-1 bg-white/5 border border-white/10 text-white placeholder:text-gray-500 
+                                 rounded-lg h-12 px-4 font-mono text-base
+                                 focus:border-white/30 focus:bg-white/10
+                                 transition-colors"
+                        onKeyPress={(e) => e.key === 'Enter' && !isSubmitting && !(cooldownEndTime !== null && Date.now() < cooldownEndTime) && validateCode()}
+                        disabled={cooldownEndTime !== null && Date.now() < cooldownEndTime}
                       />
+                      
                       <Button
                         onClick={validateCode}
-                        disabled={isSubmitting}
-                        className="bg-gradient-to-r rounded-xl md:rounded-full h-12 px-6 text-sm md:text-base from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                        disabled={isSubmitting || (cooldownEndTime !== null && Date.now() < cooldownEndTime)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/10
+                                 rounded-lg h-12 px-6 text-sm font-normal text-white
+                                 disabled:opacity-50 disabled:cursor-not-allowed
+                                 transition-colors"
                       >
-                        {isSubmitting ? 'ตรวจสอบ...' : 'ตรวจสอบ'}
+                        {cooldownEndTime && Date.now() < cooldownEndTime ? (
+                          'ล็อก'
+                        ) : isSubmitting ? (
+                          'กำลังตรวจสอบ...'
+                        ) : (
+                          'ตรวจสอบ'
+                        )}
                       </Button>
                     </div>
                   </div>
                   
-                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-xl md:rounded-2xl p-3 md:p-4">
-                    <p className="text-blue-100 text-xs md:text-sm leading-relaxed">
-                      <strong>💡 วิธีใช้:</strong> ใส่โค้ดที่ได้รับและกดตรวจสอบ ระบบจะหาอัตโนมัติว่าเป็นโค้ด Robux หรือไก่ตัน
-                    </p>
+                  {/* Minimal info cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                      <div className="text-gray-400 mb-2 text-base font-medium">💡 วิธีใช้งาน</div>
+                      <div className="text-gray-300 text-sm leading-relaxed">
+                        ใส่โค้ดและกดตรวจสอบ ระบบจะค้นหาอัตโนมัติ
+                      </div>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                      <div className="text-gray-400 mb-2 text-base font-medium">🛡️ ระบบป้องกัน</div>
+                      <div className="text-gray-300 text-sm leading-relaxed">
+                        ใส่ผิดเกิน {MAX_FAILED_ATTEMPTS} ครั้ง จะถูกล็อก 30 นาที
+                      </div>
+                    </div>
                   </div>
 
-                  {/* ปุ่มติดต่อไลน์ */}
-                  <div className="bg-green-500/20 border border-green-500/30 rounded-xl md:rounded-2xl p-3 md:p-4">
-                    <div className="text-center space-y-2">
-                      <p className="text-green-200 text-xs md:text-sm">📞 ต้องการความช่วยเหลือ? ติดต่อแอดมินได้เลย</p>
-                      <div className="flex justify-center">
-                        <Button
-                          onClick={() => setShowLineQRPopup(true)}
-                          className="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2 text-sm"
-                        >
-                          <MessageCircle className="h-3 w-3 mr-1" />
-                          ติดต่อไลน์ (mixzis)
-                        </Button>
+                  {/* Minimal contact button */}
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-5">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="text-center sm:text-left">
+                        <div className="text-white font-medium mb-1 text-base">
+                          ต้องการความช่วยเหลือ?
+                        </div>
+                        <div className="text-gray-400 text-sm">
+                          ติดต่อแอดมินได้ตลอด 24 ชั่วโมง
+                        </div>
                       </div>
+                      <Button
+                        onClick={() => setShowLineQRPopup(true)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/10
+                                 rounded-lg px-6 py-2.5 text-base font-normal text-white
+                                 transition-colors w-full sm:w-auto"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2 inline" />
+                        ติดต่อไลน์: mixzis
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1364,316 +1692,363 @@ export default function Home() {
 
         {/* Roblox Preparation Guide Dialog */}
         <Dialog open={showRobloxGuide} onOpenChange={setShowRobloxGuide}>
-          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-blue-50/95 to-purple-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-purple-50/95 to-pink-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
             <DialogHeader className="text-center pb-4 sm:pb-6">
               <div className="relative mb-3 sm:mb-4">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full blur-2xl"></div>
-                <div className="relative bg-gradient-to-r from-blue-500 to-purple-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
-                  <span className="text-xl sm:text-2xl">🛡️</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-400/30 to-pink-400/30 rounded-full blur-2xl"></div>
+                <div className="relative bg-gradient-to-r from-purple-500 to-pink-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
+                  <span className="text-xl sm:text-2xl">📝</span>
                 </div>
               </div>
               
-              <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                วิธีเตรียมบัญชี Roblox ก่อนส่งร้านเติม Robux
+              <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                เตรียมไอดี/รหัสหลังจากใส่โค้ดโรบัค
               </DialogTitle>
-              <DialogDescription className="text-gray-600 text-sm sm:text-base mt-2">
-                เพื่อความปลอดภัยและป้องกันปัญหาติด OTP/อีเมลเก่า กรุณาทำตามขั้นตอนนี้ก่อนส่งรหัสให้ร้าน
+              <DialogDescription className="text-sm sm:text-base text-gray-600 mt-2">
+                ขั้นตอนเตรียมความพร้อมหลังจากใส่โค้ดแล้ว
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-4 sm:space-y-6">
-              {/* Step 1 - Clickable */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 cursor-pointer hover:bg-white/90 transition-all duration-200" onClick={() => handleStepClick(1)}>
-                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">1</span>
-                  เปลี่ยนรหัสผ่านใหม่
+
+          <div className="space-y-4 sm:space-y-6 px-2 sm:px-4">
+            {/* ใช้เนื้อหาเดียวกับ Dialog เตรียมไอดี/รหัส */}
+            {/* วิธีที่ 1 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-purple-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-purple-900 mb-2">
+                    ✅ ตรวจสอบชื่อกับรหัสให้เรียบร้อย
                 </h3>
-                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
-                  <p>1. เข้าสู่ระบบ roblox.com หรือแอป Roblox</p>
-                  <p>2. ไปที่ Settings → Account Info</p>
-                  <p>3. เลือก Change Password</p>
-                  <p>4. ใส่รหัสเดิม → รหัสใหม่ → ยืนยันรหัสใหม่ → Save</p>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
-                    <p className="text-yellow-800 text-xs sm:text-sm">
-                      💡 ใช้รหัสที่จำง่ายสำหรับตัวเอง แต่ต้องเดายาก (ผสมตัวใหญ่–เล็ก–ตัวเลข)
-                    </p>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    ก่อนทำการส่งให้ทางร้านเติม กรุณาตรวจสอบให้แน่ใจว่า:
+                  </p>
+                  <div className="bg-purple-50 rounded-lg p-3 sm:p-4 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">ชื่อผู้ใช้ (Username) ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ไม่ใช่ชื่อที่แสดง (Display Name) แต่เป็น Username ที่ใช้ล็อคอิน</p>
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-blue-600 text-sm font-medium">👆 คลิกเพื่อดูรายละเอียด</span>
-                    <div className="flex items-center gap-2">
-                      <Checkbox 
-                        id="step1-checkbox"
-                        checked={step1Completed}
-                        onCheckedChange={(checked) => setStep1Completed(checked as boolean)}
-                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                      />
-                      <label htmlFor="step1-checkbox" className="text-sm font-medium text-green-600 cursor-pointer">
-                        ทำเสร็จแล้ว
-                      </label>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">รหัสผ่าน (Password) ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ลองเข้าสู่ระบบด้วยตัวเองก่อนเพื่อยืนยัน</p>
+                  </div>
+                </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">ตัวพิมพ์เล็ก-ใหญ่ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ระวังตัวพิมพ์เล็กใหญ่ในรหัสผ่าน</p>
+              </div>
+                  </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Step 2 - Clickable */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20 cursor-pointer hover:bg-white/90 transition-all duration-200" onClick={() => handleStepClick(2)}>
-                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">2</span>
-                  ทำให้ "เมลแดง" (Unverified Email)
+            {/* วิธีที่ 2 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-pink-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  2
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-pink-900 mb-2">
+                    📧 ตรวจสอบไอดีว่าติดเมลหรือไม่
                 </h3>
-                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
-                  <p>เลือกอย่างใดอย่างหนึ่ง:</p>
-                  <ul className="list-disc list-inside space-y-1 ml-4">
-                    <li>ใส่อีเมลทั่ว ๆ ไป (ที่ไม่ใช้งานจริง) → ระบบจะขึ้นแดงทันที</li>
-                    <li>ใส่อีเมลใหม่แต่ยังไม่กดยืนยัน → ระบบก็จะขึ้นแดงเหมือนกัน</li>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    และหากติดเมล ต้องทำเมลแดงหรือยัง
+                  </p>
+                  
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 sm:p-4 rounded-lg mb-3">
+                    <p className="text-sm sm:text-base text-yellow-800 font-semibold mb-2">
+                      ⚠️ สำคัญมาก! เมลแดงคืออะไร?
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-700 mb-2">
+                      เมลแดง คือการยืนยันอีเมลใน Roblox เพื่อให้สามารถรับโรบัคได้
+                    </p>
+              </div>
+
+                  {/* วิธีเช็คเมลว่าพร้อมเติมหรือยัง */}
+                  <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-3 sm:p-4 mb-3">
+                    <p className="font-semibold text-blue-900 text-sm sm:text-base mb-2 flex items-center gap-2">
+                      <span>🔍</span>
+                      วิธีเช็คเมลว่าพร้อมเติมหรือยัง:
+                    </p>
+                    <div className="space-y-3">
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <img 
+                          src="https://img2.pic.in.th/pic/247d481f921ca86f200aeb0e7999f3a4.jpg"
+                          alt="วิธีเช็คเมล Roblox"
+                          className="w-full rounded-lg shadow-md mb-3"
+                        />
+                        <ol className="space-y-2 text-xs sm:text-sm text-gray-700">
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">1.</span>
+                            <span>เข้าเว็บ <strong>Roblox.com</strong> และล็อคอินเข้าสู่ระบบ</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">2.</span>
+                            <span>กดที่ <strong>⚙️ Settings (ตั้งค่า)</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">3.</span>
+                            <span>ดูที่ส่วน <strong>Email Address</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-green-600 font-bold min-w-[20px]">✅</span>
+                            <span><strong>ไม่มีเมล</strong> = <strong className="text-green-600">เติมได้</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-green-600 font-bold min-w-[20px]">✅</span>
+                            <span><strong>เมลไม่ได้ยืนยัน</strong> = <strong className="text-green-600">เติมได้</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-red-600 font-bold min-w-[20px]">❌</span>
+                            <span><strong>เมลยืนยันแล้วยังไม่เป็นเมลแดง</strong> = <strong className="text-red-600">เติมไม่ได้ ต้องทำเมลแดงก่อน</strong></span>
+                          </li>
+                        </ol>
+                      </div>
+                </div>
+              </div>
+
+                  <div className="bg-red-50 rounded-lg p-3 sm:p-4 space-y-3">
+                    <div>
+                      <p className="font-semibold text-red-900 text-sm sm:text-base mb-3 flex items-center gap-2">
+                        <span>🎥</span>
+                        วิดีโอสอนทำเมลแดง:
+                      </p>
+                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingBottom: '56.25%' }}>
+                        <iframe
+                          className="absolute top-0 left-0 w-full h-full"
+                          src="https://www.youtube.com/embed/Abz6K4LyOww"
+                          title="วิธีทำเมลแดง Roblox"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        ></iframe>
+                </div>
+              </div>
+                    <div className="text-xs sm:text-sm text-red-800">
+                      <p className="font-semibold mb-1">ขั้นตอนสรุป:</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>ดูคลิปสอนด้านบน</li>
+                        <li>ทำตามขั้นตอนในคลิปให้ครบถ้วน</li>
+                        <li>ตรวจสอบว่าเมลเป็นสีแดงแล้ว</li>
+                      </ol>
+                </div>
+              </div>
+                </div>
+              </div>
+              
+              {/* Checkbox สำหรับวิธีที่ 2 */}
+              <div className="mt-4 pt-4 border-t border-pink-200">
+                <div className="flex items-center gap-3 bg-gradient-to-r from-pink-50 to-red-50 rounded-lg p-3 sm:p-4">
+                  <Checkbox 
+                    id="step2-checkbox"
+                    checked={step2Completed}
+                    onCheckedChange={(checked) => setStep2Completed(checked as boolean)}
+                    className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 h-5 w-5"
+                  />
+                  <label htmlFor="step2-checkbox" className="text-sm sm:text-base font-semibold text-pink-900 cursor-pointer flex items-center gap-2">
+                    <span className="text-lg">✅</span>
+                    <span>ทำเสร็จแล้ว - ตรวจสอบเมลและทำเมลแดงเรียบร้อยแล้ว</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            {/* วิธีที่ 3 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-blue-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  3
+                  </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-blue-900 mb-2">
+                    📱 ออกจากระบบในโทรศัพท์
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    ออกจากรหัส/ระบบในโทรศัพท์ แล้วกด Log Out
+                  </p>
+                  
+                  {/* วิธี Log out all session - ต้องทำก่อน */}
+                  <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-3 sm:p-4 mb-3">
+                    <p className="font-semibold text-purple-900 text-sm sm:text-base mb-2 flex items-center gap-2">
+                      <span>🔐</span>
+                      วิธี Log out all session (ออกจากระบบทุกอุปกรณ์):
+                    </p>
+                    <div className="bg-white rounded-lg p-3 border border-purple-200 mb-3">
+                      <img 
+                        src="https://img5.pic.in.th/file/secure-sv1/Log-out-all-seesion.png"
+                        alt="Log out all session Roblox"
+                        className="w-full rounded-lg shadow-md mb-3"
+                      />
+                      <ol className="space-y-2 text-xs sm:text-sm text-gray-700">
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">1.</span>
+                          <span>เข้าเว็บ <strong>Roblox.com</strong> และล็อคอินเข้าสู่ระบบ</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">2.</span>
+                          <span>กดที่ <strong>⚙️ Settings (ตั้งค่า)</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">3.</span>
+                          <span>เลื่อนลงมาหา <strong>"Sign out of all other sessions"</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">4.</span>
+                          <span>กดปุ่ม <strong className="text-red-600">"Sign Out"</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">5.</span>
+                          <span>ระบบจะออกจากระบบ Roblox <strong>ทุกอุปกรณ์</strong> ยกเว้นเครื่องที่คุณใช้อยู่ตอนนี้</span>
+                        </li>
+                      </ol>
+                  </div>
+                    <div className="bg-green-50 rounded-lg p-2 sm:p-3">
+                      <p className="text-xs sm:text-sm text-green-800">
+                        <strong>💡 เคล็ดลับ:</strong> วิธีนี้จะออกจากระบบทุกอุปกรณ์ทีเดียว สะดวกกว่าออกทีละเครื่อง
+                      </p>
+                  </div>
+              </div>
+
+                  {/* หลังจากทำ Log out all session แล้ว */}
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-3 sm:p-4 rounded-lg mb-3">
+                    <p className="text-sm sm:text-base text-blue-800 font-semibold mb-2">
+                      📲 วิธีออกจากระบบ Roblox บนโทรศัพท์ (หลังจาก Sign out all session เสร็จ)
+                    </p>
+                    <ol className="space-y-2 text-sm sm:text-base text-gray-700">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">1.</span>
+                        <span>เปิดแอป <strong>Roblox</strong> บนโทรศัพท์</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">2.</span>
+                        <span>กดที่ <strong>เมนู 3 จุด (⋯)</strong> หรือ <strong>ไอคอนโปรไฟล์</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">3.</span>
+                        <span><strong>เลื่อนลง</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">4.</span>
+                        <span>เลือก <strong>"Log Out"</strong> หรือ <strong>"ออกจากระบบ"</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">5.</span>
+                        <span><strong>ปิดแอป Roblox</strong> ให้เรียบร้อย</span>
+                      </li>
+                    </ol>
+              </div>
+              
+                  <div className="bg-yellow-50 rounded-lg p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm text-yellow-800">
+                      <strong>⚠️ สำคัญ:</strong> หากไม่ออกจากระบบในโทรศัพท์ อาจจะทำให้เติมโรบัคไม่สำเร็จเพราะมีการยืนยันตัวตนซ้ำซ้อน
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Checkbox สำหรับวิธีที่ 3 */}
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 sm:p-4">
+                  <Checkbox 
+                    id="step3-checkbox"
+                    checked={step3Completed}
+                    onCheckedChange={(checked) => setStep3Completed(checked as boolean)}
+                    className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 h-5 w-5"
+                  />
+                  <label htmlFor="step3-checkbox" className="text-sm sm:text-base font-semibold text-blue-900 cursor-pointer flex items-center gap-2">
+                    <span className="text-lg">✅</span>
+                    <span>ทำเสร็จแล้ว - ออกจากระบบในโทรศัพท์เรียบร้อยแล้ว</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+                    
+            {/* Warning Note */}
+            <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl sm:text-3xl">⚠️</span>
+                <div>
+                  <h4 className="font-bold text-red-900 text-base sm:text-lg mb-2">ข้อควรระวัง</h4>
+                  <ul className="space-y-1 sm:space-y-2 text-sm sm:text-base text-red-800">
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>ห้ามเปลี่ยนรหัสผ่าน</strong> หลังจากกรอกข้อมูลแล้ว</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>กรอกข้อมูลให้ถูกต้อง</strong> หากข้อมูลผิด จะทำให้เติมโรบัคไม่สำเร็จ</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>ห้ามล็อคอินขณะกำลังเติม</strong> รอจนกว่าจะได้รับการแจ้งเตือนว่าเติมเสร็จแล้ว</span>
+                    </li>
                   </ul>
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
-                    <p className="text-green-800 text-xs sm:text-sm">
-                      ✅ จุดสำคัญ: ถ้าอีเมลขึ้นแดง = ร้านเติมได้แน่นอน ไม่ติด OTP ส่งเข้าอีเมลลูกค้า
-                    </p>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-blue-600 text-sm font-medium">👆 คลิกเพื่อดูรายละเอียด</span>
-                    <div className="flex items-center gap-2">
-                      <Checkbox 
-                        id="step2-checkbox"
-                        checked={step2Completed}
-                        onCheckedChange={(checked) => setStep2Completed(checked as boolean)}
-                        className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                      />
-                      <label htmlFor="step2-checkbox" className="text-sm font-medium text-green-600 cursor-pointer">
-                        ทำเสร็จแล้ว
-                      </label>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
-                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">3</span>
-                  ปิดการยืนยันสองขั้นตอน (2-Step Verification)
-                </h3>
-                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
-                  <p>1. ไปที่ Settings → Security</p>
-                  <p>2. ปิด 2-Step Verification ทุกช่อง (Email/Authenticator/Phone)</p>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
-                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">4</span>
-                  ออกจากระบบอุปกรณ์อื่น
-                </h3>
-                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
-                  <p>• ไปที่ Settings → Security</p>
-                  <p>• กด Log out of All Other Sessions</p>
-                </div>
-              </div>
-
-              {/* Step 5 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
-                <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">5</span>
-                  ทดสอบรหัสใหม่
-                </h3>
-                <div className="space-y-2 sm:space-y-3 text-gray-700 text-sm sm:text-base">
-                  <p>• ออกจากระบบ แล้วลองล็อกอินใหม่ด้วยรหัสที่เพิ่งเปลี่ยน</p>
-                  <p>• ถ้าเข้าได้ = พร้อมส่งร้าน</p>
-                </div>
-              </div>
-
-              {/* Summary */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
-                <h3 className="text-lg sm:text-xl font-bold text-green-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="text-xl sm:text-2xl">📋</span>
-                  สรุป
-                </h3>
-                <div className="grid grid-cols-2 gap-2 text-green-700 text-sm sm:text-base">
-                  <p>• รหัสใหม่</p>
-                  <p>• เมลแดง</p>
-                  <p>• ปิด 2-Step</p>
-                  <p>• ออกจากอุปกรณ์อื่น</p>
-                </div>
-              </div>
-
-              {/* After completion */}
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
-                <h3 className="text-lg sm:text-xl font-bold text-orange-600 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="text-xl sm:text-2xl">⚠️</span>
-                  หลังจากร้านเติมเสร็จ ลูกค้าควร
-                </h3>
-                <div className="space-y-2 text-orange-700 text-sm sm:text-base">
-                  <p>• เปลี่ยนรหัสใหม่อีกครั้ง</p>
-                  <p>• ใส่อีเมลจริงที่ใช้งานได้</p>
-                  <p>• เปิด 2-Step Verification กลับมาเพื่อความปลอดภัย</p>
-                </div>
-              </div>
-            </div>
-            
-            <DialogFooter className="pt-4 sm:pt-6">
-              <div className="w-full space-y-4">
-                {/* Progress indicator */}
-                <div className="flex items-center justify-center gap-4 text-sm">
-                  <div className={`flex items-center gap-2 ${step1Completed ? 'text-green-600' : 'text-gray-400'}`}>
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${step1Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
-                      {step1Completed ? '✓' : '1'}
-                    </span>
-                    <span>ขั้นตอนที่ 1</span>
-                  </div>
-                  <div className={`flex items-center gap-2 ${step2Completed ? 'text-green-600' : 'text-gray-400'}`}>
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${step2Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
-                      {step2Completed ? '✓' : '2'}
-                    </span>
-                    <span>ขั้นตอนที่ 2</span>
-                  </div>
-                </div>
-
-                {/* All steps read confirmation */}
-                {step1Completed && step2Completed && (
-                  <div className="flex items-center justify-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <Checkbox 
-                      id="all-steps-read"
-                      checked={allStepsRead}
-                      onCheckedChange={(checked) => setAllStepsRead(checked as boolean)}
-                      className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                    />
-                    <label htmlFor="all-steps-read" className="text-sm font-medium text-green-700 cursor-pointer">
-                      ยืนยันว่าอ่านทั้งหมดเสร็จแล้ว
-                    </label>
-                  </div>
-                )}
-                
-                <Button 
-                  onClick={handleGuideRead}
-                  disabled={!step1Completed || !step2Completed || !allStepsRead}
-                  className={`w-full h-12 sm:h-14 text-base sm:text-lg font-semibold shadow-lg transition-all transform hover:scale-105 rounded-full ${
-                    step1Completed && step2Completed && allStepsRead
-                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' 
-                      : 'bg-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="text-lg sm:text-xl">✅</span>
-                    <span>
-                      {step1Completed && step2Completed && allStepsRead
-                        ? 'อ่านเสร็จแล้ว' 
-                        : step1Completed && step2Completed
-                        ? 'กรุณายืนยันว่าอ่านทั้งหมดเสร็จแล้ว'
-                        : 'กรุณาทำตามขั้นตอนที่ 1 และ 2 ให้เสร็จก่อน'
-                      }
-                    </span>
-                  </div>
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Step Detail Dialog */}
-        <Dialog open={showStepDialog} onOpenChange={setShowStepDialog}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-blue-50/95 to-purple-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
-            <DialogHeader className="text-center pb-4 sm:pb-6">
-              <div className="relative mb-3 sm:mb-4">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400/30 to-purple-400/30 rounded-full blur-2xl"></div>
-                <div className="relative bg-gradient-to-r from-blue-500 to-purple-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
-                  <span className="text-xl sm:text-2xl">📋</span>
-                </div>
-              </div>
-              
-              <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                {currentStep === 1 ? 'เปลี่ยนรหัสผ่านใหม่' : 'ทำให้ "เมลแดง" (Unverified Email)'}
-              </DialogTitle>
-              <DialogDescription className="text-gray-600 text-sm sm:text-base mt-2">
-                {currentStep === 1 ? 'ทำตามขั้นตอนนี้เพื่อเปลี่ยนรหัสผ่าน Roblox ของคุณ' : 'ทำตามขั้นตอนนี้เพื่อทำให้อีเมลขึ้นแดง (ไม่ยืนยัน)'}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4 sm:space-y-6">
-              {currentStep === 1 ? (
-                /* Step 1 Detail */
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
-                  <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">1</span>
-                    เปลี่ยนรหัสผ่านใหม่
-                  </h3>
-                  <div className="space-y-3 sm:space-y-4 text-gray-700 text-sm sm:text-base">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 1: เข้าสู่ระบบ</h4>
-                      <p>เข้าสู่ระบบ roblox.com หรือแอป Roblox ด้วยบัญชีของคุณ</p>
                     </div>
                     
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 2: ไปที่ Settings</h4>
-                      <p>ไปที่ Settings → Account Info</p>
-                    </div>
-                    
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 3: เลือก Change Password</h4>
-                      <p>เลือก Change Password</p>
-                    </div>
-                    
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">ขั้นตอนที่ 4: เปลี่ยนรหัสผ่าน</h4>
-                      <p>ใส่รหัสเดิม → รหัสใหม่ → ยืนยันรหัสใหม่ → Save</p>
-                    </div>
-                    
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-yellow-800 mb-2 flex items-center gap-2">
-                        <span>💡</span>
-                        เคล็ดลับ
-                      </h4>
-                      <p className="text-yellow-800">
-                        ใช้รหัสที่จำง่ายสำหรับตัวเอง แต่ต้องเดายาก (ผสมตัวใหญ่–เล็ก–ตัวเลข)
+            {/* Success Note */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center">
+              <span className="text-3xl sm:text-4xl mb-3 block">✅</span>
+              <h4 className="font-bold text-green-900 text-base sm:text-lg mb-2">พร้อมแล้ว!</h4>
+              <p className="text-sm sm:text-base text-green-800">
+                หากคุณทำตามขั้นตอนข้างต้นครบถ้วนแล้ว<br className="hidden sm:inline" />
+                สามารถเริ่มทำการแลกโค้ดเพื่อเติมโรบัคได้เลย
                       </p>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                /* Step 2 Detail */
-                <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border border-white/20">
-                  <h3 className="text-lg sm:text-xl font-bold text-blue-600 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="bg-blue-100 text-blue-600 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold">2</span>
-                    ทำให้ "เมลแดง" (Unverified Email)
-                  </h3>
-                  <div className="space-y-3 sm:space-y-4 text-gray-700 text-sm sm:text-base">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">วิธีที่ 1: ใส่อีเมลทั่วไป</h4>
-                      <p>ใส่อีเมลทั่ว ๆ ไป (ที่ไม่ใช้งานจริง) → ระบบจะขึ้นแดงทันที</p>
-                    </div>
-                    
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-blue-800 mb-2">วิธีที่ 2: ใส่อีเมลใหม่</h4>
-                      <p>ใส่อีเมลใหม่แต่ยังไม่กดยืนยัน → ระบบก็จะขึ้นแดงเหมือนกัน</p>
-                    </div>
-                    
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-                      <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
-                        <span>✅</span>
-                        จุดสำคัญ
-                      </h4>
-                      <p className="text-green-800">
-                        ถ้าอีเมลขึ้นแดง = ร้านเติมได้แน่นอน ไม่ติด OTP ส่งเข้าอีเมลลูกค้า
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             
-            <DialogFooter className="pt-4 sm:pt-6">
-              <Button 
-                onClick={handleStepDialogClose}
-                className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg transition-all transform hover:scale-105 rounded-full"
+          <DialogFooter className="pt-4 sm:pt-6">
+            <div className="w-full space-y-4">
+              {/* Progress indicator */}
+              <div className="flex items-center justify-center gap-4 text-sm">
+                <div className={`flex items-center gap-2 ${step2Completed ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step2Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
+                    {step2Completed ? '✓' : '2'}
+                  </span>
+                  <span className="hidden sm:inline">ขั้นตอนที่ 2</span>
+                </div>
+                <div className={`flex items-center gap-2 ${step3Completed ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step3Completed ? 'bg-green-600 text-white' : 'bg-gray-300'}`}>
+                    {step3Completed ? '✓' : '3'}
+                  </span>
+                  <span className="hidden sm:inline">ขั้นตอนที่ 3</span>
+                </div>
+              </div>
+
+              {/* Button */}
+              <Button
+                onClick={handleGuideRead}
+                disabled={!step2Completed || !step3Completed}
+                className={`w-full h-12 sm:h-14 text-base sm:text-lg font-semibold shadow-lg transition-all transform hover:scale-105 rounded-full ${
+                  step2Completed && step3Completed
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700' 
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
               >
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-lg sm:text-xl">✅</span>
-                  <span>เข้าใจแล้ว</span>
+                  <span>
+                    {step2Completed && step3Completed
+                      ? 'เข้าใจแล้ว เริ่มเติมโรบัค' 
+                      : 'กรุณาทำตามขั้นตอนที่ 2 และ 3 ให้เสร็จก่อน'
+                    }
+                  </span>
                 </div>
               </Button>
-            </DialogFooter>
+            </div>
+          </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -1729,17 +2104,38 @@ export default function Home() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="contact" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
-                    <span className="text-green-600">📱</span>
-                    เบอร์โทรศัพท์
+                  <Label htmlFor="facebookName" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
+                    <span className="text-green-600">📘</span>
+                    ชื่อเฟส (Facebook)
                   </Label>
                   <Input
-                    id="contact"
-                    value={redeemForm.contact}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, contact: e.target.value }))}
-                    placeholder="กรอกเบอร์โทรศัพท์ (เช่น 08X-XXX-XXXX)"
+                    id="facebookName"
+                    value={redeemForm.facebookName}
+                    onChange={(e) => setRedeemForm(prev => ({ ...prev, facebookName: e.target.value }))}
+                    placeholder="กรอกชื่อเฟสบุคของคุณ"
                     className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
                   />
+                </div>
+                
+                <div>
+                  <Label htmlFor="lineId" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
+                    <span className="text-green-600">💬</span>
+                    ไอดีไลน์ (Line ID)
+                  </Label>
+                  <Input
+                    id="lineId"
+                    value={redeemForm.lineId}
+                    onChange={(e) => setRedeemForm(prev => ({ ...prev, lineId: e.target.value }))}
+                    placeholder="กรอกไอดีไลน์ของคุณ (เช่น @yourlineid)"
+                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
+                  />
+                </div>
+                
+                {/* หมายเหตุ */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                  <p className="text-blue-800 text-xs sm:text-sm">
+                    <strong>📌 หมายเหตุ:</strong> กรอกชื่อเฟสหรือไอดีไลน์อย่างน้อย 1 ช่อง (หรือทั้ง 2 ช่องก็ได้) เพื่อให้ทางร้านติดต่อกลับได้
+                  </p>
                 </div>
               </div>
               
@@ -1750,7 +2146,7 @@ export default function Home() {
                   <div>
                     <h4 className="text-green-800 font-semibold mb-1">ข้อมูลสำคัญ</h4>
                     <p className="text-green-700 text-sm">
-                      กรุณากรอกข้อมูลให้ถูกต้อง ระบบจะส่ง Robux ไปยังบัญชี Roblox ของคุณภายใน 24 ชั่วโมง
+                      กรุณากรอกข้อมูลให้ถูกต้อง และให้ข้อมูลติดต่อ (Facebook/Line) เพื่อให้ทางร้านสามารถติดต่อกลับได้ ระบบจะส่ง Robux ไปยังบัญชี Roblox ของคุณภายใน 24 ชั่วโมง
                     </p>
                   </div>
                 </div>
@@ -2115,6 +2511,302 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
+      {/* Prepare ID/Password Guide Dialog */}
+      <Dialog open={showPrepareGuide} onOpenChange={setShowPrepareGuide}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-purple-50/95 to-pink-50/95 backdrop-blur-xl border border-white/30 shadow-2xl rounded-2xl sm:rounded-3xl">
+          <DialogHeader className="text-center pb-4 sm:pb-6">
+            <div className="relative mb-3 sm:mb-4">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-400/30 to-pink-400/30 rounded-full blur-2xl"></div>
+              <div className="relative bg-gradient-to-r from-purple-500 to-pink-500 rounded-full w-12 h-12 sm:w-16 sm:h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
+                <span className="text-xl sm:text-2xl">📝</span>
+              </div>
+            </div>
+            
+            <DialogTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              เตรียมไอดี/รหัสก่อนเติมโรบัค
+            </DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-gray-600 mt-2">
+              ขั้นตอนเตรียมความพร้อมก่อนทำการเติมโรบัค
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 sm:space-y-6 px-2 sm:px-4">
+            {/* วิธีที่ 1 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-purple-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-purple-900 mb-2">
+                    ✅ ตรวจสอบชื่อกับรหัสให้เรียบร้อย
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    ก่อนทำการส่งให้ทางร้านเติม กรุณาตรวจสอบให้แน่ใจว่า:
+                  </p>
+                  <div className="bg-purple-50 rounded-lg p-3 sm:p-4 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">ชื่อผู้ใช้ (Username) ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ไม่ใช่ชื่อที่แสดง (Display Name) แต่เป็น Username ที่ใช้ล็อคอิน</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">รหัสผ่าน (Password) ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ลองเข้าสู่ระบบด้วยตัวเองก่อนเพื่อยืนยัน</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold">✓</span>
+                      <div>
+                        <p className="font-semibold text-purple-900 text-sm sm:text-base">ตัวพิมพ์เล็ก-ใหญ่ถูกต้อง</p>
+                        <p className="text-xs sm:text-sm text-gray-600">ระวังตัวพิมพ์เล็กใหญ่ในรหัสผ่าน</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* วิธีที่ 2 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-pink-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  2
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-pink-900 mb-2">
+                    📧 ตรวจสอบไอดีว่าติดเมลหรือไม่
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    และหากติดเมล ต้องทำเมลแดงหรือยัง
+                  </p>
+                  
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 sm:p-4 rounded-lg mb-3">
+                    <p className="text-sm sm:text-base text-yellow-800 font-semibold mb-2">
+                      ⚠️ สำคัญมาก! เมลแดงคืออะไร?
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-700 mb-2">
+                      เมลแดง คือการยืนยันอีเมลใน Roblox เพื่อให้สามารถรับโรบัคได้
+                    </p>
+                  </div>
+
+                  {/* วิธีเช็คเมลว่าพร้อมเติมหรือยัง */}
+                  <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-3 sm:p-4 mb-3">
+                    <p className="font-semibold text-blue-900 text-sm sm:text-base mb-2 flex items-center gap-2">
+                      <span>🔍</span>
+                      วิธีเช็คเมลว่าพร้อมเติมหรือยัง:
+                    </p>
+                    <div className="space-y-3">
+                      <div className="bg-white rounded-lg p-3 border border-blue-200">
+                        <img 
+                          src="https://img2.pic.in.th/pic/247d481f921ca86f200aeb0e7999f3a4.jpg"
+                          alt="วิธีเช็คเมล Roblox"
+                          className="w-full rounded-lg shadow-md mb-3"
+                        />
+                        <ol className="space-y-2 text-xs sm:text-sm text-gray-700">
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">1.</span>
+                            <span>เข้าเว็บ <strong>Roblox.com</strong> และล็อคอินเข้าสู่ระบบ</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">2.</span>
+                            <span>กดที่ <strong>⚙️ Settings (ตั้งค่า)</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 font-bold min-w-[20px]">3.</span>
+                            <span>ดูที่ส่วน <strong>Email Address</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-green-600 font-bold min-w-[20px]">✅</span>
+                            <span><strong>ไม่มีเมล</strong> = <strong className="text-green-600">เติมได้</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-green-600 font-bold min-w-[20px]">✅</span>
+                            <span><strong>เมลไม่ได้ยืนยัน</strong> = <strong className="text-green-600">เติมได้</strong></span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-red-600 font-bold min-w-[20px]">❌</span>
+                            <span><strong>เมลยืนยันแล้วยังไม่เป็นเมลแดง</strong> = <strong className="text-red-600">เติมไม่ได้ ต้องทำเมลแดงก่อน</strong></span>
+                          </li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-red-50 rounded-lg p-3 sm:p-4 space-y-3">
+                    <div>
+                      <p className="font-semibold text-red-900 text-sm sm:text-base mb-3 flex items-center gap-2">
+                        <span>🎥</span>
+                        วิดีโอสอนทำเมลแดง:
+                      </p>
+                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingBottom: '56.25%' }}>
+                        <iframe
+                          className="absolute top-0 left-0 w-full h-full"
+                          src="https://www.youtube.com/embed/Abz6K4LyOww"
+                          title="วิธีทำเมลแดง Roblox"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    </div>
+                    <div className="text-xs sm:text-sm text-red-800">
+                      <p className="font-semibold mb-1">ขั้นตอนสรุป:</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>ดูคลิปสอนด้านบน</li>
+                        <li>ทำตามขั้นตอนในคลิปให้ครบถ้วน</li>
+                        <li>ตรวจสอบว่าเมลเป็นสีแดงแล้ว</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* วิธีที่ 3 */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 border-2 border-blue-200 shadow-lg">
+              <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shadow-lg">
+                  3
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-xl font-bold text-blue-900 mb-2">
+                    📱 ออกจากระบบในโทรศัพท์
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-3">
+                    ออกจากรหัส/ระบบในโทรศัพท์ แล้วกด Log Out
+                  </p>
+                  
+                  {/* วิธี Log out all session - ต้องทำก่อน */}
+                  <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-3 sm:p-4 mb-3">
+                    <p className="font-semibold text-purple-900 text-sm sm:text-base mb-2 flex items-center gap-2">
+                      <span>🔐</span>
+                      วิธี Log out all session (ออกจากระบบทุกอุปกรณ์):
+                    </p>
+                    <div className="bg-white rounded-lg p-3 border border-purple-200 mb-3">
+                      <img 
+                        src="https://img5.pic.in.th/file/secure-sv1/Log-out-all-seesion.png"
+                        alt="Log out all session Roblox"
+                        className="w-full rounded-lg shadow-md mb-3"
+                      />
+                      <ol className="space-y-2 text-xs sm:text-sm text-gray-700">
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">1.</span>
+                          <span>เข้าเว็บ <strong>Roblox.com</strong> และล็อคอินเข้าสู่ระบบ</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">2.</span>
+                          <span>กดที่ <strong>⚙️ Settings (ตั้งค่า)</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">3.</span>
+                          <span>เลื่อนลงมาหา <strong>"Sign out of all other sessions"</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">4.</span>
+                          <span>กดปุ่ม <strong className="text-red-600">"Sign Out"</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-purple-600 font-bold min-w-[20px]">5.</span>
+                          <span>ระบบจะออกจากระบบ Roblox <strong>ทุกอุปกรณ์</strong> ยกเว้นเครื่องที่คุณใช้อยู่ตอนนี้</span>
+                        </li>
+                      </ol>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-2 sm:p-3">
+                      <p className="text-xs sm:text-sm text-green-800">
+                        <strong>💡 เคล็ดลับ:</strong> วิธีนี้จะออกจากระบบทุกอุปกรณ์ทีเดียว สะดวกกว่าออกทีละเครื่อง
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* หลังจากทำ Log out all session แล้ว */}
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-3 sm:p-4 rounded-lg mb-3">
+                    <p className="text-sm sm:text-base text-blue-800 font-semibold mb-2">
+                      📲 วิธีออกจากระบบ Roblox บนโทรศัพท์ (หลังจาก Sign out all session เสร็จ)
+                    </p>
+                    <ol className="space-y-2 text-sm sm:text-base text-gray-700">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">1.</span>
+                        <span>เปิดแอป <strong>Roblox</strong> บนโทรศัพท์</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">2.</span>
+                        <span>กดที่ <strong>เมนู 3 จุด (⋯)</strong> หรือ <strong>ไอคอนโปรไฟล์</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">3.</span>
+                        <span><strong>เลื่อนลง</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">4.</span>
+                        <span>เลือก <strong>"Log Out"</strong> หรือ <strong>"ออกจากระบบ"</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-600 font-bold min-w-[20px]">5.</span>
+                        <span><strong>ปิดแอป Roblox</strong> ให้เรียบร้อย</span>
+                      </li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-yellow-50 rounded-lg p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm text-yellow-800">
+                      <strong>⚠️ สำคัญ:</strong> หากไม่ออกจากระบบในโทรศัพท์ อาจจะทำให้เติมโรบัคไม่สำเร็จเพราะมีการยืนยันตัวตนซ้ำซ้อน
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Warning Note */}
+            <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl sm:text-3xl">⚠️</span>
+                <div>
+                  <h4 className="font-bold text-red-900 text-base sm:text-lg mb-2">ข้อควรระวัง</h4>
+                  <ul className="space-y-1 sm:space-y-2 text-sm sm:text-base text-red-800">
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>ห้ามเปลี่ยนรหัสผ่าน</strong> หลังจากกรอกข้อมูลแล้ว</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>กรอกข้อมูลให้ถูกต้อง</strong> หากข้อมูลผิด จะทำให้เติมโรบัคไม่สำเร็จ</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mr-2">•</span>
+                      <span><strong>ห้ามล็อคอินขณะกำลังเติม</strong> รอจนกว่าจะได้รับการแจ้งเตือนว่าเติมเสร็จแล้ว</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Success Note */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center">
+              <span className="text-3xl sm:text-4xl mb-3 block">✅</span>
+              <h4 className="font-bold text-green-900 text-base sm:text-lg mb-2">พร้อมแล้ว!</h4>
+              <p className="text-sm sm:text-base text-green-800">
+                หากคุณทำตามขั้นตอนข้างต้นครบถ้วนแล้ว<br className="hidden sm:inline" />
+                สามารถเริ่มทำการแลกโค้ดเพื่อเติมโรบัคได้เลย
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-4 sm:pt-6">
+            <Button
+              onClick={() => setShowPrepareGuide(false)}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-2 sm:py-3 rounded-full text-sm sm:text-base"
+            >
+              เข้าใจแล้ว เริ่มเติมโรบัค
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Advertisement Popup */}
       <Dialog open={showAdPopup} onOpenChange={setShowAdPopup}>
         <DialogContent className="sm:max-w-lg bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl p-0 overflow-hidden">
@@ -2151,5 +2843,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { QueueItem, QueueDisplay } from '@/types';
 import { getQueuePosition, getQueueDisplay, searchQueueByGameInfo } from '@/lib/queueApi';
 import { testSimpleSearch } from '@/lib/testSearch';
-import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X, MessageCircle, Home, ArrowLeft } from 'lucide-react';
+import { Search, Clock, CheckCircle, XCircle, AlertCircle, Users, Play, MessageSquare, X, MessageCircle, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
@@ -361,36 +361,87 @@ export default function QueueStatusChecker() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
-      <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-8">
-        {/* Navigation Bar */}
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <Link 
-            to="/" 
-            className="group flex items-center space-x-2 sm:space-x-3 bg-white/10 backdrop-blur-xl hover:bg-white/20 border border-white/20 hover:border-white/30 rounded-xl sm:rounded-2xl px-3 py-2 sm:px-6 sm:py-3 transition-all duration-300 hover:scale-105 shadow-lg"
-          >
-            <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-full p-1.5 sm:p-2 group-hover:scale-110 transition-transform duration-300">
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div>
-              <div className="text-white font-semibold text-sm sm:text-lg">กลับหน้าแรก</div>
-              <div className="text-purple-200 text-xs sm:text-sm">Thai Robux Redemption</div>
-            </div>
-          </Link>
-          
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <Link 
-              to="/admin" 
-              className="group bg-white/10 backdrop-blur-xl hover:bg-white/20 border border-white/20 hover:border-white/30 rounded-xl sm:rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 transition-all duration-300 hover:scale-105"
-            >
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-full p-1 sm:p-1.5 group-hover:scale-110 transition-transform duration-300">
-                  <Home className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
-                </div>
-                <span className="text-white text-xs sm:text-sm font-medium">แอดมิน</span>
-              </div>
+      {/* Top Navigation Bar */}
+      <nav className="bg-purple-800/30 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link to="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+              <img 
+                src="https://img5.pic.in.th/file/secure-sv1/2318a16a76694dc8dccbd75362a64368deb68b00127501b51b1a9a0588ca2f42.png" 
+                alt="Lemon Shop Logo" 
+                className="w-10 h-10 object-contain"
+              />
+              <span className="text-white font-bold text-lg hidden sm:inline-block">Lemon Shop</span>
             </Link>
+            
+            {/* Navigation Menu */}
+            <div className="flex items-center space-x-1 md:space-x-2">
+              <Link to="/">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+                >
+                  🏠 หน้าหลัก
+                </Button>
+              </Link>
+              
+              <Link to="/queue-status">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4 bg-white/10"
+                >
+                  🔍 เช็คคิว
+                </Button>
+              </Link>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://www.facebook.com/LemonShopStore/', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📞 ติดต่อร้าน
+              </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://lemonshop.rdcw.xyz/', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                🛒 ซื้อสินค้าเพิ่มเติม
+              </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => window.open('https://youtu.be/caiYmzge0lk', '_blank')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📖 วิธีการใช้สินค้า
+              </Button>
+              
+              <Button 
+                variant="ghost"
+                onClick={() => alert('กรุณากลับไปหน้าแรกเพื่อดูคู่มือเตรียมไอดี/รหัส')}
+                className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-3 md:px-4"
+              >
+                📝 เตรียมไอดี/รหัส
+              </Button>
+              
+              <Link to="/admin">
+                <Button 
+                  variant="ghost" 
+                  className="text-white hover:bg-white/10 rounded-full text-sm md:text-base px-2 md:px-3 ml-2 border border-white/20"
+                >
+                  <Settings className="w-4 h-4 md:mr-1" />
+                  <span className="hidden md:inline">แอดมิน</span>
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
+      </nav>
+
+      <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-8">
 
         {/* หัวข้อหลัก */}
         <div className="text-center space-y-4">
@@ -767,7 +818,7 @@ export default function QueueStatusChecker() {
                                       ดูคลิปสอนทำเมลแดง:
                                     </p>
                                     <a
-                                      href="https://youtu.be/uw2N7kl5ZbU?si=3bCCzPxt0A4ffBlV"
+                                      href="https://youtu.be/caiYmzge0lk"
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="block bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg text-center font-semibold transition-all"
