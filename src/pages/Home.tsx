@@ -1078,45 +1078,53 @@ export default function Home() {
           </div>
         </div>
         
+        {/* Overlay */}
+        {isMobileMenuOpen && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[999]"
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+        )}
+        
         {/* Mobile Menu Slide-in */}
         <div
-          className={`lg:hidden fixed inset-y-0 left-0 w-72 bg-purple-900/98 backdrop-blur-xl border-r border-white/10 transform transition-transform duration-300 ease-in-out z-50 ${
+          className={`lg:hidden fixed inset-y-0 left-0 w-80 bg-gradient-to-br from-purple-900/98 via-blue-900/98 to-indigo-900/98 backdrop-blur-xl border-r border-white/20 transform transition-transform duration-300 ease-in-out z-[1000] shadow-2xl ${
             isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
           <div className="flex flex-col h-full">
             {/* Mobile Menu Header */}
-            <div className="flex items-center justify-between p-4 border-b border-white/10">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-between p-6">
+              <div className="flex items-center space-x-3">
                 <img 
                   src="https://img5.pic.in.th/file/secure-sv1/2318a16a76694dc8dccbd75362a64368deb68b00127501b51b1a9a0588ca2f42.png" 
                   alt="Lemon Shop Logo" 
-                  className="w-8 h-8 object-contain"
+                  className="w-10 h-10 object-contain"
                 />
-                <span className="text-white font-bold text-lg">Lemon Shop</span>
+                <span className="text-white font-bold text-2xl">Lemon Shop</span>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="text-white p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="text-white p-2 hover:bg-white/20 rounded-full transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-7 h-7" />
               </button>
             </div>
             
             {/* Mobile Menu Items */}
-            <div className="flex-1 overflow-y-auto py-4">
-              <div className="space-y-1 px-3">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-2">
                 <Link to="/" onClick={() => setIsMobileMenuOpen(false)}>
-                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3">
-                    <span className="text-xl">🏠</span>
-                    <span>หน้าหลัก</span>
+                  <button className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4">
+                    <span className="text-2xl">🏠</span>
+                    <span className="text-lg font-medium">หน้าหลัก</span>
                   </button>
                 </Link>
                 
                 <Link to="/queue-status" onClick={() => setIsMobileMenuOpen(false)}>
-                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3">
-                    <span className="text-xl">🔍</span>
-                    <span>เช็คคิว</span>
+                  <button className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4">
+                    <span className="text-2xl">🔍</span>
+                    <span className="text-lg font-medium">เช็คคิว</span>
                   </button>
                 </Link>
                 
@@ -1125,10 +1133,10 @@ export default function Home() {
                     window.open('https://www.facebook.com/LemonShopStore/', '_blank');
                     setIsMobileMenuOpen(false);
                   }}
-                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                  className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4"
                 >
-                  <span className="text-xl">📞</span>
-                  <span>ติดต่อร้าน</span>
+                  <span className="text-2xl">📞</span>
+                  <span className="text-lg font-medium">ติดต่อร้าน</span>
                 </button>
                 
                 <button
@@ -1136,10 +1144,10 @@ export default function Home() {
                     window.open('https://lemonshop.rdcw.xyz/', '_blank');
                     setIsMobileMenuOpen(false);
                   }}
-                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                  className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4"
                 >
-                  <span className="text-xl">🛒</span>
-                  <span>ซื้อสินค้าเพิ่มเติม</span>
+                  <span className="text-2xl">🛒</span>
+                  <span className="text-lg font-medium">ซื้อสินค้าเพิ่มเติม</span>
                 </button>
                 
                 <button
@@ -1147,10 +1155,10 @@ export default function Home() {
                     window.open('https://youtu.be/caiYmzge0lk', '_blank');
                     setIsMobileMenuOpen(false);
                   }}
-                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                  className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4"
                 >
-                  <span className="text-xl">📖</span>
-                  <span>วิธีการใช้สินค้า</span>
+                  <span className="text-2xl">📖</span>
+                  <span className="text-lg font-medium">วิธีการใช้สินค้า</span>
                 </button>
                 
                 <button
@@ -1158,32 +1166,24 @@ export default function Home() {
                     setShowPrepareGuide(true);
                     setIsMobileMenuOpen(false);
                   }}
-                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3"
+                  className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4"
                 >
-                  <span className="text-xl">📝</span>
-                  <span>เตรียมไอดี/รหัส</span>
+                  <span className="text-2xl">📝</span>
+                  <span className="text-lg font-medium">เตรียมไอดี/รหัส</span>
                 </button>
                 
-                <div className="my-3 border-t border-white/10"></div>
+                <div className="my-4 border-t border-white/20"></div>
                 
                 <Link to="/admin" onClick={() => setIsMobileMenuOpen(false)}>
-                  <button className="w-full text-left px-4 py-3 text-white hover:bg-white/10 rounded-lg transition-colors flex items-center space-x-3 border border-white/20">
-                    <Settings className="w-5 h-5" />
-                    <span>แอดมิน</span>
+                  <button className="w-full text-left px-5 py-4 text-white hover:bg-white/10 rounded-xl transition-colors flex items-center space-x-4 border border-white/30">
+                    <Settings className="w-6 h-6" />
+                    <span className="text-lg font-medium">แอดมิน</span>
                   </button>
                 </Link>
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Overlay */}
-        {isMobileMenuOpen && (
-          <div
-            className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            onClick={() => setIsMobileMenuOpen(false)}
-          ></div>
-        )}
       </nav>
 
       <div className="container mx-auto px-4 py-8">
