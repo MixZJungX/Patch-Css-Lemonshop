@@ -905,27 +905,103 @@ export default function QueueStatusChecker() {
                                 <>
                                   <p className="font-semibold text-orange-100 mb-2">📱 วิธีแก้ไขปัญหาการยืนยันโทรศัพท์:</p>
                                   
-                                  <div className="bg-blue-500/20 border border-blue-400/50 rounded-lg p-4 mb-3">
+                                  {/* วิธี Log out all session - ต้องทำก่อน */}
+                                  <div className="bg-purple-500/20 border-2 border-purple-400/50 rounded-lg p-4 mb-3">
                                     <p className="text-white font-semibold mb-2 flex items-center gap-2">
-                                      <span>🔓</span>
-                                      วิธีแก้ไข:
+                                      <span>🔐</span>
+                                      วิธี Log out all session (ออกจากระบบทุกอุปกรณ์):
                                     </p>
-                                    <div className="space-y-2 text-sm">
-                                      <p className="bg-white/10 p-2 rounded">
-                                        <span className="font-semibold text-yellow-300">⚠️ สำคัญ:</span> ให้คุณ<span className="font-bold text-yellow-200"> ล็อคเอาท์ (Log Out) ออกจาก Roblox ในโทรศัพท์</span>ของคุณ
+                                    <div className="bg-white/10 rounded-lg p-3 border border-purple-300/30 mb-3">
+                                      <img 
+                                        src="https://img2.pic.in.th/pic/Logout-all-seesion-.jpg"
+                                        alt="Log out all session Roblox"
+                                        className="w-full rounded-lg shadow-md mb-3"
+                                      />
+                                      <ol className="space-y-2 text-xs sm:text-sm text-white">
+                                        <li className="flex items-start gap-2">
+                                          <span className="text-purple-300 font-bold min-w-[20px]">1.</span>
+                                          <span>เข้าเว็บ <strong>Roblox.com</strong> และล็อคอินเข้าสู่ระบบ</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="text-purple-300 font-bold min-w-[20px]">2.</span>
+                                          <span>กดที่ <strong>⚙️ Settings (ตั้งค่า)</strong></span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="text-purple-300 font-bold min-w-[20px]">3.</span>
+                                          <span>เลื่อนลงมาหา <strong>"Sign out of all other sessions"</strong></span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="text-purple-300 font-bold min-w-[20px]">4.</span>
+                                          <span>กดปุ่ม <strong className="text-red-300">"Sign Out"</strong></span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="text-purple-300 font-bold min-w-[20px]">5.</span>
+                                          <span>ระบบจะออกจากระบบ Roblox <strong>ทุกอุปกรณ์</strong> ยกเว้นเครื่องที่คุณใช้อยู่ตอนนี้</span>
+                                        </li>
+                                      </ol>
+                                    </div>
+                                    <div className="bg-green-500/20 rounded-lg p-2">
+                                      <p className="text-xs sm:text-sm text-green-100">
+                                        <strong>💡 เคล็ดลับ:</strong> วิธีนี้จะออกจากระบบทุกอุปกรณ์ทีเดียว สะดวกกว่าออกทีละเครื่อง
                                       </p>
-                                      <p className="pl-2">1. เข้าแอป Roblox ในโทรศัพท์</p>
-                                      <p className="pl-2">2. กดที่เมนู (3 จุด) หรือไอคอนโปรไฟล์</p>
-                                      <p className="pl-2">3. เลือก "Log Out" หรือ "ออกจากระบบ"</p>
-                                      <p className="pl-2">4. ยืนยันการออกจากระบบ</p>
                                     </div>
                                   </div>
 
-                                  <div className="space-y-1 pl-2 text-sm">
-                                    <p className="font-semibold">ขั้นตอนสรุป:</p>
-                                    <p>1. ล็อคเอาท์ออกจาก Roblox ในโทรศัพท์</p>
-                                    <p>2. หากมั่นใจว่าล็อคเอาท์แล้ว กดปุ่ม "แก้ไขปัญหาแล้ว" ด้านล่าง</p>
-                                    <p>3. หากมีปัญหา สอบถาม/ทักมาทางไลน์</p>
+                                  {/* หลังจากทำ Log out all session แล้ว */}
+                                  <div className="bg-blue-500/20 border-l-4 border-blue-400/50 p-4 rounded-lg mb-3">
+                                    <p className="text-sm sm:text-base text-blue-100 font-semibold mb-2">
+                                      📲 วิธีออกจากระบบ Roblox บนโทรศัพท์ (หลังจาก Sign out all session เสร็จ)
+                                    </p>
+                                    <ol className="space-y-2 text-sm sm:text-base text-white">
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-blue-300 font-bold min-w-[20px]">1.</span>
+                                        <span>เปิดแอป <strong>Roblox</strong> บนโทรศัพท์</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-blue-300 font-bold min-w-[20px]">2.</span>
+                                        <span>กดที่ <strong>เมนู 3 จุด (⋯)</strong> หรือ <strong>ไอคอนโปรไฟล์</strong></span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-blue-300 font-bold min-w-[20px]">3.</span>
+                                        <span><strong>เลื่อนลง</strong></span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-blue-300 font-bold min-w-[20px]">4.</span>
+                                        <span>เลือก <strong>"Log Out"</strong> หรือ <strong>"ออกจากระบบ"</strong></span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-blue-300 font-bold min-w-[20px]">5.</span>
+                                        <span><strong>ปิดแอป Roblox</strong> ให้เรียบร้อย</span>
+                                      </li>
+                                    </ol>
+                                  </div>
+
+                                  <div className="bg-yellow-500/20 rounded-lg p-3 mb-3">
+                                    <p className="text-xs sm:text-sm text-yellow-100">
+                                      <strong>⚠️ สำคัญ:</strong> หากไม่ออกจากระบบในโทรศัพท์ อาจจะทำให้เติมโรบัคไม่สำเร็จเพราะมีการยืนยันตัวตนซ้ำซ้อน
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-1 pl-2 text-sm bg-white/10 p-3 rounded-lg">
+                                    <p className="font-semibold text-white mb-2">✅ ขั้นตอนสรุป:</p>
+                                    <ol className="space-y-1 text-white">
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-green-300 font-bold">1.</span>
+                                        <span>ทำ <strong>Log out all session</strong> จากเว็บ Roblox (ตามรูปภาพด้านบน)</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-green-300 font-bold">2.</span>
+                                        <span>ออกจากระบบ Roblox ในโทรศัพท์</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-green-300 font-bold">3.</span>
+                                        <span>หากมั่นใจว่าล็อคเอาท์แล้ว กดปุ่ม "แก้ไขปัญหาแล้ว" ด้านล่าง</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="text-green-300 font-bold">4.</span>
+                                        <span>หากมีปัญหา สอบถาม/ทักมาทางไลน์</span>
+                                      </li>
+                                    </ol>
                                   </div>
                                 </>
                               )}
