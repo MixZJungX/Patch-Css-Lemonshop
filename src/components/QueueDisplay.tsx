@@ -91,6 +91,43 @@ export default function QueueDisplay() {
     }
   };
 
+  // ฟังก์ชันดึงชื่อจากข้อมูลต่างๆ
+  const getNameFromItem = (item: any): string => {
+    // ลองดึงชื่อจากหลายแหล่ง
+    if (item.roblox_username) return item.roblox_username;
+    if (item.customer_name) return item.customer_name;
+    
+    // ถ้าไม่มี ให้ลองดึงจาก contact_info
+    if (item.contact_info) {
+      const nameMatch = item.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim() ||
+                       item.contact_info.match(/Username:\s*([^|]+)/)?.[1]?.trim();
+      if (nameMatch) return nameMatch;
+    }
+    
+    return '';
+  };
+
+  // ฟังก์ชันเซ็นเซอร์ชื่อ
+  const censorName = (name: string): string => {
+    if (!name || name.trim().length === 0) return name;
+    
+    const trimmedName = name.trim();
+    const length = trimmedName.length;
+    
+    // ถ้าชื่อสั้นมาก (< 3 ตัว) ให้แสดงแค่ตัวแรก + ***
+    if (length <= 3) {
+      return trimmedName[0] + '***';
+    }
+    
+    // ถ้าชื่อปานกลาง (3-6 ตัว) ให้แสดงตัวแรก + *** + ตัวท้าย 1 ตัว
+    if (length <= 6) {
+      return trimmedName[0] + '***' + trimmedName[length - 1];
+    }
+    
+    // ถ้าชื่อยาว (> 6 ตัว) ให้แสดงตัวแรก 2 ตัว + *** + ตัวท้าย 2 ตัว
+    return trimmedName.substring(0, 2) + '***' + trimmedName.substring(length - 2);
+  };
+
   // Filter queue items based on search term
   const filteredNextItems = queueData.next_items?.filter(item => {
     if (!searchTerm.trim()) return true;
@@ -140,7 +177,9 @@ export default function QueueDisplay() {
             <div className="flex items-center justify-center mb-2">
               <Play className="w-6 h-6 mr-2" />
               <span className="text-2xl font-bold">
-                {queueData.current_processing ? 'กำลังดำเนินการ' : 'รอเริ่มงาน'}
+                {queueData.current_processing && queueData.current_processing.length > 0 
+                  ? `กำลังดำเนินการ (${queueData.current_processing.length})` 
+                  : 'รอเริ่มงาน'}
               </span>
             </div>
             <p className="text-sm">สถานะปัจจุบัน</p>
@@ -173,47 +212,6 @@ export default function QueueDisplay() {
           </div>
         </CardContent>
       </Card>
-
-      {/* คิวที่กำลังดำเนินการ */}
-      {queueData.current_processing && (
-        <Card className="bg-gradient-to-r from-red-600 to-red-700 text-white mb-6">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center">
-              🎯 กำลังดำเนินการ
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-center">
-            <div className="text-6xl font-bold mb-2">
-              #{queueData.current_processing.queue_number}
-            </div>
-            <div className="flex items-center justify-center mb-2">
-              <span className="text-2xl mr-2">
-                {getProductTypeIcon(queueData.current_processing.product_type)}
-              </span>
-              <span className="text-xl">
-                {getProductTypeName(queueData.current_processing.product_type)}
-              </span>
-            </div>
-            {(queueData.current_processing.roblox_username || queueData.current_processing.customer_name) && (
-              <div className="space-y-2">
-                <p className="text-lg opacity-90">
-                  {queueData.current_processing.roblox_username || queueData.current_processing.customer_name}
-                </p>
-                {queueData.current_processing.robux_amount && (
-                  <p className="text-sm opacity-75">
-                    💎 {queueData.current_processing.robux_amount} Robux
-                  </p>
-                )}
-                {queueData.current_processing.assigned_code && (
-                  <p className="text-sm opacity-75">
-                    🎫 Code: {queueData.current_processing.assigned_code}
-                  </p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* คิว 3 อันดับถัดไป */}
       <Card className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
@@ -268,6 +266,96 @@ export default function QueueDisplay() {
           )}
         </CardContent>
       </Card>
+
+      {/* คิวที่กำลังดำเนินการ - แสดงทั้งหมด (อยู่ด้านล่างของคิวที่รอดำเนินการ) */}
+      {queueData.current_processing && queueData.current_processing.length > 0 && (
+        <Card className="bg-gradient-to-r from-red-600 to-red-700 text-white mb-6">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">
+              🎯 กำลังดำเนินการ ({queueData.current_processing.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {queueData.current_processing.map((item) => (
+                <Card key={item.id} className="bg-white/10 border-white/20">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-4xl font-bold mb-2">
+                      #{item.queue_number}
+                    </div>
+                    <div className="flex items-center justify-center mb-2">
+                      <span className="text-xl mr-2">
+                        {getProductTypeIcon(item.product_type)}
+                      </span>
+                      <span className="text-sm">
+                        {getProductTypeName(item.product_type)}
+                      </span>
+                    </div>
+                    {/* แสดงชื่อแบบเซ็นเซอร์เสมอ (ดึงจากหลายแหล่ง) */}
+                    {(() => {
+                      const displayName = getNameFromItem(item);
+                      return displayName ? (
+                        <div className="space-y-2">
+                          <p className="text-sm opacity-90">
+                            👤 {censorName(displayName)}
+                          </p>
+                          {item.robux_amount && (
+                            <p className="text-xs opacity-75">
+                              💎 {item.robux_amount} Robux
+                            </p>
+                          )}
+                          {item.assigned_code && (
+                            <p className="text-xs opacity-75">
+                              🎫 Code: {item.assigned_code}
+                            </p>
+                          )}
+                          {/* แสดง admin_notes (คอมเม้นที่แอดมินใส่) */}
+                          {item.admin_notes && (
+                            <div className="mt-2 bg-yellow-500/20 backdrop-blur-sm rounded-lg p-2 border border-yellow-400/30">
+                              <div className="flex items-start gap-1">
+                                <span className="text-yellow-300 text-xs">💬</span>
+                                <div className="text-left flex-1">
+                                  <p className="text-xs font-semibold text-yellow-200 mb-0.5">หมายเหตุ:</p>
+                                  <p className="text-xs text-yellow-100 break-words">{item.admin_notes}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {item.robux_amount && (
+                            <p className="text-xs opacity-75">
+                              💎 {item.robux_amount} Robux
+                            </p>
+                          )}
+                          {item.assigned_code && (
+                            <p className="text-xs opacity-75">
+                              🎫 Code: {item.assigned_code}
+                            </p>
+                          )}
+                          {/* แสดง admin_notes (คอมเม้นที่แอดมินใส่) */}
+                          {item.admin_notes && (
+                            <div className="mt-2 bg-yellow-500/20 backdrop-blur-sm rounded-lg p-2 border border-yellow-400/30">
+                              <div className="flex items-start gap-1">
+                                <span className="text-yellow-300 text-xs">💬</span>
+                                <div className="text-left flex-1">
+                                  <p className="text-xs font-semibold text-yellow-200 mb-0.5">หมายเหตุ:</p>
+                                  <p className="text-xs text-yellow-100 break-words">{item.admin_notes}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ข้อความด้านล่าง */}
       <Card className="mt-6 bg-gradient-to-r from-gray-800 to-gray-900 text-white">

@@ -112,6 +112,43 @@ export default function QueueStatusChecker() {
     }
   };
 
+  // ฟังก์ชันดึงชื่อจากข้อมูลต่างๆ
+  const getNameFromItem = (item: any): string => {
+    // ลองดึงชื่อจากหลายแหล่ง
+    if (item.roblox_username) return item.roblox_username;
+    if (item.customer_name) return item.customer_name;
+    
+    // ถ้าไม่มี ให้ลองดึงจาก contact_info
+    if (item.contact_info) {
+      const nameMatch = item.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim() ||
+                       item.contact_info.match(/Username:\s*([^|]+)/)?.[1]?.trim();
+      if (nameMatch) return nameMatch;
+    }
+    
+    return '';
+  };
+
+  // ฟังก์ชันเซ็นเซอร์ชื่อ
+  const censorName = (name: string): string => {
+    if (!name || name.trim().length === 0) return name;
+    
+    const trimmedName = name.trim();
+    const length = trimmedName.length;
+    
+    // ถ้าชื่อสั้นมาก (< 3 ตัว) ให้แสดงแค่ตัวแรก + ***
+    if (length <= 3) {
+      return trimmedName[0] + '***';
+    }
+    
+    // ถ้าชื่อปานกลาง (3-6 ตัว) ให้แสดงตัวแรก + *** + ตัวท้าย 1 ตัว
+    if (length <= 6) {
+      return trimmedName[0] + '***' + trimmedName[length - 1];
+    }
+    
+    // ถ้าชื่อยาว (> 6 ตัว) ให้แสดงตัวแรก 2 ตัว + *** + ตัวท้าย 2 ตัว
+    return trimmedName.substring(0, 2) + '***' + trimmedName.substring(length - 2);
+  };
+
   const handleCustomerFixedProblem = async () => {
     if (!queueItem) return;
 
@@ -1208,28 +1245,14 @@ export default function QueueStatusChecker() {
                       <div className="flex items-center justify-center mb-1 sm:mb-2">
                         <Play className="w-4 h-4 sm:w-6 sm:h-6 text-purple-400 mr-1 sm:mr-2" />
                         <span className="text-xs sm:text-sm font-bold text-purple-300">
-                          {queueDisplay.current_processing ? 'กำลังดำเนินการ' : 'รอเริ่มงาน'}
+                          {queueDisplay.current_processing && queueDisplay.current_processing.length > 0 
+                            ? `กำลังดำเนินการ (${queueDisplay.current_processing.length})` 
+                            : 'รอเริ่มงาน'}
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm text-purple-200">สถานะปัจจุบัน</p>
                     </div>
                   </div>
-
-                  {/* คิวที่กำลังดำเนินการ */}
-                  {queueDisplay.current_processing && (
-                    <div className="bg-gradient-to-br from-red-500/30 to-pink-500/30 backdrop-blur-sm rounded-2xl p-4 border border-red-400/30 text-center">
-                      <div className="text-3xl sm:text-4xl font-bold text-white mb-2 drop-shadow-lg">
-                        #{queueDisplay.current_processing.queue_number}
-                      </div>
-                      <div className="flex items-center justify-center mb-2">
-                        <span className="text-lg sm:text-xl mr-2">{getProductTypeInfo(queueDisplay.current_processing.product_type).icon}</span>
-                        <span className="text-sm sm:text-base text-white">{getProductTypeInfo(queueDisplay.current_processing.product_type).name}</span>
-                      </div>
-                      {queueDisplay.current_processing.customer_name && (
-                        <p className="text-xs text-red-200">{queueDisplay.current_processing.customer_name}</p>
-                      )}
-                    </div>
-                  )}
 
                   {/* คิว 3 อันดับถัดไป */}
                   <div className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 backdrop-blur-sm rounded-2xl p-4 border border-blue-400/30">
@@ -1280,6 +1303,57 @@ export default function QueueStatusChecker() {
                       </div>
                     )}
                   </div>
+
+                  {/* คิวที่กำลังดำเนินการ - แสดงทั้งหมด (อยู่ด้านล่างของคิวที่รอดำเนินการ) */}
+                  {queueDisplay.current_processing && queueDisplay.current_processing.length > 0 && (
+                    <div className="bg-gradient-to-br from-red-500/30 to-pink-500/30 backdrop-blur-sm rounded-2xl p-4 border border-red-400/30 mt-4">
+                      <div className="text-center mb-4">
+                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2">🎯 กำลังดำเนินการ ({queueDisplay.current_processing.length})</h3>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {queueDisplay.current_processing.map((item) => (
+                          <div key={item.id} className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20 text-center">
+                            <div className="text-2xl sm:text-3xl font-bold text-white mb-2 drop-shadow-lg">
+                              #{item.queue_number}
+                            </div>
+                            <div className="flex items-center justify-center mb-2">
+                              <span className="text-base sm:text-lg mr-2">{getProductTypeInfo(item.product_type).icon}</span>
+                              <span className="text-xs sm:text-sm text-white">{getProductTypeInfo(item.product_type).name}</span>
+                            </div>
+                            {/* แสดงชื่อแบบเซ็นเซอร์เสมอ (ดึงจากหลายแหล่ง) */}
+                            {(() => {
+                              const displayName = getNameFromItem(item);
+                              return (
+                                <>
+                                  {displayName && (
+                                    <p className="text-xs text-red-200 mb-2">👤 {censorName(displayName)}</p>
+                                  )}
+                                  {item.robux_amount && (
+                                    <p className="text-xs text-red-200/80 mb-1">💎 {item.robux_amount} Robux</p>
+                                  )}
+                                  {item.assigned_code && (
+                                    <p className="text-xs text-red-200/80 mb-1">🎫 Code: {item.assigned_code}</p>
+                                  )}
+                                  {/* แสดง admin_notes (คอมเม้นที่แอดมินใส่) */}
+                                  {item.admin_notes && (
+                                    <div className="mt-2 bg-yellow-500/20 backdrop-blur-sm rounded-lg p-2 border border-yellow-400/30">
+                                      <div className="flex items-start gap-1">
+                                        <span className="text-yellow-300 text-xs">💬</span>
+                                        <div className="text-left flex-1">
+                                          <p className="text-xs font-semibold text-yellow-200 mb-0.5">หมายเหตุ:</p>
+                                          <p className="text-xs text-yellow-100 break-words">{item.admin_notes}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

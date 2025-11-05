@@ -53,6 +53,12 @@ export default function Home() {
   const [totalRobuxValue, setTotalRobuxValue] = useState(0);
   const [totalActiveAccounts, setTotalActiveAccounts] = useState(0);
   
+  // สถิติยอดเติมทั้งหมด
+  const [totalRobuxRedeemed, setTotalRobuxRedeemed] = useState(0);
+  const [totalRobuxRedeemedCount, setTotalRobuxRedeemedCount] = useState(0);
+  const [totalChickenRedeemed, setTotalChickenRedeemed] = useState(0);
+  const [totalRainbowRedeemed, setTotalRainbowRedeemed] = useState(0);
+  
   // Loading states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRobuxButtonSubmitting, setIsRobuxButtonSubmitting] = useState(false);
@@ -107,6 +113,7 @@ export default function Home() {
     loadAvailableItems();
     loadAnnouncements();
     loadAdvertisement();
+    loadStatistics();
     
     // โหลดข้อมูล anti-spam จาก localStorage
     loadAntiSpamData();
@@ -162,6 +169,45 @@ export default function Home() {
       setTotalRainbowCredits(totalCredits);
     }
   }, [availableRainbowCodes]);
+
+  // โหลดสถิติยอดเติมทั้งหมด
+  const loadStatistics = async () => {
+    try {
+      // ดึงยอดเติมโรบัคทั้งหมดจาก redemption_requests ที่ completed และ pending
+      const { data: completedRobuxRequests, error: robuxError } = await supabase
+        .from('app_284beb8f90_redemption_requests')
+        .select('robux_amount')
+        .in('status', ['completed', 'pending']);
+      
+      if (!robuxError && completedRobuxRequests) {
+        const totalRobux = completedRobuxRequests.reduce((sum, req) => sum + (req.robux_amount || 0), 0);
+        setTotalRobuxRedeemed(totalRobux);
+        setTotalRobuxRedeemedCount(completedRobuxRequests.length);
+      }
+
+      // ดึงยอดไก่ตันที่แลกแล้วทั้งหมดจาก chicken_accounts ที่ used
+      const { data: usedChickenAccounts, error: chickenError } = await supabase
+        .from('app_284beb8f90_chicken_accounts')
+        .select('id')
+        .eq('status', 'used');
+      
+      if (!chickenError && usedChickenAccounts) {
+        setTotalChickenRedeemed(usedChickenAccounts.length);
+      }
+
+      // ดึงโค้ด Rainbow ที่เติมแล้วทั้งหมดจาก rainbow_requests ที่ completed
+      const { data: completedRainbowRequests, error: rainbowError } = await supabase
+        .from('app_284beb8f90_rainbow_requests')
+        .select('id')
+        .eq('status', 'completed');
+      
+      if (!rainbowError && completedRainbowRequests) {
+        setTotalRainbowRedeemed(completedRainbowRequests.length);
+      }
+    } catch (error) {
+      console.error('Error loading statistics:', error);
+    }
+  };
 
   const loadAvailableItems = async () => {
     try {
@@ -1286,27 +1332,27 @@ export default function Home() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🎮</div>
-              <div className="text-2xl font-bold text-white">{availableCodes.length}</div>
-              <div className="text-purple-200 text-sm">Robux Codes</div>
-              <div className="text-xs text-white/60 mt-1">{totalRobuxValue.toLocaleString()} R$</div>
+              <div className="text-2xl font-bold text-white">{totalRobuxRedeemed.toLocaleString()}</div>
+              <div className="text-purple-200 text-sm">ยอดเติมโรบัคทั้งหมด</div>
+              <div className="text-xs text-white/60 mt-1">{totalRobuxRedeemed.toLocaleString()} R$ ({totalRobuxRedeemedCount.toLocaleString()} รายการ)</div>
             </CardContent>
           </Card>
           
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🐔</div>
-              <div className="text-2xl font-bold text-white">{availableAccounts.filter(account => account.status === 'available').length}</div>
-              <div className="text-purple-200 text-sm">Chicken Accounts</div>
-              <div className="text-xs text-white/60 mt-1">พร้อมใช้งาน</div>
+              <div className="text-2xl font-bold text-white">{totalChickenRedeemed.toLocaleString()}</div>
+              <div className="text-purple-200 text-sm">ยอดไก่ตันที่แลกแล้วทั้งหมด</div>
+              <div className="text-xs text-white/60 mt-1">รวม {totalChickenRedeemed.toLocaleString()} บัญชี</div>
             </CardContent>
           </Card>
           
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-center rounded-3xl">
             <CardContent className="p-6">
               <div className="text-4xl mb-2">🌈</div>
-              <div className="text-2xl font-bold text-white">{availableRainbowCodes.length}</div>
-              <div className="text-purple-200 text-sm">Rainbow Six Codes</div>
-              <div className="text-xs text-white/60 mt-1">{totalRainbowCredits.toLocaleString()} Credits</div>
+              <div className="text-2xl font-bold text-white">{totalRainbowRedeemed.toLocaleString()}</div>
+              <div className="text-purple-200 text-sm">โค้ด Rainbow ที่เติมแล้วทั้งหมด</div>
+              <div className="text-xs text-white/60 mt-1">รวม {totalRainbowRedeemed.toLocaleString()} รายการ</div>
             </CardContent>
           </Card>
           

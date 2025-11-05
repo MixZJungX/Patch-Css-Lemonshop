@@ -16,10 +16,12 @@ import { RedemptionRequest, RedemptionCode, ChickenAccount } from '@/types';
 import { Link } from 'react-router-dom';
 import { Upload, Search, X, Filter } from 'lucide-react';
 import QueueManager from '@/components/QueueManager';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'advertisements'>('requests');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'advertisements'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
@@ -54,6 +56,30 @@ export default function Admin() {
   const [advertisements, setAdvertisements] = useState<Array<{ id: string; title: string; image_url: string; link_url?: string; is_active: boolean; created_at?: string }>>([]);
   const [newAd, setNewAd] = useState({ title: '', image_url: '', link_url: '' });
   const [uploadingAd, setUploadingAd] = useState(false);
+  
+  // Dashboard states
+  const [queueStats, setQueueStats] = useState({
+    completed: 0,
+    problem: 0,
+    total: 0
+  });
+  const [queueChartData, setQueueChartData] = useState<Array<{ date: string; completed: number; problem: number }>>([]);
+  const [chickenStats, setChickenStats] = useState({
+    used: 0,
+    available: 0,
+    total: 0
+  });
+  const [robuxStats, setRobuxStats] = useState({
+    used: 0,
+    available: 0,
+    total: 0
+  });
+  
+  // Chart filter states
+  const [chartPeriod, setChartPeriod] = useState<'day' | 'month' | 'year'>('day');
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM format
+  const [robuxChartData, setRobuxChartData] = useState<Array<{ date: string; used: number; available: number }>>([]);
+  const [combinedChartData, setCombinedChartData] = useState<Array<{ date: string; queue_completed: number; queue_problem: number; chicken_used: number; robux_used: number }>>([]);
 
   // Form states
   const [newCode, setNewCode] = useState({ code: '', robux_value: '' });
@@ -79,7 +105,262 @@ export default function Admin() {
 
   useEffect(() => {
     loadData();
+    loadDashboardStats();
   }, []);
+
+  useEffect(() => {
+    loadChartData();
+  }, [chartPeriod, selectedMonth]);
+
+  const loadDashboardStats = async () => {
+    try {
+      // ดึงข้อมูลคิวสำหรับกราฟ
+      const { data: queueItems, error: queueError } = await supabase
+        .from('queue_items')
+        .select('status, created_at, updated_at');
+      
+      if (!queueError && queueItems) {
+        const completed = queueItems.filter(item => item.status === 'completed').length;
+        const problem = queueItems.filter(item => item.status === 'problem').length;
+        setQueueStats({
+          completed,
+          problem,
+          total: queueItems.length
+        });
+      }
+
+      // ดึงข้อมูลบัญชีไก่ตัน
+      const { data: chickenAccounts, error: chickenError } = await supabase
+        .from('app_284beb8f90_chicken_accounts')
+        .select('status');
+      
+      if (!chickenError && chickenAccounts) {
+        const used = chickenAccounts.filter(acc => acc.status === 'used').length;
+        const available = chickenAccounts.filter(acc => acc.status === 'available').length;
+        setChickenStats({
+          used,
+          available,
+          total: chickenAccounts.length
+        });
+      }
+
+      // ดึงข้อมูลโค้ดโรบัค
+      const { data: robuxCodes, error: robuxError } = await supabase
+        .from('app_284beb8f90_redemption_codes')
+        .select('status');
+      
+      if (!robuxError && robuxCodes) {
+        const used = robuxCodes.filter(code => code.status === 'used').length;
+        const available = robuxCodes.filter(code => code.status === 'available').length;
+        setRobuxStats({
+          used,
+          available,
+          total: robuxCodes.length
+        });
+      }
+    } catch (error) {
+      console.error('Error loading dashboard stats:', error);
+    }
+  };
+
+  const loadChartData = async () => {
+    try {
+      const now = new Date();
+      let startDate: Date;
+      let dateFormat: (date: Date) => string;
+      let dataPoints: number;
+
+      // กำหนดช่วงเวลาและรูปแบบวันที่ตาม period
+      if (chartPeriod === 'day') {
+        // แสดงรายวัน (7 วันย้อนหลัง)
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 6);
+        dateFormat = (date: Date) => date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+        dataPoints = 7;
+      } else if (chartPeriod === 'month') {
+        // แสดงรายเดือน (12 เดือนย้อนหลัง)
+        startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 11);
+        startDate.setDate(1);
+        dateFormat = (date: Date) => date.toLocaleDateString('th-TH', { month: 'short', year: 'numeric' });
+        dataPoints = 12;
+      } else {
+        // แสดงรายปี (5 ปีย้อนหลัง)
+        startDate = new Date(now);
+        startDate.setFullYear(startDate.getFullYear() - 4);
+        startDate.setMonth(0);
+        startDate.setDate(1);
+        dateFormat = (date: Date) => date.getFullYear().toString();
+        dataPoints = 5;
+      }
+
+      // ถ้าเลือกเดือนเฉพาะ ให้ filter ข้อมูลตามเดือนนั้น
+      if (chartPeriod === 'day' && selectedMonth) {
+        const [year, month] = selectedMonth.split('-').map(Number);
+        startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+        const daysInMonth = endDate.getDate();
+        dataPoints = daysInMonth;
+      }
+
+      // ดึงข้อมูลทั้งหมด
+      const [queueItemsRes, chickenAccountsRes, robuxCodesRes] = await Promise.all([
+        supabase.from('queue_items').select('status, created_at, updated_at'),
+        supabase.from('app_284beb8f90_chicken_accounts').select('status, used_at, created_at'),
+        supabase.from('app_284beb8f90_redemption_codes').select('status, used_at, created_at')
+      ]);
+
+      const queueItems = queueItemsRes.data || [];
+      const chickenAccounts = chickenAccountsRes.data || [];
+      const robuxCodes = robuxCodesRes.data || [];
+
+      // สร้างข้อมูลสำหรับกราฟโค้ดโรบัค
+      const robuxChart: Array<{ date: string; used: number; available: number }> = [];
+      const combinedChart: Array<{ date: string; queue_completed: number; queue_problem: number; chicken_used: number; robux_used: number }> = [];
+
+      for (let i = 0; i < dataPoints; i++) {
+        let date: Date;
+        if (chartPeriod === 'day' && selectedMonth) {
+          const [year, month] = selectedMonth.split('-').map(Number);
+          date = new Date(year, month - 1, i + 1);
+        } else if (chartPeriod === 'day') {
+          date = new Date(startDate);
+          date.setDate(date.getDate() + i);
+        } else if (chartPeriod === 'month') {
+          date = new Date(startDate);
+          date.setMonth(date.getMonth() + i);
+        } else {
+          date = new Date(startDate);
+          date.setFullYear(date.getFullYear() + i);
+        }
+
+        const dateStr = date.toISOString().split('T')[0];
+        const dateLabel = dateFormat(date);
+
+        // นับโค้ดโรบัคที่ใช้แล้วและยังไม่ใช้
+        const robuxUsed = robuxCodes.filter(code => {
+          if (code.status !== 'used') return false;
+          const codeDate = code.used_at ? new Date(code.used_at) : new Date(code.created_at);
+          const codeDateStr = codeDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return codeDateStr === dateStr;
+          if (chartPeriod === 'month') return codeDateStr.startsWith(dateStr.slice(0, 7));
+          return codeDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        const robuxAvailable = robuxCodes.filter(code => {
+          if (code.status !== 'available') return false;
+          const codeDate = new Date(code.created_at);
+          const codeDateStr = codeDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return codeDateStr === dateStr;
+          if (chartPeriod === 'month') return codeDateStr.startsWith(dateStr.slice(0, 7));
+          return codeDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        // นับคิวที่สำเร็จแล้วและมีปัญหา
+        const queueCompleted = queueItems.filter(item => {
+          if (item.status !== 'completed') return false;
+          const itemDate = new Date(item.updated_at || item.created_at);
+          const itemDateStr = itemDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return itemDateStr === dateStr;
+          if (chartPeriod === 'month') return itemDateStr.startsWith(dateStr.slice(0, 7));
+          return itemDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        const queueProblem = queueItems.filter(item => {
+          if (item.status !== 'problem') return false;
+          const itemDate = new Date(item.updated_at || item.created_at);
+          const itemDateStr = itemDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return itemDateStr === dateStr;
+          if (chartPeriod === 'month') return itemDateStr.startsWith(dateStr.slice(0, 7));
+          return itemDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        // นับบัญชีไก่ตันที่ใช้แล้ว
+        const chickenUsed = chickenAccounts.filter(acc => {
+          if (acc.status !== 'used') return false;
+          const accDate = acc.used_at ? new Date(acc.used_at) : new Date(acc.created_at);
+          const accDateStr = accDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return accDateStr === dateStr;
+          if (chartPeriod === 'month') return accDateStr.startsWith(dateStr.slice(0, 7));
+          return accDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        robuxChart.push({
+          date: dateLabel,
+          used: robuxUsed,
+          available: robuxAvailable
+        });
+
+        combinedChart.push({
+          date: dateLabel,
+          queue_completed: queueCompleted,
+          queue_problem: queueProblem,
+          chicken_used: chickenUsed,
+          robux_used: robuxUsed
+        });
+      }
+
+      setRobuxChartData(robuxChart);
+      setCombinedChartData(combinedChart);
+      
+      // อัปเดต queueChartData จากข้อมูลที่ดึงมา
+      const queueChart: Array<{ date: string; completed: number; problem: number }> = [];
+      for (let i = 0; i < dataPoints; i++) {
+        let date: Date;
+        if (chartPeriod === 'day' && selectedMonth) {
+          const [year, month] = selectedMonth.split('-').map(Number);
+          date = new Date(year, month - 1, i + 1);
+        } else if (chartPeriod === 'day') {
+          date = new Date(startDate);
+          date.setDate(date.getDate() + i);
+        } else if (chartPeriod === 'month') {
+          date = new Date(startDate);
+          date.setMonth(date.getMonth() + i);
+        } else {
+          date = new Date(startDate);
+          date.setFullYear(date.getFullYear() + i);
+        }
+        
+        const dateStr = date.toISOString().split('T')[0];
+        const dateLabel = dateFormat(date);
+        
+        const queueCompleted = queueItems.filter(item => {
+          if (item.status !== 'completed') return false;
+          const itemDate = new Date(item.updated_at || item.created_at);
+          const itemDateStr = itemDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return itemDateStr === dateStr;
+          if (chartPeriod === 'month') return itemDateStr.startsWith(dateStr.slice(0, 7));
+          return itemDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+
+        const queueProblem = queueItems.filter(item => {
+          if (item.status !== 'problem') return false;
+          const itemDate = new Date(item.updated_at || item.created_at);
+          const itemDateStr = itemDate.toISOString().split('T')[0];
+          
+          if (chartPeriod === 'day') return itemDateStr === dateStr;
+          if (chartPeriod === 'month') return itemDateStr.startsWith(dateStr.slice(0, 7));
+          return itemDateStr.startsWith(dateStr.slice(0, 4));
+        }).length;
+        
+        queueChart.push({
+          date: dateLabel,
+          completed: queueCompleted,
+          problem: queueProblem
+        });
+      }
+      
+      setQueueChartData(queueChart);
+    } catch (error) {
+      console.error('Error loading chart data:', error);
+    }
+  };
 
   // Real-time validation for bulk Rainbow Six codes
   useEffect(() => {
@@ -264,11 +545,11 @@ export default function Admin() {
       // Try to load from Supabase first
       try {
         const [requestsRes, codesRes, accountsRes, rainbowCodesRes, adsRes] = await Promise.all([
-          supabase.from('app_284beb8f90_redemption_requests').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_284beb8f90_redemption_codes').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_284beb8f90_chicken_accounts').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_284beb8f90_rainbow_codes').select('*').order('created_at', { ascending: false }),
-          supabase.from('app_284beb8f90_advertisements').select('*').order('created_at', { ascending: false })
+          supabase.from('app_284beb8f90_redemption_requests').select('*').order('created_at', { ascending: false }).limit(1000),
+          supabase.from('app_284beb8f90_redemption_codes').select('*').order('created_at', { ascending: false }).limit(1000),
+          supabase.from('app_284beb8f90_chicken_accounts').select('*').order('created_at', { ascending: false }).limit(1000),
+          supabase.from('app_284beb8f90_rainbow_codes').select('*').order('created_at', { ascending: false }).limit(1000),
+          supabase.from('app_284beb8f90_advertisements').select('*').order('created_at', { ascending: false }).limit(100)
         ]);
 
         setRequests(requestsRes.data || []);
@@ -297,7 +578,8 @@ export default function Admin() {
           const { data: annData } = await supabase
             .from('app_284beb8f90_announcements')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(100);
           setAnnouncements((annData || []).map((a: any) => ({ id: a.id, title: a.title, content: a.content || a.message, type: a.type || 'info', link: a.link || '', is_active: a.is_active, created_at: a.created_at })));
         } catch (_e) {
           setAnnouncements([]);
@@ -308,7 +590,8 @@ export default function Admin() {
           const { data: rainbowData, error: rainbowError } = await supabase
             .from('app_284beb8f90_rainbow_requests')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(1000);
 
           if (rainbowError) {
             console.error('Error loading Rainbow Six requests:', rainbowError);
@@ -1130,6 +1413,7 @@ export default function Admin() {
         <div className="flex justify-center mb-6">
           <div className="bg-white/10 backdrop-blur-xl rounded-xl p-1 border border-white/20">
             {[
+              { key: 'dashboard', label: '🏠 Dashboard', count: 0 },
               { key: 'requests', label: '📋 คำขอ', count: requests.filter(r => r.status === 'pending').length },
               { key: 'codes', label: '💎 โค้ด', count: codes.length },
               { key: 'accounts', label: '🐔 บัญชี', count: accounts.length },
@@ -1141,7 +1425,7 @@ export default function Admin() {
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'advertisements' | 'queue')}
+                onClick={() => setActiveTab(tab.key as 'dashboard' | 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'advertisements' | 'queue')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -1155,6 +1439,352 @@ export default function Admin() {
         </div>
 
         {/* Content */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {/* ตัวเลือกช่วงเวลา */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm">ช่วงเวลา:</span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => setChartPeriod('day')}
+                        className={chartPeriod === 'day' ? 'bg-purple-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}
+                      >
+                        วัน
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setChartPeriod('month')}
+                        className={chartPeriod === 'month' ? 'bg-purple-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}
+                      >
+                        เดือน
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setChartPeriod('year')}
+                        className={chartPeriod === 'year' ? 'bg-purple-600 text-white' : 'bg-white/10 text-white hover:bg-white/20'}
+                      >
+                        ปี
+                      </Button>
+                    </div>
+                  </div>
+                  {chartPeriod === 'day' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm">เลือกเดือน:</span>
+                      <Input
+                        type="month"
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white w-40"
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* กราฟรวมทุกอย่าง */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">📈 กราฟรวมทุกอย่าง</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {combinedChartData.length > 0 ? (
+                  <ChartContainer
+                    config={{
+                      queue_completed: { label: 'คิวสำเร็จ', color: '#10b981' },
+                      queue_problem: { label: 'คิวมีปัญหา', color: '#ef4444' },
+                      chicken_used: { label: 'บัญชีไก่ตันใช้แล้ว', color: '#3b82f6' },
+                      robux_used: { label: 'โค้ดโรบัคใช้แล้ว', color: '#f59e0b' },
+                    }}
+                    className="h-[400px] w-full"
+                  >
+                    <AreaChart data={combinedChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="queue_completed" 
+                        stackId="1"
+                        stroke="#10b981" 
+                        fill="#10b981" 
+                        fillOpacity={0.6}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="queue_problem" 
+                        stackId="1"
+                        stroke="#ef4444" 
+                        fill="#ef4444" 
+                        fillOpacity={0.6}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="chicken_used" 
+                        stackId="1"
+                        stroke="#3b82f6" 
+                        fill="#3b82f6" 
+                        fillOpacity={0.6}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="robux_used" 
+                        stackId="1"
+                        stroke="#f59e0b" 
+                        fill="#f59e0b" 
+                        fillOpacity={0.6}
+                      />
+                    </AreaChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[400px] text-white/60">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* กราฟแสดงคิวที่มีปัญหาและสำเร็จแล้ว */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">📊 สถิติระบบคิว</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-400 mb-2">{queueStats.completed}</div>
+                    <div className="text-white/80">คิวที่สำเร็จแล้ว</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-red-400 mb-2">{queueStats.problem}</div>
+                    <div className="text-white/80">คิวที่มีปัญหา</div>
+                  </div>
+                </div>
+                
+                {queueChartData.length > 0 ? (
+                  <ChartContainer
+                    config={{
+                      completed: { label: 'สำเร็จแล้ว', color: '#10b981' },
+                      problem: { label: 'มีปัญหา', color: '#ef4444' },
+                    }}
+                    className="h-[300px] w-full"
+                  >
+                    <LineChart data={queueChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                      <Line 
+                        type="monotone" 
+                        dataKey="completed" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        dot={{ fill: '#10b981', r: 4 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="problem" 
+                        stroke="#ef4444" 
+                        strokeWidth={2}
+                        dot={{ fill: '#ef4444', r: 4 }}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-white/60">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* กราฟโค้ดโรบัค */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">💎 กราฟโค้ดโรบัค</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {robuxChartData.length > 0 ? (
+                  <ChartContainer
+                    config={{
+                      used: { label: 'โค้ดที่ใช้แล้ว', color: '#f59e0b' },
+                      available: { label: 'โค้ดที่ยังไม่ใช้', color: '#10b981' },
+                    }}
+                    className="h-[300px] w-full"
+                  >
+                    <LineChart data={robuxChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#ffffff80' }}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                      <Line 
+                        type="monotone" 
+                        dataKey="used" 
+                        stroke="#f59e0b" 
+                        strokeWidth={2}
+                        dot={{ fill: '#f59e0b', r: 4 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="available" 
+                        stroke="#10b981" 
+                        strokeWidth={2}
+                        dot={{ fill: '#10b981', r: 4 }}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-white/60">
+                    กำลังโหลดข้อมูล...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* สถิติบัญชีไก่ตัน */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">🐔 สถิติบัญชีไก่ตัน</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-green-500/20 border border-green-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-green-400 mb-2">{chickenStats.used.toLocaleString()}</div>
+                    <div className="text-white/80">บัญชีที่แลกแล้ว</div>
+                    <div className="text-xs text-white/60 mt-1">
+                      {chickenStats.total > 0 ? `${((chickenStats.used / chickenStats.total) * 100).toFixed(1)}%` : '0%'} ของทั้งหมด
+                    </div>
+                  </div>
+                  <div className="bg-blue-500/20 border border-blue-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-blue-400 mb-2">{chickenStats.available.toLocaleString()}</div>
+                    <div className="text-white/80">บัญชีที่ยังไม่ถูกแลก</div>
+                    <div className="text-xs text-white/60 mt-1">
+                      {chickenStats.total > 0 ? `${((chickenStats.available / chickenStats.total) * 100).toFixed(1)}%` : '0%'} ของทั้งหมด
+                    </div>
+                  </div>
+                  <div className="bg-purple-500/20 border border-purple-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-purple-400 mb-2">{chickenStats.total.toLocaleString()}</div>
+                    <div className="text-white/80">บัญชีทั้งหมด</div>
+                  </div>
+                </div>
+                
+                {/* กราฟแสดงเปอร์เซ็นต์ */}
+                <div className="mt-6 bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 bg-green-500/30 rounded-full h-8 flex items-center justify-center text-white text-sm font-semibold" style={{ width: chickenStats.total > 0 ? `${(chickenStats.used / chickenStats.total) * 100}%` : '0%' }}>
+                      {chickenStats.used > 0 && `${((chickenStats.used / chickenStats.total) * 100).toFixed(1)}%`}
+                    </div>
+                    <div className="flex-1 bg-blue-500/30 rounded-full h-8 flex items-center justify-center text-white text-sm font-semibold" style={{ width: chickenStats.total > 0 ? `${(chickenStats.available / chickenStats.total) * 100}%` : '0%' }}>
+                      {chickenStats.available > 0 && `${((chickenStats.available / chickenStats.total) * 100).toFixed(1)}%`}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* สถิติโค้ดโรบัค */}
+            <Card className="bg-white/10 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">💎 สถิติโค้ดโรบัค</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-orange-500/20 border border-orange-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-orange-400 mb-2">{robuxStats.used.toLocaleString()}</div>
+                    <div className="text-white/80">โค้ดที่ใช้แล้ว</div>
+                    <div className="text-xs text-white/60 mt-1">
+                      {robuxStats.total > 0 ? `${((robuxStats.used / robuxStats.total) * 100).toFixed(1)}%` : '0%'} ของทั้งหมด
+                    </div>
+                  </div>
+                  <div className="bg-emerald-500/20 border border-emerald-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-emerald-400 mb-2">{robuxStats.available.toLocaleString()}</div>
+                    <div className="text-white/80">โค้ดที่ยังไม่ใช้</div>
+                    <div className="text-xs text-white/60 mt-1">
+                      {robuxStats.total > 0 ? `${((robuxStats.available / robuxStats.total) * 100).toFixed(1)}%` : '0%'} ของทั้งหมด
+                    </div>
+                  </div>
+                  <div className="bg-indigo-500/20 border border-indigo-400/30 rounded-xl p-6 text-center">
+                    <div className="text-4xl font-bold text-indigo-400 mb-2">{robuxStats.total.toLocaleString()}</div>
+                    <div className="text-white/80">โค้ดทั้งหมด</div>
+                  </div>
+                </div>
+                
+                {/* กราฟแสดงเปอร์เซ็นต์ */}
+                <div className="mt-6 bg-white/5 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 bg-orange-500/30 rounded-full h-8 flex items-center justify-center text-white text-sm font-semibold" style={{ width: robuxStats.total > 0 ? `${(robuxStats.used / robuxStats.total) * 100}%` : '0%' }}>
+                      {robuxStats.used > 0 && `${((robuxStats.used / robuxStats.total) * 100).toFixed(1)}%`}
+                    </div>
+                    <div className="flex-1 bg-emerald-500/30 rounded-full h-8 flex items-center justify-center text-white text-sm font-semibold" style={{ width: robuxStats.total > 0 ? `${(robuxStats.available / robuxStats.total) * 100}%` : '0%' }}>
+                      {robuxStats.available > 0 && `${((robuxStats.available / robuxStats.total) * 100).toFixed(1)}%`}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* สรุปภาพรวม */}
+            <Card className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-xl border-white/20">
+              <CardHeader>
+                <CardTitle className="text-white">📈 สรุปภาพรวม</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white/10 rounded-lg p-4 text-center">
+                    <div className="text-2xl mb-2">🎯</div>
+                    <div className="text-xl font-bold text-white">{queueStats.total}</div>
+                    <div className="text-sm text-white/80">คิวทั้งหมด</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg p-4 text-center">
+                    <div className="text-2xl mb-2">✅</div>
+                    <div className="text-xl font-bold text-green-400">{queueStats.completed}</div>
+                    <div className="text-sm text-white/80">คิวสำเร็จ</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg p-4 text-center">
+                    <div className="text-2xl mb-2">🐔</div>
+                    <div className="text-xl font-bold text-blue-400">{chickenStats.total}</div>
+                    <div className="text-sm text-white/80">บัญชีทั้งหมด</div>
+                  </div>
+                  <div className="bg-white/10 rounded-lg p-4 text-center">
+                    <div className="text-2xl mb-2">💎</div>
+                    <div className="text-xl font-bold text-purple-400">{robuxStats.total}</div>
+                    <div className="text-sm text-white/80">โค้ดทั้งหมด</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {activeTab === 'requests' && (
           <Card className="bg-white/10 backdrop-blur-xl border-white/20">
             <CardHeader>

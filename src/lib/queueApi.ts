@@ -133,17 +133,15 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     // ไม่ throw error แต่ใช้ empty array แทน
   }
 
-  const { data: processingItem, error: processingError } = await supabase
+  const { data: processingItems, error: processingError } = await supabase
     .from('queue_items')
     .select('*')
     .eq('status', 'processing')
-    .order('updated_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .order('queue_number', { ascending: true }); // เรียงตามหมายเลขคิวแทน updated_at
 
   if (processingError) {
-    console.warn('⚠️ Error fetching processing item:', processingError);
-    // ไม่ throw error แต่ใช้ null แทน
+    console.warn('⚠️ Error fetching processing items:', processingError);
+    // ไม่ throw error แต่ใช้ empty array แทน
   }
 
   // ดึงข้อมูลคิวที่มีปัญหา
@@ -225,7 +223,7 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
   };
 
   const enrichedWaitingItems = enrichQueueData(waitingItems || []);
-  const enrichedProcessingItem = processingItem ? enrichQueueData([processingItem])[0] : undefined;
+  const enrichedProcessingItems = enrichQueueData(processingItems || []);
   const enrichedProblemItems = enrichQueueData(problemItems || []);
   const next3Items = enrichedWaitingItems.slice(0, 3);
   const totalWaiting = enrichedWaitingItems.length;
@@ -235,7 +233,7 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
   const averageWaitTime = totalWaiting * 5;
 
   return {
-    current_processing: enrichedProcessingItem,
+    current_processing: enrichedProcessingItems.length > 0 ? enrichedProcessingItems : undefined,
     next_3_items: next3Items,
     total_waiting: totalWaiting,
     total_problems: totalProblems,

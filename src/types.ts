@@ -69,7 +69,7 @@ export interface QueueItem {
 }
 
 export interface QueueDisplay {
-  current_processing?: QueueItem;
+  current_processing?: QueueItem[]; // เปลี่ยนเป็น array เพื่อแสดงคิวทั้งหมดที่กำลังดำเนินการ
   next_3_items: QueueItem[];
   total_waiting: number;
   total_problems: number;
