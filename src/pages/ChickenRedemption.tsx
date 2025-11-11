@@ -261,6 +261,20 @@ export default function ChickenRedemption() {
                   </p>
                 </div>
 
+                {/* Quick Messenger CTA for mode 2 right under account info */}
+                {redeemedAccount && redeemedAccount.username === '-' && redeemedAccount.password === '-' && (
+                  <div className="mt-3">
+                    <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700">
+                      <a href="https://m.me/lemonshopStore" target="_blank" rel="noopener noreferrer">
+                        ทักเพจเพื่อรับสินค้า ส่งโค้ดให้ร้าน (Messenger)
+                      </a>
+                    </Button>
+                    <p className="text-xs text-indigo-700 mt-2 text-center">
+                      กดปุ่มด้านบนเพื่อทักเพจ ส่งโค้ดที่ได้รับให้ทางร้าน และรับสินค้าด้วยตัวเอง
+                    </p>
+                  </div>
+                )}
+
                 {/* Important instructions after successful redemption */}
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
                   <div className="space-y-3">
@@ -289,6 +303,29 @@ export default function ChickenRedemption() {
                           </div>
                         </div>
                       </div>
+
+                      {redeemedAccount && redeemedAccount.username === '-' && redeemedAccount.password === '-' && (
+                        <div className="bg-white p-3 rounded-md border-l-4 border-indigo-400">
+                        <div className="flex items-start gap-2">
+                          <span className="text-indigo-600">📦</span>
+                          <div>
+                            <p className="font-medium text-indigo-700">
+                              รับสินค้าที่เพจผ่าน Messenger
+                            </p>
+                            <p className="text-indigo-600 text-xs">
+                              กดปุ่มด้านล่างเพื่อทักเพจ ส่งโค้ดให้ทางร้าน และรับสินค้าด้วยตัวเอง
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700">
+                            <a href="https://m.me/lemonshopStore" target="_blank" rel="noopener noreferrer">
+                              ทักเพจเพื่อรับสินค้า ส่งโค้ดให้ร้าน (Messenger)
+                            </a>
+                          </Button>
+                        </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-center pt-2 border-t border-blue-200">

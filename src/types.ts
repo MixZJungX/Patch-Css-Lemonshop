@@ -14,6 +14,7 @@ export interface ChickenAccount {
   username: string;
   password: string;
   product_name: string;
+  product_type?: string;
   status: 'available' | 'used' | 'maintenance';
   notes?: string;
   created_at: string;

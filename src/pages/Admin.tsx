@@ -99,6 +99,8 @@ export default function Admin() {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [bulkImportData, setBulkImportData] = useState('');
   const [bulkImportType, setBulkImportType] = useState<'codes' | 'accounts'>('codes');
+  // Bulk accounts mode: detailed = code,type,username,password[,notes], codeType = code,type
+  const [bulkAccountsMode, setBulkAccountsMode] = useState<'detailed' | 'codeType'>('detailed');
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showBulkImportDialog, setShowBulkImportDialog] = useState(false);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
@@ -440,30 +442,57 @@ export default function Admin() {
             successCount++;
           }
         } else {
-          // Process chicken accounts: code,type,username,password,notes
+          // Process chicken accounts
           const parts = trimmedLine.split(',').map(s => s.trim());
-          const [code, productType, username, password, notes = ''] = parts;
           
-          if (!code || !productType || !username || !password) {
-            errorCount++;
-            continue;
-          }
-
-          const { error } = await adminApi.createChickenAccounts([{
-            code: code.toUpperCase(),
-            product_type: productType,
-            username: username,
-            password: password,
-            notes: notes,
-            status: 'available',
-            created_at: new Date().toISOString()
-          }]);
-
-          if (error) {
-            errorCount++;
-            console.error('Error importing account:', code, error);
+          if (bulkAccountsMode === 'codeType') {
+            // Expect: code,productType
+            const [code, productType] = parts;
+            if (!code || !productType) {
+              errorCount++;
+              continue;
+            }
+            const username = '-';
+            const password = '-';
+            const notes = '';
+            const { error } = await adminApi.createChickenAccounts([{
+              code: code.toUpperCase(),
+              product_type: productType,
+              username,
+              password,
+              notes,
+              status: 'available',
+              created_at: new Date().toISOString()
+            }]);
+            if (error) {
+              errorCount++;
+              console.error('Error importing account:', code, error);
+            } else {
+              successCount++;
+            }
           } else {
-            successCount++;
+            // Detailed: code,productType,username,password[,notes]
+            const [code, productType, username, password, notes = ''] = parts;
+            if (!code || !productType || !username || !password) {
+              errorCount++;
+              continue;
+            }
+            const { error } = await adminApi.createChickenAccounts([{
+              code: code.toUpperCase(),
+              product_type: productType,
+              username,
+              password,
+              notes,
+              status: 'available',
+              created_at: new Date().toISOString()
+            }]);
+
+            if (error) {
+              errorCount++;
+              console.error('Error importing account:', code, error);
+            } else {
+              successCount++;
+            }
           }
         }
       }
@@ -1232,22 +1261,46 @@ export default function Admin() {
         if (error) throw error;
         toast.success(`เพิ่มโค้ด Robux จำนวน ${codeData.length} รายการสำเร็จ!`);
       } else {
-        // Format: CODE,PRODUCT_NAME,USERNAME,PASSWORD,NOTES
-        const accountData = lines.map(line => {
-          const parts = line.split(',').map(s => s.trim());
-          if (parts.length < 4) {
-            throw new Error(`รูปแบบไม่ถูกต้อง: ${line}`);
-          }
-          const [code, productName, username, password, notes = ''] = parts;
-          return {
-            code: code.toUpperCase(),
-            product_type: productName,
-            username,
-            password,
-            notes,
-            status: 'available'
-          };
-        });
+        // Accounts import - supports two modes
+        let accountData;
+        if (bulkAccountsMode === 'codeType') {
+          // Format: CODE,PRODUCT_TYPE
+          accountData = lines.map(line => {
+            const parts = line.split(',').map(s => s.trim());
+            if (parts.length < 2) {
+              throw new Error(`รูปแบบไม่ถูกต้อง: ${line}`);
+            }
+            const [code, productType] = parts;
+            const username = '-';
+            const password = '-';
+            const notes = '';
+            return {
+              code: code.toUpperCase(),
+              product_type: productType,
+              username,
+              password,
+              notes,
+              status: 'available'
+            };
+          });
+        } else {
+          // Detailed format: CODE,PRODUCT_NAME,USERNAME,PASSWORD[,NOTES]
+          accountData = lines.map(line => {
+            const parts = line.split(',').map(s => s.trim());
+            if (parts.length < 4) {
+              throw new Error(`รูปแบบไม่ถูกต้อง: ${line}`);
+            }
+            const [code, productName, username, password, notes = ''] = parts;
+            return {
+              code: code.toUpperCase(),
+              product_type: productName,
+              username,
+              password,
+              notes,
+              status: 'available'
+            };
+          });
+        }
 
         const { error } = await adminApi.createChickenAccounts(accountData);
 
@@ -2843,14 +2896,44 @@ export default function Admin() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                  <h4 className="font-semibold text-orange-300 mb-2">รูปแบบข้อมูลบัญชีไก่ตัน:</h4>
-                  <div className="bg-gray-800 rounded p-3 font-mono text-sm">
-                    <div className="text-gray-400 mb-2">รูปแบบ: โค้ด,ประเภทบัญชี,ชื่อผู้ใช้,รหัสผ่าน,หมายเหตุ</div>
-                    <div className="text-green-400">CHICKEN01,Bone Blossom,user123,pass123,Premium Account</div>
-                    <div className="text-green-400">CHICKEN02,Butterfly,user456,pass456,</div>
-                    <div className="text-green-400">CHICKEN03,Royal Wings,user789,pass789,VIP Account</div>
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 space-y-3">
+                  <h4 className="font-semibold text-orange-300">รูปแบบข้อมูลบัญชีไก่ตัน:</h4>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={bulkAccountsMode === 'detailed' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setBulkAccountsMode('detailed')}
+                      className="bg-orange-600/30 hover:bg-orange-600/40 border-orange-500/40"
+                    >
+                      โหมดเดิม (โค้ด,ประเภท,ชื่อผู้ใช้,รหัสผ่าน[,หมายเหตุ])
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={bulkAccountsMode === 'codeType' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setBulkAccountsMode('codeType')}
+                      className="bg-indigo-600/30 hover:bg-indigo-600/40 border-indigo-500/40"
+                    >
+                      โหมดใส่โค้ด,ประเภท (เช่น DSD2130,50-999M)
+                    </Button>
                   </div>
+                  {bulkAccountsMode === 'codeType' ? (
+                    <div className="bg-gray-800 rounded p-3 font-mono text-sm">
+                      <div className="text-gray-400 mb-2">รูปแบบ: โค้ด,ประเภทบัญชี</div>
+                      <div className="text-green-400">DSD2130,50-999M</div>
+                      <div className="text-green-400">ABC123,Free Fire</div>
+                      <div className="text-green-400">XYZ999,RoV</div>
+                      <div className="text-gray-400 mt-2 text-xs">หมายเหตุ: ระบบจะตั้งชื่อผู้ใช้/รหัสผ่านเป็น "-" ให้โดยอัตโนมัติ</div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-800 rounded p-3 font-mono text-sm">
+                      <div className="text-gray-400 mb-2">รูปแบบ: โค้ด,ประเภทบัญชี,ชื่อผู้ใช้,รหัสผ่าน,หมายเหตุ</div>
+                      <div className="text-green-400">CHICKEN01,Bone Blossom,user123,pass123,Premium Account</div>
+                      <div className="text-green-400">CHICKEN02,Butterfly,user456,pass456,</div>
+                      <div className="text-green-400">CHICKEN03,Royal Wings,user789,pass789,VIP Account</div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2863,7 +2946,9 @@ export default function Admin() {
                   onChange={(e) => setBulkImportData(e.target.value)}
                   placeholder={bulkImportType === 'codes' 
                     ? "ROBUX100,100\nROBUX200,200\nROBUX500,500" 
-                    : "CHICKEN01,Bone Blossom,user123,pass123,Premium Account\nCHICKEN02,Butterfly,user456,pass456,\nCHICKEN03,Royal Wings,user789,pass789,VIP Account"
+                    : (bulkAccountsMode === 'codeType'
+                        ? "DSD2130,50-999M\nABC123,Free Fire\nXYZ999,RoV"
+                        : "CHICKEN01,Bone Blossom,user123,pass123,Premium Account\nCHICKEN02,Butterfly,user456,pass456,\nCHICKEN03,Royal Wings,user789,pass789,VIP Account")
                   }
                   className="bg-gray-800 border-gray-600 text-white min-h-[200px] font-mono text-sm"
                   rows={10}

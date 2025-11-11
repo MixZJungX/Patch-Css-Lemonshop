@@ -820,6 +820,28 @@ export default function QueueStatusChecker() {
                       <p className="text-xs text-blue-200 text-center">💡 {getStatusInfo(queueItem.status).description}</p>
                     </div>
 
+                    {/* ปุ่มทักเพจสำหรับสถานะกำลังดำเนินการ */}
+                    {queueItem.status === 'processing' && (
+                      <div className="mt-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-sm rounded-xl p-4 border border-blue-400/30">
+                        <div className="text-center space-y-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                              <MessageCircle className="w-5 h-5 text-white" />
+                            </div>
+                          </div>
+                          <h3 className="text-base font-bold text-white">คิวของคุณกำลังดำเนินการ</h3>
+                          <p className="text-sm text-blue-200">ทักเพจเพื่อติดตามความคืบหน้า</p>
+                          <Button
+                            onClick={() => window.open('https://m.me/lemonshopStore', '_blank')}
+                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-bold py-3 rounded-lg shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                          >
+                            <MessageCircle className="w-5 h-5 mr-2" />
+                            ทักเพจเพื่อติดตามคิว
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* ปุ่มติดต่อไลน์สำหรับสถานะอื่นๆ */}
                     {(queueItem.status === 'cancelled' || queueItem.status === 'waiting') && (
                       <div className="mt-3 bg-blue-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30">

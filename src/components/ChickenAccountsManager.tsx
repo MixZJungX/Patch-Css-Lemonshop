@@ -53,6 +53,8 @@ export function ChickenAccountsManager() {
   const [bulkInput, setBulkInput] = useState("");
   const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
   const [isBulkAdding, setIsBulkAdding] = useState(false);
+  // Bulk import mode: 'normal' expects code:username:password[:product], 'codeType' expects code,type
+  const [bulkMode, setBulkMode] = useState<'normal' | 'codeType'>('normal');
   
   // Statistics
   const [totalAccounts, setTotalAccounts] = useState(0);
@@ -257,32 +259,62 @@ export function ChickenAccountsManager() {
         const line = lines[i].trim();
         if (!line) continue;
 
-        // Support multiple formats: code:username:password or code,username,password
-        let parts: string[] = [];
-        if (line.includes(':')) {
-          parts = line.split(':');
-        } else if (line.includes(',')) {
-          parts = line.split(',');
-        } else if (line.includes('|')) {
-          parts = line.split('|');
+        if (bulkMode === 'codeType') {
+          // New simple mode: "CODE,TYPE"
+          let parts: string[] = [];
+          if (line.includes(',')) {
+            parts = line.split(',');
+          } else if (line.includes('|')) {
+            parts = line.split('|');
+          } else if (line.includes(':')) {
+            parts = line.split(':'); // fallback
+          }
+
+          if (parts.length < 2) {
+            errors.push(`บรรทัดที่ ${i + 1}: รูปแบบไม่ถูกต้อง (ต้องเป็น โค้ด,ประเภท)`);
+            continue;
+          }
+
+          const code = parts[0].trim();
+          const productName = parts[1] ? parts[1].trim() : "";
+
+          if (!code || !productName) {
+            errors.push(`บรรทัดที่ ${i + 1}: ข้อมูลไม่ครบถ้วน (ต้องมี โค้ด และ ประเภท)`);
+            continue;
+          }
+
+          // Use placeholder for username/password because schema requires them
+          const placeholderUsername = '-';
+          const placeholderPassword = '-';
+          accountsToAdd.push({ code, username: placeholderUsername, password: placeholderPassword, product_name: productName });
+        } else {
+          // Normal detailed mode: code:username:password[:product]
+          let parts: string[] = [];
+          if (line.includes(':')) {
+            parts = line.split(':');
+          } else if (line.includes(',')) {
+            parts = line.split(',');
+          } else if (line.includes('|')) {
+            parts = line.split('|');
+          }
+
+          if (parts.length < 3) {
+            errors.push(`บรรทัดที่ ${i + 1}: รูปแบบไม่ถูกต้อง`);
+            continue;
+          }
+
+          const code = parts[0].trim();
+          const username = parts[1].trim();
+          const password = parts[2].trim();
+          const productName = parts[3] ? parts[3].trim() : "";
+
+          if (!code || !username || !password) {
+            errors.push(`บรรทัดที่ ${i + 1}: ข้อมูลไม่ครบถ้วน`);
+            continue;
+          }
+
+          accountsToAdd.push({ code, username, password, product_name: productName || null });
         }
-
-        if (parts.length < 3) {
-          errors.push(`บรรทัดที่ ${i + 1}: รูปแบบไม่ถูกต้อง`);
-          continue;
-        }
-
-        const code = parts[0].trim();
-        const username = parts[1].trim();
-        const password = parts[2].trim();
-        const productName = parts[3] ? parts[3].trim() : "";
-
-        if (!code || !username || !password) {
-          errors.push(`บรรทัดที่ ${i + 1}: ข้อมูลไม่ครบถ้วน`);
-          continue;
-        }
-
-        accountsToAdd.push({ code, username, password, product_name: productName || null });
       }
 
       if (accountsToAdd.length === 0) {
@@ -532,22 +564,98 @@ export function ChickenAccountsManager() {
                   <SheetHeader>
                     <SheetTitle>นำเข้าบัญชีไก่ตันหลายรายการ</SheetTitle>
                     <SheetDescription>
-                      วางข้อมูลในรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน:ชื่อสินค้า (แต่ละบัญชีบรรทัดใหม่)
+                      เลือกรูปแบบการนำเข้า แล้ววางข้อมูล (หนึ่งบัญชีต่อหนึ่งบรรทัด)
                     </SheetDescription>
                   </SheetHeader>
                   <div className="grid gap-4 py-4">
+                    {/* Mode toggle */}
+                    <div className="grid gap-2">
+                      <Label>โหมดการนำเข้า</Label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={bulkMode === 'normal' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setBulkMode('normal')}
+                        >
+                          โหมดเดิม (โค้ด:ชื่อผู้ใช้:รหัสผ่าน[:ชื่อสินค้า])
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={bulkMode === 'codeType' ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setBulkMode('codeType')}
+                        >
+                          โหมดใส่โค้ด,ประเภท (เช่น DSD2130,50-999M)
+                        </Button>
+                      </div>
+
+                      {/* How-to instructions */}
+                      {bulkMode === 'codeType' ? (
+                        <div className="rounded-md border bg-blue-50 p-3 text-sm text-blue-800">
+                          <div className="font-semibold mb-1">วิธีใช้งานโหมดใส่โค้ด,ประเภท</div>
+                          <ol className="list-decimal list-inside space-y-1">
+                            <li>เตรียมข้อมูลรูปแบบ: โค้ด,ประเภท</li>
+                            <li>หนึ่งรายการต่อหนึ่งบรรทัด</li>
+                            <li>วางข้อมูลลงในช่องด้านล่าง แล้วกด “นำเข้าบัญชี”</li>
+                          </ol>
+                          <div className="mt-2">
+                            ตัวอย่าง:
+                            <pre className="mt-1 rounded bg-white p-2 text-xs border">
+DSD2130,50-999M
+ABC123,Free Fire
+XYZ999,RoV
+                            </pre>
+                          </div>
+                          <p className="mt-2 text-xs text-blue-700">
+                            หมายเหตุ: ระบบจะตั้งชื่อผู้ใช้และรหัสผ่านเป็น "-" อัตโนมัติ และบันทึกประเภทไว้ที่ช่อง “ชื่อสินค้า”
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="rounded-md border bg-amber-50 p-3 text-sm text-amber-800">
+                          <div className="font-semibold mb-1">วิธีใช้งานโหมดเดิม (ละเอียด)</div>
+                          <ol className="list-decimal list-inside space-y-1">
+                            <li>เตรียมข้อมูลรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน[:ชื่อสินค้า]</li>
+                            <li>หนึ่งรายการต่อหนึ่งบรรทัด</li>
+                            <li>วางข้อมูลลงในช่องด้านล่าง แล้วกด “นำเข้าบัญชี”</li>
+                          </ol>
+                          <div className="mt-2">
+                            ตัวอย่าง:
+                            <pre className="mt-1 rounded bg-white p-2 text-xs border">
+CHICKEN01:BoneBlossom:user123:pass123:Premium Account
+CHICKEN02:Butterfly:user456:pass456
+CHICKEN03:RoyalWings:user789:pass789:VIP Account
+                            </pre>
+                          </div>
+                          <p className="mt-2 text-xs text-amber-700">
+                            หมายเหตุ: ช่อง “ชื่อสินค้า” ไม่บังคับ หากไม่ระบุให้เว้นว่างได้
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid gap-2">
                       <Label htmlFor="bulk-accounts">ข้อมูลบัญชี</Label>
                       <Textarea
                         id="bulk-accounts"
                         className="min-h-[200px]"
-                        placeholder="ABC123:ChickenUser1:password123:Free Fire&#10;DEF456:ChickenUser2:password456:RoV&#10;GHI789:ChickenUser3:password789"
+                        placeholder={
+                          bulkMode === 'codeType'
+                            ? "DSD2130,50-999M&#10;ABC123,Free Fire&#10;XYZ999,RoV"
+                            : "ABC123:ChickenUser1:password123:Free Fire&#10;DEF456:ChickenUser2:password456:RoV&#10;GHI789:ChickenUser3:password789"
+                        }
                         value={bulkInput}
                         onChange={(e) => setBulkInput(e.target.value)}
                       />
-                      <p className="text-xs text-gray-500">
-                        รองรับรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน:ชื่อสินค้า (ชื่อสินค้าไม่บังคับ)
-                      </p>
+                      {bulkMode === 'codeType' ? (
+                        <p className="text-xs text-gray-500">
+                          รูปแบบ: โค้ด,ประเภท เช่น DSD2130,50-999M ระบบจะกำหนดชื่อผู้ใช้และรหัสผ่านเป็นเครื่องหมายขีดกลางอัตโนมัติ
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          รองรับรูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน:ชื่อสินค้า (ชื่อสินค้าไม่บังคับ)
+                        </p>
+                      )}
                     </div>
                     <Button 
                       onClick={handleBulkImport}

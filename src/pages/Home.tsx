@@ -1803,44 +1803,127 @@ export default function Home() {
         <Dialog open={showChickenRedeemPopup} onOpenChange={setShowChickenRedeemPopup}>
           <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-xl border border-white/20 rounded-3xl">
             <DialogHeader>
-              <DialogTitle className="text-orange-600 text-xl">🐔 บัญชีไก่ตันของคุณ</DialogTitle>
+              <DialogTitle className="text-orange-600 text-xl">🐔 แลกสำเร็จ!</DialogTitle>
               <DialogDescription className="text-gray-600">
-                ข้อมูลบัญชีเกมไก่ตันที่คุณแลกรับ
+                {validatedChickenAccount?.username === '-' && validatedChickenAccount?.password === '-' 
+                  ? 'กรุณาทักเพจเพื่อรับสินค้า'
+                  : 'ข้อมูลบัญชีเกมไก่ตันที่คุณแลกรับ'
+                }
               </DialogDescription>
             </DialogHeader>
             
             {validatedChickenAccount && (
               <div className="space-y-4">
-                <div className="p-4 border rounded-lg bg-orange-50">
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
-                      <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.username || 'ไม่มีข้อมูล'}
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
-                      <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
-                        {validatedChickenAccount.password || 'ไม่มีข้อมูล'}
-                      </div>
-                    </div>
-                    {validatedChickenAccount.notes && (
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">หมายเหตุ:</Label>
-                        <div className="bg-white p-2 rounded-2xl border text-sm mt-1">
-                          {validatedChickenAccount.notes}
+                {/* Mode 2: Show only Messenger CTA (no credentials) */}
+                {validatedChickenAccount.username === '-' && validatedChickenAccount.password === '-' ? (
+                  <div className="space-y-2.5">
+                    {/* Compact Code Display Card */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
+                      <div className="text-center space-y-1.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className="text-base">🎫</span>
+                          <h3 className="text-sm font-bold text-green-800">โค้ดที่ได้รับ</h3>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg p-2 border border-green-300">
+                          <p className="text-xl font-bold font-mono text-green-800 tracking-wide break-all">
+                            {validatedChickenAccount.code || chickenRedeemCode}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-sm text-gray-600">ประเภท:</span>
+                          <span className="text-sm font-bold text-green-700 bg-green-100 px-2.5 py-0.5 rounded-full">
+                            {validatedChickenAccount.product_type || validatedChickenAccount.product_name || 'ไม่ระบุ'}
+                          </span>
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Compact Messenger CTA */}
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-0.5">
+                      <div className="bg-white rounded-[7px] p-3 space-y-2">
+                        <div className="text-center space-y-1.5">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto">
+                            <MessageCircle className="w-6 h-6 text-white" />
+                          </div>
+                          <h3 className="text-base font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                            ขั้นตอนถัดไป
+                          </h3>
+                          <p className="text-gray-700 text-sm leading-snug">
+                            ทักเพจ ส่งโค้ด และรับสินค้า
+                          </p>
+                        </div>
+                        
+                        <Button
+                          onClick={() => window.open('https://m.me/lemonshopStore', '_blank')}
+                          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-bold py-3 rounded-lg text-base shadow-md transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                        >
+                          <MessageCircle className="w-5 h-5 mr-1.5" />
+                          ทักเพจเพื่อรับสินค้า
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Compact Instructions */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+                      <div className="flex items-start gap-2">
+                        <div className="text-lg flex-shrink-0">💡</div>
+                        <div className="flex-1 space-y-1">
+                          <p className="font-semibold text-sm text-blue-900">สิ่งที่ต้องทำ:</p>
+                          <ul className="space-y-0.5 text-sm text-blue-800">
+                            <li className="flex items-start gap-1.5">
+                              <span className="text-blue-600 flex-shrink-0">•</span>
+                              <span>แคปหน้าจอโค้ดนี้ไว้</span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <span className="text-blue-600 flex-shrink-0">•</span>
+                              <span>กดปุ่มด้านบนเพื่อทักเพจ</span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <span className="text-blue-600 flex-shrink-0">•</span>
+                              <span>ส่งโค้ดให้ทางร้านและรับสินค้า</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3">
-                  <p className="text-yellow-800 text-xs">
-                    <strong>⚠️ คำเตือน:</strong> กรุณาเก็บข้อมูลบัญชีนี้ไว้อย่างปลอดภัย และเปลี่ยนรหัสผ่านหลังจากเข้าสู่ระบบครั้งแรก
-                  </p>
-                </div>
+                ) : (
+                  /* Mode 1: Show credentials normally */
+                  <>
+                    <div className="p-4 border rounded-lg bg-orange-50">
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">ชื่อผู้ใช้:</Label>
+                          <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
+                            {validatedChickenAccount.username || 'ไม่มีข้อมูล'}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">รหัสผ่าน:</Label>
+                          <div className="bg-white p-2 rounded-2xl border font-mono text-sm mt-1">
+                            {validatedChickenAccount.password || 'ไม่มีข้อมูล'}
+                          </div>
+                        </div>
+                        {validatedChickenAccount.notes && (
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">หมายเหตุ:</Label>
+                            <div className="bg-white p-2 rounded-2xl border text-sm mt-1">
+                              {validatedChickenAccount.notes}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3">
+                      <p className="text-yellow-800 text-xs">
+                        <strong>⚠️ คำเตือน:</strong> กรุณาเก็บข้อมูลบัญชีนี้ไว้อย่างปลอดภัย และเปลี่ยนรหัสผ่านหลังจากเข้าสู่ระบบครั้งแรก
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             
@@ -3009,6 +3092,16 @@ export default function Home() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Messenger Button */}
+      <button
+        onClick={() => window.open('https://m.me/lemonshopStore', '_blank')}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-3xl group"
+        aria-label="ติดต่อเพจ Messenger"
+      >
+        <MessageCircle className="w-7 h-7 text-white group-hover:scale-110 transition-transform duration-300" />
+        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></span>
+      </button>
     </div>
   );
 }

@@ -245,6 +245,22 @@ export default function RedeemPage() {
               ⚠️ คำเตือน: กรุณาบันทึกข้อมูลนี้ทันที เมื่อปิดหน้าต่างแล้วจะไม่สามารถดูได้อีก
             </p>
           </div>
+
+          {accountInfo && accountInfo.username === '-' && accountInfo.password === '-' && (
+            <div className="mt-3">
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <p className="text-blue-800 text-sm font-medium mb-2">📦 รับสินค้าที่เพจผ่าน Messenger</p>
+                <p className="text-blue-700 text-xs mb-2">
+                  กดปุ่มด้านล่างเพื่อทักเพจ ส่งโค้ดให้ทางร้าน และรับสินค้าด้วยตัวเอง
+                </p>
+                <Button asChild className="w-full bg-indigo-600 hover:bg-indigo-700">
+                  <a href="https://m.me/lemonshopStore" target="_blank" rel="noopener noreferrer">
+                    ทักเพจเพื่อรับสินค้า ส่งโค้ดให้ร้าน (Messenger)
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
           
           <DialogFooter className="mt-4">
             <Button 

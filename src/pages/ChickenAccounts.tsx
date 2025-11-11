@@ -47,6 +47,13 @@ export default function ChickenAccounts() {
   // Edit account states
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingAccount, setEditingAccount] = useState<Partial<ChickenAccount>>({});
+  // Bulk import states
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
+  const [bulkMode, setBulkMode] = useState<'normal' | 'codeType'>('normal');
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !isAdmin) {
@@ -332,6 +339,15 @@ export default function ChickenAccounts() {
                 
                 <Button
                   variant="outline"
+                  className="bg-purple-500/10 border-purple-500/30 text-purple-300 hover:bg-purple-500/20 backdrop-blur-xl shadow-lg transition-all duration-300 hover:scale-105 font-thai"
+                  onClick={() => { setBulkOpen(true); setBulkError(null); setBulkSuccess(null); }}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  นำเข้าหลายรายการ
+                </Button>
+
+                <Button
+                  variant="outline"
                   className="bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20 backdrop-blur-xl shadow-lg transition-all duration-300 hover:scale-105 font-thai"
                   onClick={exportToCSV}
                 >
@@ -342,6 +358,186 @@ export default function ChickenAccounts() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Bulk Import Dialog */}
+        {bulkOpen && (
+          <Card className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <CardHeader className="p-4 md:p-6 border-b border-white/10">
+              <CardTitle className="text-xl text-white font-thai">นำเข้าข้อมูลหลายรายการ</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 md:p-6 space-y-4">
+              {bulkError && (
+                <div className="rounded-md border border-red-500/40 bg-red-500/10 text-red-200 p-3 text-sm">{bulkError}</div>
+              )}
+              {bulkSuccess && (
+                <div className="rounded-md border border-green-500/40 bg-green-500/10 text-green-200 p-3 text-sm">{bulkSuccess}</div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-white font-thai-body">โหมดการนำเข้า</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={bulkMode === 'normal' ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setBulkMode('normal')}
+                  >
+                    โหมดเดิม (โค้ด:ชื่อผู้ใช้:รหัสผ่าน[:ชื่อสินค้า])
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={bulkMode === 'codeType' ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setBulkMode('codeType')}
+                  >
+                    โหมดใส่โค้ด,ประเภท (เช่น DSD2130,50-999M)
+                  </Button>
+                </div>
+
+                {bulkMode === 'codeType' ? (
+                  <div className="rounded-md border bg-blue-50/10 border-blue-400/30 p-3 text-sm text-blue-200">
+                    <div className="font-semibold mb-1">วิธีใช้งานโหมดใส่โค้ด,ประเภท</div>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>รูปแบบ: โค้ด,ประเภท</li>
+                      <li>ใส่หนึ่งรายการต่อหนึ่งบรรทัด</li>
+                      <li>กด “นำเข้า” เพื่อบันทึก</li>
+                    </ol>
+                    <div className="mt-2">
+                      ตัวอย่าง:
+                      <pre className="mt-1 rounded bg-white/10 p-2 text-xs border border-white/20 text-white font-mono">
+DSD2130,50-999M
+ABC123,Free Fire
+XYZ999,RoV
+                      </pre>
+                    </div>
+                    <p className="mt-2 text-xs text-blue-200/80">
+                      หมายเหตุ: ระบบจะตั้งชื่อผู้ใช้/รหัสผ่านเป็น “-” อัตโนมัติ และบันทึกประเภทไว้ที่ “ชื่อสินค้า”
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border bg-amber-50/10 border-amber-400/30 p-3 text-sm text-amber-200">
+                    <div className="font-semibold mb-1">วิธีใช้งานโหมดเดิม (ละเอียด)</div>
+                    <ol className="list-decimal list-inside space-y-1">
+                      <li>รูปแบบ: โค้ด:ชื่อผู้ใช้:รหัสผ่าน[:ชื่อสินค้า]</li>
+                      <li>ใส่หนึ่งรายการต่อหนึ่งบรรทัด</li>
+                      <li>กด “นำเข้า” เพื่อบันทึก</li>
+                    </ol>
+                    <div className="mt-2">
+                      ตัวอย่าง:
+                      <pre className="mt-1 rounded bg-white/10 p-2 text-xs border border-white/20 text-white font-mono">
+CHICKEN01:BoneBlossom:user123:pass123:Premium Account
+CHICKEN02:Butterfly:user456:pass456
+CHICKEN03:RoyalWings:user789:pass789:VIP Account
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="text-white font-thai-body">ข้อมูลที่ต้องการนำเข้า (หนึ่งรายการต่อบรรทัด)</Label>
+                <Textarea
+                  rows={8}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 font-mono"
+                  placeholder={bulkMode === 'codeType'
+                    ? 'DSD2130,50-999M\nABC123,Free Fire\nXYZ999,RoV'
+                    : 'CHICKEN01:BoneBlossom:user123:pass123:Premium Account\nCHICKEN02:Butterfly:user456:pass456\nCHICKEN03:RoyalWings:user789:pass789:VIP Account'}
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" className="bg-white/10 border-white/20 text-white" onClick={() => setBulkOpen(false)}>
+                  ปิด
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!bulkInput.trim()) {
+                      setBulkError('กรุณาวางข้อมูลก่อน');
+                      return;
+                    }
+                    setBulkError(null);
+                    setBulkSuccess(null);
+                    setIsBulkAdding(true);
+                    try {
+                      const lines = bulkInput.trim().split('\n').map(l => l.trim()).filter(Boolean);
+                      const accountsToAdd: { code: string; username: string; password: string; product_name: string | null }[] = [];
+                      const errors: string[] = [];
+                      for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (bulkMode === 'codeType') {
+                          let parts: string[] = [];
+                          if (line.includes(',')) parts = line.split(',');
+                          else if (line.includes('|')) parts = line.split('|');
+                          else if (line.includes(':')) parts = line.split(':');
+                          if (parts.length < 2) { errors.push(`แถวที่ ${i+1}: รูปแบบไม่ถูกต้อง`); continue; }
+                          const code = parts[0].trim();
+                          const product = parts[1]?.trim() || '';
+                          if (!code || !product) { errors.push(`แถวที่ ${i+1}: ข้อมูลไม่ครบ`); continue; }
+                          accountsToAdd.push({ code, username: '-', password: '-', product_name: product });
+                        } else {
+                          let parts: string[] = [];
+                          if (line.includes(':')) parts = line.split(':');
+                          else if (line.includes(',')) parts = line.split(',');
+                          else if (line.includes('|')) parts = line.split('|');
+                          if (parts.length < 3) { errors.push(`แถวที่ ${i+1}: รูปแบบไม่ถูกต้อง`); continue; }
+                          const code = parts[0].trim();
+                          const username = parts[1].trim();
+                          const password = parts[2].trim();
+                          const product = parts[3]?.trim() || '';
+                          if (!code || !username || !password) { errors.push(`แถวที่ ${i+1}: ข้อมูลไม่ครบ`); continue; }
+                          accountsToAdd.push({ code, username, password, product_name: product || null });
+                        }
+                      }
+                      if (accountsToAdd.length === 0) {
+                        setBulkError('ไม่พบข้อมูลที่ถูกต้อง');
+                        setIsBulkAdding(false);
+                        return;
+                      }
+                      const codes = accountsToAdd.map(a => a.code);
+                      const { data: existingCodes, error: checkError } = await supabase
+                        .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+                        .select("code")
+                        .in("code", codes);
+                      if (checkError) throw checkError;
+                      const existing = new Set((existingCodes || []).map(c => c.code));
+                      const uniqueAccounts = accountsToAdd.filter(a => !existing.has(a.code));
+                      const duplicateCount = accountsToAdd.length - uniqueAccounts.length;
+                      if (uniqueAccounts.length > 0) {
+                        const { error: insertError } = await supabase
+                          .from("app_9c8f2cf91bf942b2a7f12fc4c7ee9dc6_chicken_accounts")
+                          .insert(uniqueAccounts.map(a => ({
+                            code: a.code,
+                            username: a.username,
+                            password: a.password,
+                            product_name: a.product_name,
+                            status: 'available'
+                          })));
+                        if (insertError) throw insertError;
+                      }
+                      let msg = `นำเข้าสำเร็จ ${uniqueAccounts.length} รายการ`;
+                      if (duplicateCount > 0) msg += `, ข้ามโค้ดซ้ำ ${duplicateCount} รายการ`;
+                      if (errors.length > 0) msg += `, พบข้อผิดพลาด ${errors.length} รายการ`;
+                      setBulkSuccess(msg);
+                      setBulkInput('');
+                      setBulkOpen(false);
+                      fetchAccounts();
+                    } catch (e) {
+                      setBulkError(e instanceof Error ? e.message : 'ไม่สามารถนำเข้าได้');
+                    } finally {
+                      setIsBulkAdding(false);
+                    }
+                  }}
+                  disabled={isBulkAdding}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {isBulkAdding ? 'กำลังนำเข้า...' : 'นำเข้า'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Add Account Form */}
         {isAddingAccount && (
