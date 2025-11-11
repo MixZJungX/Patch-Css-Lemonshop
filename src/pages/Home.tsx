@@ -1233,6 +1233,73 @@ export default function Home() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Important Notice - Rainbow Blinking Alert */}
+        <div className="mb-6">
+          <style>{`
+            @keyframes rainbow-bg {
+              0% { background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3); }
+              14% { background: linear-gradient(90deg, #9400d3, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082); }
+              28% { background: linear-gradient(90deg, #4b0082, #9400d3, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff); }
+              42% { background: linear-gradient(90deg, #0000ff, #4b0082, #9400d3, #ff0000, #ff7f00, #ffff00, #00ff00); }
+              57% { background: linear-gradient(90deg, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000, #ff7f00, #ffff00); }
+              71% { background: linear-gradient(90deg, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000, #ff7f00); }
+              85% { background: linear-gradient(90deg, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000); }
+              100% { background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3); }
+            }
+            @keyframes rainbow-border {
+              0% { border-color: #ff0000; box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+              14% { border-color: #ff7f00; box-shadow: 0 0 30px rgba(255, 127, 0, 0.8); }
+              28% { border-color: #ffff00; box-shadow: 0 0 30px rgba(255, 255, 0, 0.8); }
+              42% { border-color: #00ff00; box-shadow: 0 0 30px rgba(0, 255, 0, 0.8); }
+              57% { border-color: #0000ff; box-shadow: 0 0 30px rgba(0, 0, 255, 0.8); }
+              71% { border-color: #4b0082; box-shadow: 0 0 30px rgba(75, 0, 130, 0.8); }
+              85% { border-color: #9400d3; box-shadow: 0 0 30px rgba(148, 0, 211, 0.8); }
+              100% { border-color: #ff0000; box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+            }
+            @keyframes rainbow-text {
+              0% { color: #ff0000; text-shadow: 0 0 10px rgba(255, 0, 0, 0.8); }
+              14% { color: #ff7f00; text-shadow: 0 0 10px rgba(255, 127, 0, 0.8); }
+              28% { color: #ffff00; text-shadow: 0 0 10px rgba(255, 255, 0, 0.8); }
+              42% { color: #00ff00; text-shadow: 0 0 10px rgba(0, 255, 0, 0.8); }
+              57% { color: #0000ff; text-shadow: 0 0 10px rgba(0, 0, 255, 0.8); }
+              71% { color: #4b0082; text-shadow: 0 0 10px rgba(75, 0, 130, 0.8); }
+              85% { color: #9400d3; text-shadow: 0 0 10px rgba(148, 0, 211, 0.8); }
+              100% { color: #ff0000; text-shadow: 0 0 10px rgba(255, 0, 0, 0.8); }
+            }
+            .rainbow-bg-animation {
+              animation: rainbow-bg 3s linear infinite;
+              background-size: 200% 100%;
+            }
+            .rainbow-border-animation {
+              animation: rainbow-border 2s linear infinite;
+            }
+            .rainbow-text-animation {
+              animation: rainbow-text 2s linear infinite;
+            }
+          `}</style>
+          <div className="backdrop-blur-xl border-4 rounded-2xl p-4 rainbow-bg-animation rainbow-border-animation" style={{ background: 'linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)' }}>
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-3xl rainbow-text-animation">⚠️</span>
+                <h3 className="text-white font-bold text-lg sm:text-xl drop-shadow-lg rainbow-text-animation">แจ้งเตือนสำคัญ!</h3>
+                <span className="text-3xl rainbow-text-animation">⚠️</span>
+              </div>
+              <div className="bg-black/40 rounded-xl p-3 backdrop-blur-sm border border-white/30">
+                <p className="text-white font-semibold text-base sm:text-lg mb-2 drop-shadow-lg">
+                  🕐 เวลาเติมโรบัค: 10:00 น. - 22:00 น.
+                </p>
+                <p className="text-white text-sm sm:text-base drop-shadow-lg">
+                  หากเติมโรบัคช้า กรุณา
+                  <Link to="/queue-status" className="mx-1 underline font-bold hover:text-yellow-300 transition-colors rainbow-text-animation">
+                    เช็คคิว
+                  </Link>
+                  เพื่อดูสถานะของคุณ
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {announcements.length > 0 && (
           <div className="mb-6">
             <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-3 sm:p-4">
