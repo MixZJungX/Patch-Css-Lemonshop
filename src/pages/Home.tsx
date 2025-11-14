@@ -68,6 +68,7 @@ export default function Home() {
   const [redeemCode, setRedeemCode] = useState('');
   const [validatedCode, setValidatedCode] = useState<RedemptionCode | null>(null);
   const [showRedeemPopup, setShowRedeemPopup] = useState(false);
+  const [redeemStep, setRedeemStep] = useState<1 | 2 | 3>(1); // Multi-step form
   const [redeemForm, setRedeemForm] = useState({
     username: '',
     password: '',
@@ -125,6 +126,34 @@ export default function Home() {
         toast.error('ระบบคิวไม่พร้อมใช้งาน กรุณาติดต่อแอดมิน');
       }
     });
+
+    // 🚀 ตั้งค่า Realtime subscription สำหรับ queue_items
+    console.log('🔌 [Home] Setting up Realtime subscription for statistics...');
+    const channel = supabase
+      .channel('home_queue_stats')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'queue_items'
+        },
+        (payload) => {
+          console.log('📡 [Home] Queue updated, refreshing statistics...', payload);
+          loadStatistics(); // รีเฟรชสถิติเมื่อมีการเปลี่ยนแปลง
+        }
+      )
+      .subscribe((status) => {
+        console.log('📊 [Home] Realtime status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ [Home] Successfully subscribed to queue statistics updates!');
+        }
+      });
+
+    return () => {
+      console.log('🔌 [Home] Unsubscribing from queue statistics...');
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // อัปเดต countdown timer ทุกวินาที
@@ -173,36 +202,39 @@ export default function Home() {
   // โหลดสถิติยอดเติมทั้งหมด
   const loadStatistics = async () => {
     try {
-      // ดึงยอดเติมโรบัคทั้งหมดจาก redemption_requests ที่ completed และ pending
-      const { data: completedRobuxRequests, error: robuxError } = await supabase
-        .from('app_284beb8f90_redemption_requests')
+      // ✨ ดึงยอดเติมโรบัคทั้งหมดจาก queue_items ที่ completed และ processing
+      const { data: completedRobuxQueue, error: robuxError } = await supabase
+        .from('queue_items')
         .select('robux_amount')
-        .in('status', ['completed', 'pending']);
+        .eq('product_type', 'robux')
+        .in('status', ['completed', 'processing']);
       
-      if (!robuxError && completedRobuxRequests) {
-        const totalRobux = completedRobuxRequests.reduce((sum, req) => sum + (req.robux_amount || 0), 0);
+      if (!robuxError && completedRobuxQueue) {
+        const totalRobux = completedRobuxQueue.reduce((sum, item) => sum + (item.robux_amount || 0), 0);
         setTotalRobuxRedeemed(totalRobux);
-        setTotalRobuxRedeemedCount(completedRobuxRequests.length);
+        setTotalRobuxRedeemedCount(completedRobuxQueue.length);
       }
 
-      // ดึงยอดไก่ตันที่แลกแล้วทั้งหมดจาก chicken_accounts ที่ used
-      const { data: usedChickenAccounts, error: chickenError } = await supabase
-        .from('app_284beb8f90_chicken_accounts')
+      // ดึงยอดไก่ตันที่แลกแล้วทั้งหมดจาก queue_items ที่ completed
+      const { data: completedChickenQueue, error: chickenError } = await supabase
+        .from('queue_items')
         .select('id')
-        .eq('status', 'used');
-      
-      if (!chickenError && usedChickenAccounts) {
-        setTotalChickenRedeemed(usedChickenAccounts.length);
-      }
-
-      // ดึงโค้ด Rainbow ที่เติมแล้วทั้งหมดจาก rainbow_requests ที่ completed
-      const { data: completedRainbowRequests, error: rainbowError } = await supabase
-        .from('app_284beb8f90_rainbow_requests')
-        .select('id')
+        .eq('product_type', 'chicken')
         .eq('status', 'completed');
       
-      if (!rainbowError && completedRainbowRequests) {
-        setTotalRainbowRedeemed(completedRainbowRequests.length);
+      if (!chickenError && completedChickenQueue) {
+        setTotalChickenRedeemed(completedChickenQueue.length);
+      }
+
+      // ดึงโค้ด Rainbow ที่เติมแล้วทั้งหมดจาก queue_items ที่ completed
+      const { data: completedRainbowQueue, error: rainbowError } = await supabase
+        .from('queue_items')
+        .select('id')
+        .eq('product_type', 'rainbow')
+        .eq('status', 'completed');
+      
+      if (!rainbowError && completedRainbowQueue) {
+        setTotalRainbowRedeemed(completedRainbowQueue.length);
       }
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -600,108 +632,42 @@ export default function Home() {
         return;
       }
 
-      // สร้าง redemption request ในตารางหลัก
+      // ✨ ใหม่: บันทึกข้อมูลเข้า queue_items เลย ไม่ต้องบันทึก redemption_requests
       try {
-        const requestData = {
-          roblox_username: redeemForm.username,
-          roblox_password: redeemForm.password,
-          robux_amount: validatedCode!.robux_value || 0,
-          contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
-          phone: contactString,
-          status: 'pending',
-          assigned_code: validatedCode!.code,
-          code_id: validatedCode!.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        console.log('📝 สร้าง request data:', requestData);
-        console.log('🔑 โค้ดที่ใช้:', validatedCode!.code);
-
-        // ตรวจสอบว่าโค้ดถูกใช้แล้วหรือไม่ก่อนสร้างคำขอ
-        console.log('🔍 ตรวจสอบโค้ดซ้ำ:', validatedCode!.code);
-        const { data: existingCode, error: checkError } = await supabase
-          .from('app_284beb8f90_redemption_requests')
+        // ตรวจสอบว่าโค้ดถูกใช้แล้วหรือไม่ (ใน queue_items)
+        console.log('🔍 ตรวจสอบโค้ดซ้ำใน queue_items:', validatedCode!.code);
+        const { data: existingQueue, error: checkError } = await supabase
+          .from('queue_items')
           .select('id, assigned_code, status')
           .eq('assigned_code', validatedCode!.code)
           .limit(1);
           
         if (checkError) {
           console.error('❌ ไม่สามารถตรวจสอบโค้ดได้:', checkError);
-        } else if (existingCode && existingCode.length > 0) {
-          console.log('⚠️ โค้ดนี้ถูกใช้แล้ว:', existingCode[0]);
+        } else if (existingQueue && existingQueue.length > 0) {
+          console.log('⚠️ โค้ดนี้ถูกใช้แล้ว:', existingQueue[0]);
           toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
           return;
         } else {
           console.log('✅ โค้ดพร้อมใช้งาน');
         }
 
-        // Save the redemption request
-        const { error: saveError } = await supabase
-          .from('app_284beb8f90_redemption_requests')
-          .insert([requestData]);
-          
-        if (saveError) {
-          console.error('❌ ไม่สามารถสร้างคำขอได้:', saveError);
-          console.error('รายละเอียด error:', {
-            code: saveError.code,
-            message: saveError.message,
-            details: saveError.details,
-            hint: saveError.hint
-          });
-          console.error('📝 requestData ที่พยายามบันทึก:', requestData);
-          
-          // ตรวจสอบว่าเป็น duplicate key error หรือไม่
-          if (saveError.message.includes('duplicate key') || saveError.code === '23505') {
-            toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
-            return;
-          }
-          
-          // ถ้าเกิด error ให้ลองบันทึกแบบเรียบง่าย
-          try {
-            const simpleRequestData = {
-              roblox_username: redeemForm.username,
-              robux_amount: validatedCode!.robux_value || 0,
-              contact_info: `Code: ${validatedCode!.code} | Password: ${redeemForm.password} | ${contactString}`,
-              status: 'pending',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            
-            const { error: simpleError } = await supabase
-              .from('app_284beb8f90_redemption_requests')
-              .insert([simpleRequestData]);
-              
-            if (simpleError) {
-              console.error('❌ ไม่สามารถบันทึกแบบเรียบง่ายได้:', simpleError);
-              if (simpleError.message.includes('duplicate key') || simpleError.code === '23505') {
-                toast.error('โค้ดนี้ถูกใช้งานไปแล้ว กรุณาใช้โค้ดอื่น', { id: toastId });
-              } else {
-                toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
-              }
-              return;
-            }
-            
-            console.log('✅ บันทึกแบบเรียบง่ายสำเร็จ');
-            
-          } catch (simpleError) {
-            console.error('❌ ไม่สามารถบันทึกแบบเรียบง่ายได้:', simpleError);
-            toast.error('เกิดข้อผิดพลาดในการสร้างคำขอ กรุณาลองใหม่อีกครั้ง', { id: toastId });
-            return;
-          }
-        }
-
-        console.log('✅ สร้างคำขอสำเร็จ');
-
-        // เพิ่มคิวใหม่
+        // เพิ่มคิวใหม่พร้อมข้อมูลครบถ้วน
         try {
           const queueData = {
-            // ใช้เฉพาะคอลัมน์ที่มีอยู่จริงในตาราง queue_items
+            // ข้อมูลหลัก
+            roblox_username: redeemForm.username,
+            roblox_password: redeemForm.password,
+            robux_amount: validatedCode!.robux_value || 0,
+            assigned_code: validatedCode!.code,
+            code_id: validatedCode!.id,
             contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
             product_type: 'robux',
             status: 'waiting',
             estimated_wait_time: 15
           };
+          
+          console.log('📝 สร้าง queue data พร้อมข้อมูลครบถ้วน:', queueData);
           
           const newQueueItem = await addToQueue(queueData);
           console.log('✅ เพิ่มคิวสำเร็จ:', newQueueItem);
@@ -762,6 +728,12 @@ export default function Home() {
             
             const simpleQueueData = {
               queue_number: nextQueueNumber,
+              // รวมข้อมูลครบถ้วน
+              roblox_username: redeemForm.username,
+              roblox_password: redeemForm.password,
+              robux_amount: validatedCode!.robux_value || 0,
+              assigned_code: validatedCode!.code,
+              code_id: validatedCode!.id,
               contact_info: `ชื่อ: ${redeemForm.username} | ${contactString}`,
               product_type: 'robux',
               status: 'waiting',
@@ -2371,126 +2343,270 @@ export default function Home() {
           </DialogContent>
         </Dialog>
 
-        {/* Robux Redemption Dialog */}
-        <Dialog open={showRedeemPopup} onOpenChange={setShowRedeemPopup}>
-          <DialogContent className="sm:max-w-lg bg-gradient-to-br from-white/95 to-white/90 backdrop-blur-xl border border-white/30 shadow-2xl rounded-3xl">
-            <DialogHeader className="text-center pb-6">
+        {/* Robux Redemption Dialog - Multi-Step Form */}
+        <Dialog open={showRedeemPopup} onOpenChange={(open) => {
+          setShowRedeemPopup(open);
+          if (!open) setRedeemStep(1); // Reset to step 1 when closing
+        }}>
+          <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-3xl border-0 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] rounded-[2.5rem] overflow-hidden p-8">
+            {/* iOS-style Glassmorphism Background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/40 via-white/30 to-green-50/40 backdrop-blur-2xl pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-green-300/20 to-emerald-300/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-emerald-300/20 to-green-300/20 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '1s' }}></div>
+            
+            {/* Subtle Border Highlight */}
+            <div className="absolute inset-0 rounded-[2.5rem] border border-white/20 pointer-events-none"></div>
+            
+            <DialogHeader className="text-center pb-6 relative z-10">
               <div className="relative mb-4">
-                {/* Glowing Background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-green-400/30 to-emerald-400/30 rounded-full blur-2xl"></div>
-                <div className="relative bg-gradient-to-r from-green-500 to-emerald-500 rounded-full w-16 h-16 mx-auto flex items-center justify-center shadow-lg border-2 border-white/20">
-                  <span className="text-2xl">💎</span>
+                {/* Robux Amount Display */}
+                <div className="text-center">
+                  <div className="inline-block bg-gradient-to-br from-green-500 via-emerald-500 to-green-600 rounded-full px-10 py-5 shadow-[0_10px_40px_-10px_rgba(16,185,129,0.5)] border border-white/30 backdrop-blur-xl">
+                    <div className="flex items-baseline justify-center gap-2">
+                      <span className="text-5xl font-bold text-white drop-shadow-lg">{validatedCode?.robux_value}</span>
+                      <span className="text-2xl font-semibold text-white/90">Robux</span>
+                    </div>
+                  </div>
                 </div>
               </div>
               
-              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-green-600 via-emerald-600 to-green-700 bg-clip-text text-transparent mb-2 tracking-tight">
                 แลกโค้ดรับ Robux
               </DialogTitle>
-              <DialogDescription className="text-gray-600 text-base mt-2">
-                กรอกข้อมูล Roblox ของคุณเพื่อรับ <span className="font-bold text-green-600">{validatedCode?.robux_value} Robux</span>
+              <DialogDescription className="text-gray-600 text-base font-medium">
+                กรอกข้อมูลเพื่อรับโรบัคของคุณ 🎮
               </DialogDescription>
+              
+              {/* iOS-style Progress Steps */}
+              <div className="flex items-center justify-center gap-1 mt-6 px-4">
+                {[
+                  { num: 1, label: 'ชื่อผู้ใช้', icon: '👤' },
+                  { num: 2, label: 'รหัสผ่าน', icon: '🔒' },
+                  { num: 3, label: 'ติดต่อ', icon: '📱' }
+                ].map((step, index) => (
+                  <React.Fragment key={step.num}>
+                    <div className="flex flex-col items-center">
+                      <div className={`relative w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                        redeemStep === step.num 
+                          ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white scale-110 shadow-[0_8px_30px_rgb(34,197,94,0.5)] ring-4 ring-green-100/50' 
+                          : redeemStep > step.num
+                          ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white shadow-[0_4px_20px_rgb(34,197,94,0.3)]'
+                          : 'bg-gray-50 text-gray-400 border border-gray-200 shadow-sm'
+                      }`}>
+                        {redeemStep > step.num ? (
+                          <span className="text-xl">✓</span>
+                        ) : (
+                          <span className="text-lg">{step.icon}</span>
+                        )}
+                        {redeemStep === step.num && (
+                          <div className="absolute inset-0 rounded-full bg-green-400/50 animate-ping"></div>
+                        )}
+                      </div>
+                      <span className={`text-xs mt-2 font-semibold transition-all duration-300 ${
+                        redeemStep === step.num ? 'text-green-700 scale-105' : 'text-gray-400'
+                      }`}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {index < 2 && (
+                      <div className={`flex-1 h-1.5 mx-2 rounded-full transition-all duration-700 ${
+                        redeemStep > step.num 
+                          ? 'bg-gradient-to-r from-green-400 to-emerald-500 shadow-[0_2px_10px_rgb(34,197,94,0.3)]' 
+                          : 'bg-gray-100'
+                      }`}></div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
             </DialogHeader>
             
-            <form onSubmit={handleRobuxSubmit} className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="username" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
-                    <span className="text-green-600">👤</span>
-                    ชื่อผู้ใช้ Roblox
+            <div className="space-y-6 relative z-10">
+              {/* Step 1: Username */}
+              {redeemStep === 1 && (
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="relative">
+                    <Label htmlFor="username" className="text-gray-800 font-bold flex items-center gap-2 mb-3 text-base">
+                      <span className="text-2xl">👤</span>
+                      <span>ชื่อผู้ใช้ Roblox</span>
                   </Label>
-                  <Input
-                    id="username"
-                    value={redeemForm.username}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="ชื่อผู้ใช้ของคุณใน Roblox"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
-                  />
+                    <div className="relative group">
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-green-400/50 to-emerald-500/50 rounded-[1.5rem] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 blur-md transition-all duration-500"></div>
+                      <Input
+                        id="username"
+                        value={redeemForm.username}
+                        onChange={(e) => setRedeemForm(prev => ({ ...prev, username: e.target.value }))}
+                        placeholder="กรอกชื่อผู้ใช้ของคุณ..."
+                        className="relative h-14 border border-gray-200/50 focus:border-green-400/50 focus:ring-4 focus:ring-green-100/50 transition-all duration-300 rounded-[1.5rem] text-base font-medium bg-white/80 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(34,197,94,0.1)] focus:shadow-[0_4px_20px_rgba(34,197,94,0.2)]"
+                        autoFocus
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                      <span>💡</span>
+                      <span>กรอกชื่อผู้ใช้ Roblox ของคุณให้ถูกต้อง</span>
+                    </p>
                 </div>
                 
-                <div>
-                  <Label htmlFor="password" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
-                    <span className="text-green-600">🔒</span>
-                    รหัสผ่าน Roblox
+                  <Button 
+                    onClick={() => {
+                      if (!redeemForm.username.trim()) {
+                        toast.error('กรุณากรอกชื่อผู้ใช้ Roblox');
+                        return;
+                      }
+                      setRedeemStep(2);
+                    }}
+                    className="w-full h-14 text-base font-bold bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white shadow-[0_8px_30px_-5px_rgba(34,197,94,0.5)] hover:shadow-[0_12px_40px_-5px_rgba(34,197,94,0.6)] transition-all duration-500 rounded-[1.5rem] transform hover:scale-[1.02] active:scale-[0.98] border border-white/20"
+                  >
+                    <span className="flex items-center justify-center gap-2">
+                      <span>ถัดไป</span>
+                      <span className="text-xl">→</span>
+                    </span>
+                  </Button>
+                </div>
+              )}
+              
+              {/* Step 2: Password */}
+              {redeemStep === 2 && (
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="relative">
+                    <Label htmlFor="password" className="text-gray-800 font-bold flex items-center gap-2 mb-3 text-base">
+                      <span className="text-2xl">🔒</span>
+                      <span>รหัสผ่าน Roblox</span>
                   </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={redeemForm.password}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="รหัสผ่านของคุณ"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
-                  />
+                    <div className="relative group">
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-green-400/50 to-emerald-500/50 rounded-[1.5rem] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 blur-md transition-all duration-500"></div>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={redeemForm.password}
+                        onChange={(e) => setRedeemForm(prev => ({ ...prev, password: e.target.value }))}
+                        placeholder="กรอกรหัสผ่านของคุณ..."
+                        className="relative h-14 border border-gray-200/50 focus:border-green-400/50 focus:ring-4 focus:ring-green-100/50 transition-all duration-300 rounded-[1.5rem] text-base font-medium bg-white/80 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(34,197,94,0.1)] focus:shadow-[0_4px_20px_rgba(34,197,94,0.2)]"
+                        autoFocus
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                      <span>🔐</span>
+                      <span>รหัสผ่านจะถูกเก็บเป็นความลับและปลอดภัย</span>
+                    </p>
                 </div>
                 
-                <div>
-                  <Label htmlFor="facebookName" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
-                    <span className="text-green-600">📘</span>
-                    ชื่อเฟส (Facebook)
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={() => setRedeemStep(1)}
+                      variant="outline"
+                      className="flex-1 h-14 text-base font-bold border border-gray-200/50 hover:border-green-400/50 hover:bg-green-50/50 transition-all duration-500 rounded-[1.5rem] transform hover:scale-[1.02] active:scale-[0.98] bg-white/50 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(34,197,94,0.1)]"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="text-xl">←</span>
+                        <span>ย้อนกลับ</span>
+                      </span>
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        if (!redeemForm.password.trim()) {
+                          toast.error('กรุณากรอกรหัสผ่าน Roblox');
+                          return;
+                        }
+                        setRedeemStep(3);
+                      }}
+                      className="flex-1 h-14 text-base font-bold bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white shadow-[0_8px_30px_-5px_rgba(34,197,94,0.5)] hover:shadow-[0_12px_40px_-5px_rgba(34,197,94,0.6)] transition-all duration-500 rounded-[1.5rem] transform hover:scale-[1.02] active:scale-[0.98] border border-white/20"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span>ถัดไป</span>
+                        <span className="text-xl">→</span>
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Step 3: Contact Info */}
+              {redeemStep === 3 && (
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <Label htmlFor="facebookName" className="text-gray-800 font-bold flex items-center gap-2 mb-3 text-base">
+                        <span className="text-2xl">📘</span>
+                        <span>ชื่อเฟส (Facebook)</span>
                   </Label>
-                  <Input
-                    id="facebookName"
-                    value={redeemForm.facebookName}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, facebookName: e.target.value }))}
-                    placeholder="กรอกชื่อเฟสบุคของคุณ"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
-                  />
+                      <div className="relative group">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-400/50 to-blue-500/50 rounded-[1.5rem] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 blur-md transition-all duration-500"></div>
+                        <Input
+                          id="facebookName"
+                          value={redeemForm.facebookName}
+                          onChange={(e) => setRedeemForm(prev => ({ ...prev, facebookName: e.target.value }))}
+                          placeholder="กรอกชื่อเฟสบุคของคุณ..."
+                          className="relative h-14 border border-gray-200/50 focus:border-blue-400/50 focus:ring-4 focus:ring-blue-100/50 transition-all duration-300 rounded-[1.5rem] text-base font-medium bg-white/80 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(59,130,246,0.1)] focus:shadow-[0_4px_20px_rgba(59,130,246,0.2)]"
+                          autoFocus
+                        />
+                      </div>
                 </div>
                 
-                <div>
-                  <Label htmlFor="lineId" className="text-gray-700 font-semibold flex items-center gap-2 mb-2">
-                    <span className="text-green-600">💬</span>
-                    ไอดีไลน์ (Line ID)
+                    <div className="relative">
+                      <Label htmlFor="lineId" className="text-gray-800 font-bold flex items-center gap-2 mb-3 text-base">
+                        <span className="text-2xl">💬</span>
+                        <span>ไอดีไลน์ (Line ID)</span>
                   </Label>
-                  <Input
-                    id="lineId"
-                    value={redeemForm.lineId}
-                    onChange={(e) => setRedeemForm(prev => ({ ...prev, lineId: e.target.value }))}
-                    placeholder="กรอกไอดีไลน์ของคุณ (เช่น @yourlineid)"
-                    className="h-12 border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-400/20 transition-all rounded-2xl"
-                  />
-                </div>
-                
-                {/* หมายเหตุ */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                  <p className="text-blue-800 text-xs sm:text-sm">
-                    <strong>📌 หมายเหตุ:</strong> กรอกชื่อเฟสหรือไอดีไลน์อย่างน้อย 1 ช่อง (หรือทั้ง 2 ช่องก็ได้) เพื่อให้ทางร้านติดต่อกลับได้
-                  </p>
+                      <div className="relative group">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-green-400/50 to-emerald-500/50 rounded-[1.5rem] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 blur-md transition-all duration-500"></div>
+                        <Input
+                          id="lineId"
+                          value={redeemForm.lineId}
+                          onChange={(e) => setRedeemForm(prev => ({ ...prev, lineId: e.target.value }))}
+                          placeholder="เช่น @yourlineid"
+                          className="relative h-14 border border-gray-200/50 focus:border-green-400/50 focus:ring-4 focus:ring-green-100/50 transition-all duration-300 rounded-[1.5rem] text-base font-medium bg-white/80 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(34,197,94,0.1)] focus:shadow-[0_4px_20px_rgba(34,197,94,0.2)]"
+                        />
+                      </div>
                 </div>
               </div>
               
-              {/* Info Box */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4">
-                <div className="flex items-start gap-3">
-                  <div className="text-green-600 text-lg">💡</div>
+                  {/* หมายเหตุ */}
+                  <div className="relative overflow-hidden bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border border-blue-200/30 rounded-[1.5rem] p-4 shadow-[0_2px_10px_rgba(0,0,0,0.05)] backdrop-blur-xl bg-white/40">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-blue-200/20 rounded-full blur-2xl"></div>
+                    <div className="relative flex items-start gap-3">
+                      <span className="text-2xl">📌</span>
                   <div>
-                    <h4 className="text-green-800 font-semibold mb-1">ข้อมูลสำคัญ</h4>
-                    <p className="text-green-700 text-sm">
-                      กรุณากรอกข้อมูลให้ถูกต้อง และให้ข้อมูลติดต่อ (Facebook/Line) เพื่อให้ทางร้านสามารถติดต่อกลับได้ ระบบจะส่ง Robux ไปยังบัญชี Roblox ของคุณภายใน 24 ชั่วโมง
+                        <p className="text-blue-900 text-xs font-semibold mb-1">หมายเหตุสำคัญ</p>
+                        <p className="text-blue-700 text-xs leading-relaxed">
+                          กรอกชื่อเฟสหรือไอดีไลน์<strong className="text-blue-900"> อย่างน้อย 1 ช่อง</strong> เพื่อให้ทางร้านติดต่อกลับได้
                     </p>
                   </div>
                 </div>
               </div>
               
-              <DialogFooter className="pt-4">
-                <Button 
-                  type="submit"
-                  disabled={isRobuxButtonSubmitting}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all transform hover:scale-105 rounded-full"
-                >
+                  <div className="flex gap-3 pt-2">
+                    <Button 
+                      onClick={() => setRedeemStep(2)}
+                      variant="outline"
+                      className="flex-1 h-14 text-base font-bold border border-gray-200/50 hover:border-green-400/50 hover:bg-green-50/50 transition-all duration-500 rounded-[1.5rem] transform hover:scale-[1.02] active:scale-[0.98] bg-white/50 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_20px_rgba(34,197,94,0.1)]"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="text-xl">←</span>
+                        <span>ย้อนกลับ</span>
+                      </span>
+                    </Button>
+                    <Button 
+                      onClick={handleRobuxSubmit}
+                      disabled={isRobuxButtonSubmitting}
+                      className="flex-1 h-14 text-base font-bold bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 hover:from-green-600 hover:via-emerald-600 hover:to-green-700 text-white shadow-[0_8px_30px_-5px_rgba(34,197,94,0.5)] hover:shadow-[0_12px_40px_-5px_rgba(34,197,94,0.6)] transition-all duration-500 rounded-[1.5rem] transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none border border-white/20"
+                    >
                   {isRobuxButtonSubmitting ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
                       <span>กำลังแลก...</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center gap-2">
                       <span className="text-xl">💎</span>
-                      <span>แลกโค้ด</span>
+                          <span>ยืนยันแลกโค้ด</span>
+                          <span className="text-xl">✨</span>
                     </div>
                   )}
                 </Button>
-              </DialogFooter>
-            </form>
+                  </div>
+                </div>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
 
