@@ -17,3 +17,4 @@ SHOW statement_timeout;
 -- - แต่ควรแก้ไข query ให้เร็วขึ้นด้วยการใช้ limit และ indexes
 
 
+

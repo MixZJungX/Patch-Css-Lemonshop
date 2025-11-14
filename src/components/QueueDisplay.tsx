@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QueueDisplay as QueueDisplayType } from '@/types';
 import { getQueueDisplay } from '@/lib/queueApi';
+import { supabase } from '@/lib/supabase';
 import { Clock, Users, Play, CheckCircle, Search, X } from 'lucide-react';
 
 export default function QueueDisplay() {
@@ -22,22 +23,46 @@ export default function QueueDisplay() {
   };
 
   useEffect(() => {
+    // โหลดข้อมูลครั้งแรก
     loadQueueData();
     
-    // อัปเดตข้อมูลทุก 10 วินาที
-    const interval = setInterval(loadQueueData, 10000);
+    console.log('🔌 Setting up Realtime subscription for queue_items...');
     
-    // อัปเดตทันทีเมื่อหน้าถูกเปิด
+    // 🚀 ใช้ Supabase Realtime แทน polling
+    const channel = supabase
+      .channel('queue_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // ฟังทุก event: INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'queue_items'
+        },
+        (payload) => {
+          console.log('📡 Realtime update received:', payload);
+          // อัพเดทข้อมูลทันทีเมื่อมีการเปลี่ยนแปลง
+          loadQueueData();
+        }
+      )
+      .subscribe((status) => {
+        console.log('📊 Realtime status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to queue updates!');
+        }
+      });
+    
+    // อัปเดตทันทีเมื่อหน้าได้รับ focus
     const updateImmediately = () => {
       loadQueueData();
     };
     
-    // ฟัง event เมื่อหน้าได้รับ focus
     window.addEventListener('focus', updateImmediately);
     window.addEventListener('visibilitychange', updateImmediately);
     
+    // Cleanup
     return () => {
-      clearInterval(interval);
+      console.log('🔌 Unsubscribing from queue updates...');
+      supabase.removeChannel(channel);
       window.removeEventListener('focus', updateImmediately);
       window.removeEventListener('visibilitychange', updateImmediately);
     };
@@ -369,7 +394,7 @@ export default function QueueDisplay() {
             </p>
           </div>
           <p className="text-xs opacity-60">
-            อัปเดตล่าสุด: {new Date().toLocaleString('th-TH')} | อัปเดตทุก 10 วินาที
+            อัปเดตล่าสุด: {new Date().toLocaleString('th-TH')} | 🔴 อัปเดตแบบ Real-time
           </p>
         </CardContent>
       </Card>

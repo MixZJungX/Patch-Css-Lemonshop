@@ -77,6 +77,7 @@ export const addToQueue = async (queueData: any): Promise<any> => {
       const newQueueItem = {
         ...queueData,
         queue_number: queueNumber,
+        order_id: crypto.randomUUID(), // เพิ่ม order_id ที่จำเป็น
         status: 'waiting',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -156,75 +157,12 @@ export const getQueueDisplay = async (): Promise<QueueDisplay> => {
     // ไม่ throw error แต่ใช้ empty array แทน
   }
 
-  // ดึงข้อมูล redemption requests
-  const { data: redemptionData, error: redemptionError } = await supabase
-    .from('app_284beb8f90_redemption_requests')
-    .select('*');
-
-  if (redemptionError) throw redemptionError;
-
-  // ฟังก์ชันรวมข้อมูล
-  const enrichQueueData = (queueItems: any[]) => {
-    return queueItems?.map(queueItem => {
-      // หา redemption requests ทั้งหมดที่ match
-      const allMatchingRedemptions = redemptionData?.filter(redemption => {
-        const queueUsername = queueItem.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
-        
-        // จับคู่แบบหลายวิธี
-        return queueItem.contact_info.includes(redemption.roblox_username) ||
-               queueUsername === redemption.roblox_username ||
-               queueItem.customer_name === redemption.roblox_username ||
-               (queueItem.contact_info.includes('เบอร์โทร:') && redemption.contact_info.includes('เบอร์โทร:') && 
-                queueItem.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() === 
-                redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
-               (queueItem.contact_info.includes('Code:') && redemption.assigned_code && 
-                queueItem.contact_info.includes(redemption.assigned_code));
-      }) || [];
-
-      // เลือก redemption ที่เวลาใกล้เคียงที่สุด
-      const matchingRedemption = allMatchingRedemptions.length > 0
-        ? allMatchingRedemptions.reduce((closest, current) => {
-            const queueTime = new Date(queueItem.created_at).getTime();
-            const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
-            const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
-            return currentTimeDiff < closestTimeDiff ? current : closest;
-          })
-        : null;
-
-      // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
-      // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"
-      let passwordFromContact = null;
-      let codeFromContact = null;
-      
-      // ลองหลายรูปแบบ regex
-      if (queueItem.contact_info.includes('Password:')) {
-        passwordFromContact = queueItem.contact_info.match(/Password:\s*([^|]+)/)?.[1]?.trim() ||
-                             queueItem.contact_info.match(/Password:\s*([^\s|]+)/)?.[1]?.trim() ||
-                             queueItem.contact_info.match(/Password:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-      }
-      
-      if (queueItem.contact_info.includes('Code:')) {
-        codeFromContact = queueItem.contact_info.match(/Code:\s*([^|]+)/)?.[1]?.trim() ||
-                         queueItem.contact_info.match(/Code:\s*([^\s|]+)/)?.[1]?.trim() ||
-                         queueItem.contact_info.match(/Code:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-      }
-      
-      return {
-        ...queueItem,
-        roblox_username: matchingRedemption?.roblox_username || queueItem.roblox_username,
-        // ใช้ข้อมูลจาก contact_info เป็นหลัก (100% ข้อมูลอยู่ใน contact_info)
-        roblox_password: passwordFromContact || matchingRedemption?.roblox_password || queueItem.roblox_password,
-        robux_amount: matchingRedemption?.robux_amount || queueItem.robux_amount,
-        assigned_code: codeFromContact || matchingRedemption?.assigned_code || queueItem.assigned_code,
-        assigned_account_code: matchingRedemption?.assigned_account_code || queueItem.assigned_account_code,
-        code_id: matchingRedemption?.code_id || queueItem.code_id
-      };
-    }) || [];
-  };
-
-  const enrichedWaitingItems = enrichQueueData(waitingItems || []);
-  const enrichedProcessingItems = enrichQueueData(processingItems || []);
-  const enrichedProblemItems = enrichQueueData(problemItems || []);
+  // ✨ ใหม่: ไม่ต้อง match กับ redemption_requests อีกแล้ว
+  // ข้อมูลทั้งหมดอยู่ใน queue_items แล้ว - ง่ายและรวดเร็วกว่า!
+  
+  const enrichedWaitingItems = waitingItems || [];
+  const enrichedProcessingItems = processingItems || [];
+  const enrichedProblemItems = problemItems || [];
   const next3Items = enrichedWaitingItems.slice(0, 3);
   const totalWaiting = enrichedWaitingItems.length;
   const totalProblems = enrichedProblemItems.length;
@@ -254,69 +192,9 @@ export const checkQueueStatus = async (queueNumber: number): Promise<QueueItem |
     throw error;
   }
 
-  // ดึงข้อมูล redemption requests
-  const { data: redemptionData, error: redemptionError } = await supabase
-    .from('app_284beb8f90_redemption_requests')
-    .select('*');
-
-  if (redemptionError) {
-    console.warn('⚠️ Error fetching redemption data:', redemptionError);
-    // ไม่ throw error แต่ใช้ empty array แทน
-  }
-
-  // หา redemption requests ทั้งหมดที่ตรงกัน
-  const allMatchingRedemptions = redemptionData?.filter(redemption => {
-    const queueUsername = queueData.contact_info.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
-    
-    // จับคู่แบบหลายวิธี
-    return queueData.contact_info.includes(redemption.roblox_username) ||
-           queueUsername === redemption.roblox_username ||
-           queueData.customer_name === redemption.roblox_username ||
-           (queueData.contact_info.includes('เบอร์โทร:') && redemption.contact_info.includes('เบอร์โทร:') && 
-            queueData.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() === 
-            redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
-           (queueData.contact_info.includes('Code:') && redemption.assigned_code && 
-            queueData.contact_info.includes(redemption.assigned_code));
-  }) || [];
-
-  // เลือก redemption ที่เวลาใกล้เคียงที่สุด
-  const matchingRedemption = allMatchingRedemptions.length > 0
-    ? allMatchingRedemptions.reduce((closest, current) => {
-        const queueTime = new Date(queueData.created_at).getTime();
-        const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
-        const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
-        return currentTimeDiff < closestTimeDiff ? current : closest;
-      })
-    : null;
-
-  // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
-  // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"
-  let passwordFromContact = null;
-  let codeFromContact = null;
-  
-  // ลองหลายรูปแบบ regex
-  if (queueData.contact_info.includes('Password:')) {
-    passwordFromContact = queueData.contact_info.match(/Password:\s*([^|]+)/)?.[1]?.trim() ||
-                         queueData.contact_info.match(/Password:\s*([^\s|]+)/)?.[1]?.trim() ||
-                         queueData.contact_info.match(/Password:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-  }
-  
-  if (queueData.contact_info.includes('Code:')) {
-    codeFromContact = queueData.contact_info.match(/Code:\s*([^|]+)/)?.[1]?.trim() ||
-                     queueData.contact_info.match(/Code:\s*([^\s|]+)/)?.[1]?.trim() ||
-                     queueData.contact_info.match(/Code:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-  }
-  
-  return {
-    ...queueData,
-    roblox_username: matchingRedemption?.roblox_username || queueData.roblox_username,
-    // ใช้ข้อมูลจาก contact_info เป็นหลัก (100% ข้อมูลอยู่ใน contact_info)
-    roblox_password: passwordFromContact || matchingRedemption?.roblox_password || queueData.roblox_password,
-    robux_amount: matchingRedemption?.robux_amount || queueData.robux_amount,
-    assigned_code: codeFromContact || matchingRedemption?.assigned_code || queueData.assigned_code,
-    assigned_account_code: matchingRedemption?.assigned_account_code || queueData.assigned_account_code,
-    code_id: matchingRedemption?.code_id || queueData.code_id
-  };
+  // ✨ ใหม่: ไม่ต้อง match กับ redemption_requests
+  // ข้อมูลทั้งหมดอยู่ใน queue_items แล้ว
+  return queueData;
 };
 
 // ดึงตำแหน่งคิว (ลำดับที่เท่าไหร่)
@@ -416,106 +294,20 @@ export const deleteQueueItem = async (queueId: string): Promise<void> => {
 
 // ดึงคิวทั้งหมด (สำหรับแอดมิน)
 export const getAllQueueItems = async (): Promise<QueueItem[]> => {
-  // ดึงข้อมูลคิว
+  // ✨ ใหม่: ดึงข้อมูลจาก queue_items เลย ไม่ต้อง match กับ redemption_requests
   const { data: queueData, error: queueError } = await supabase
     .from('queue_items')
     .select('*')
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true});
 
   if (queueError) {
     console.warn('⚠️ Error fetching all queue items:', queueError);
-    return []; // return empty array instead of throwing
+    return [];
   }
 
-  // ดึงข้อมูล redemption requests
-  const { data: redemptionData, error: redemptionError } = await supabase
-    .from('app_284beb8f90_redemption_requests')
-    .select('*')
-    .order('created_at', { ascending: true });
-
-  if (redemptionError) {
-    console.warn('⚠️ Error fetching redemption data in getAllQueueItems:', redemptionError);
-    return queueData || []; // return queue data only if redemption fails
-  }
-
-  console.log('📊 ข้อมูลที่ดึงมา:', {
-    queueData: queueData?.length,
-    redemptionData: redemptionData?.length,
-    sampleQueue: queueData?.[0],
-    sampleRedemption: redemptionData?.[0]
-  });
-
-  // รวมข้อมูลโดยการจับคู่จาก contact_info หรือ customer_name
-  const enrichedData = queueData?.map(queueItem => {
-    // หา redemption requests ทั้งหมดที่ตรงกัน
-    const allMatchingRedemptions = redemptionData?.filter(redemption => {
-      // จับคู่จาก username ใน contact_info
-      const queueUsername = queueItem.contact_info?.match(/ชื่อ:\s*([^|]+)/)?.[1]?.trim();
-      
-      // จับคู่แบบหลายวิธี
-      return (
-        // วิธีที่ 1: username อยู่ใน contact_info
-        queueItem.contact_info?.includes(redemption.roblox_username) ||
-        // วิธีที่ 2: username ที่แยกออกมาเท่ากัน
-        queueUsername === redemption.roblox_username ||
-        // วิธีที่ 3: customer_name เท่ากับ username (ถ้ามี)
-        queueItem.customer_name === redemption.roblox_username ||
-        // วิธีที่ 4: ดูจากเบอร์โทร
-        (queueItem.contact_info?.includes('เบอร์โทร:') && redemption.contact_info?.includes('เบอร์โทร:') && 
-         queueItem.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim() === 
-         redemption.contact_info.match(/เบอร์โทร:\s*([^|]+)/)?.[1]?.trim()) ||
-        // วิธีที่ 5: ดูจาก Code ใน contact_info
-        (queueItem.contact_info?.includes('Code:') && redemption.assigned_code && 
-         queueItem.contact_info.includes(redemption.assigned_code))
-      );
-    }) || [];
-
-    // เลือก redemption ที่เวลาใกล้เคียงที่สุด
-    const matchingRedemption = allMatchingRedemptions.length > 0
-      ? allMatchingRedemptions.reduce((closest, current) => {
-          const queueTime = new Date(queueItem.created_at).getTime();
-          const closestTimeDiff = Math.abs(queueTime - new Date(closest.created_at).getTime());
-          const currentTimeDiff = Math.abs(queueTime - new Date(current.created_at).getTime());
-          return currentTimeDiff < closestTimeDiff ? current : closest;
-        })
-      : null;
-
-    // Fallback: ดึงข้อมูลจาก contact_info ถ้าไม่มีใน redemption_requests
-    // รูปแบบ: "Code: 50BXJK258J | Password: 123456780 | Phone: 0821695505"
-    const sourceContact = matchingRedemption?.contact_info || queueItem.contact_info;
-    let passwordFromContact = null;
-    let codeFromContact = null;
-    
-    // ลองหลายรูปแบบ regex จาก sourceContact
-    if (sourceContact && sourceContact.includes('Password:')) {
-      passwordFromContact = sourceContact.match(/Password:\s*([^|]+)/)?.[1]?.trim() ||
-                           sourceContact.match(/Password:\s*([^\s|]+)/)?.[1]?.trim() ||
-                           sourceContact.match(/Password:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-    }
-    
-    if (sourceContact && sourceContact.includes('Code:')) {
-      codeFromContact = sourceContact.match(/Code:\s*([^|]+)/)?.[1]?.trim() ||
-                       sourceContact.match(/Code:\s*([^\s|]+)/)?.[1]?.trim() ||
-                       sourceContact.match(/Code:\s*(.+?)(?:\s*\||$)/)?.[1]?.trim();
-    }
-    
-    // ลบ console.log เพื่อลด log spam
-    
-    const result = {
-      ...queueItem,
-      roblox_username: matchingRedemption?.roblox_username || queueItem.roblox_username,
-      // ใช้ข้อมูลจาก contact_info เป็นหลัก (100% ข้อมูลอยู่ใน contact_info)
-      roblox_password: passwordFromContact || matchingRedemption?.roblox_password || queueItem.roblox_password,
-      robux_amount: matchingRedemption?.robux_amount || queueItem.robux_amount,
-      assigned_code: codeFromContact || matchingRedemption?.assigned_code || queueItem.assigned_code,
-      assigned_account_code: matchingRedemption?.assigned_account_code || queueItem.assigned_account_code,
-      code_id: matchingRedemption?.code_id || queueItem.code_id
-    };
-    
-    return result;
-  }) || [];
+  console.log('📊 ข้อมูลคิวทั้งหมด:', queueData?.length);
   
-  return enrichedData;
+  return queueData || [];
 };
 
 // เช็คสถานะคิวจากชื่อในเกมหรือโค้ด (ค้นหาจาก queue_items อย่างเดียว)

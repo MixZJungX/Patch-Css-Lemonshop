@@ -21,7 +21,7 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Responsi
 
 export default function Admin() {
   const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'advertisements'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'queue' | 'advertisements'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeRequestFilter, setActiveRequestFilter] = useState<'all' | 'pending' | 'processing' | 'completed' | 'rejected'>('all');
   const [rainbowSearchTerm, setRainbowSearchTerm] = useState('');
@@ -1431,21 +1431,7 @@ export default function Admin() {
 
       {/* Stats */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl mb-1">📋</div>
-              <div className="text-xl font-bold text-blue-300">{requests.length}</div>
-              <div className="text-xs text-blue-200">คำขอทั้งหมด</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl mb-1">⏳</div>
-              <div className="text-xl font-bold text-yellow-300">{requests.filter(r => r.status === 'pending').length}</div>
-              <div className="text-xs text-yellow-200">รอดำเนินการ</div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 text-white">
             <CardContent className="p-4 text-center">
               <div className="text-2xl mb-1">💎</div>
@@ -1467,18 +1453,17 @@ export default function Admin() {
           <div className="bg-white/10 backdrop-blur-xl rounded-xl p-1 border border-white/20">
             {[
               { key: 'dashboard', label: '🏠 Dashboard', count: 0 },
-              { key: 'requests', label: '📋 คำขอ', count: requests.filter(r => r.status === 'pending').length },
+              { key: 'queue', label: '🎯 ระบบคิว', count: 0 },
               { key: 'codes', label: '💎 โค้ด', count: codes.length },
               { key: 'accounts', label: '🐔 บัญชี', count: accounts.length },
               { key: 'rainbow', label: '🎮 Rainbow Six', count: rainbowRequests.length },
               { key: 'add-rainbow', label: '➕ เพิ่มโค้ด R6', count: 0 },
               { key: 'announcements', label: '📢 ประกาศ', count: announcements.filter(a => a.is_active).length },
               { key: 'advertisements', label: '🎨 โฆษณา', count: advertisements.filter(a => a.is_active).length },
-              { key: 'queue', label: '🎯 ระบบคิว', count: 0 },
             ].map(tab => (
               <Button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'dashboard' | 'requests' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'advertisements' | 'queue')}
+                onClick={() => setActiveTab(tab.key as 'dashboard' | 'codes' | 'accounts' | 'rainbow' | 'add-rainbow' | 'announcements' | 'advertisements' | 'queue')}
                 className={`px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.key
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
@@ -1836,221 +1821,6 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {activeTab === 'requests' && (
-          <Card className="bg-white/10 backdrop-blur-xl border-white/20">
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <CardTitle className="text-white">📋 จัดการคำขอ</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => setActiveRequestFilter('all')}
-                    size="sm"
-                    className={`px-3 py-1 ${
-                      activeRequestFilter === 'all'
-                        ? 'bg-white text-gray-900 shadow-lg'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    ทั้งหมด ({requests.length})
-                  </Button>
-                  <Button
-                    onClick={() => setActiveRequestFilter('pending')}
-                    size="sm"
-                    className={`px-3 py-1 ${
-                      activeRequestFilter === 'pending'
-                        ? 'bg-yellow-400 text-yellow-900 shadow-lg'
-                        : 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30'
-                    }`}
-                  >
-                    รอดำเนินการ ({requests.filter(r => r.status === 'pending').length})
-                  </Button>
-                  <Button
-                    onClick={() => setActiveRequestFilter('processing')}
-                    size="sm"
-                    className={`px-3 py-1 ${
-                      activeRequestFilter === 'processing'
-                        ? 'bg-blue-400 text-blue-900 shadow-lg'
-                        : 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
-                    }`}
-                  >
-                    กำลังดำเนินการ ({requests.filter(r => r.status === 'processing').length})
-                  </Button>
-                  <Button
-                    onClick={() => setActiveRequestFilter('completed')}
-                    size="sm"
-                    className={`px-3 py-1 ${
-                      activeRequestFilter === 'completed'
-                        ? 'bg-green-400 text-green-900 shadow-lg'
-                        : 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
-                    }`}
-                  >
-                    สำเร็จแล้ว ({requests.filter(r => r.status === 'completed').length})
-                  </Button>
-                  <Button
-                    onClick={() => setActiveRequestFilter('rejected')}
-                    size="sm"
-                    className={`px-3 py-1 ${
-                      activeRequestFilter === 'rejected'
-                        ? 'bg-red-400 text-red-900 shadow-lg'
-                        : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
-                    }`}
-                  >
-                    ยกเลิก ({requests.filter(r => r.status === 'rejected').length})
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-white/10">
-                      <TableHead className="text-white">โค้ด</TableHead>
-                      <TableHead className="text-white">ชื่อผู้ใช้</TableHead>
-                      <TableHead className="text-white">รหัสผ่าน</TableHead>
-                      <TableHead className="text-white">ประเภท</TableHead>
-                      <TableHead className="text-white">เบอร์โทรศัพท์</TableHead>
-                      <TableHead className="text-white">สถานะ</TableHead>
-                      <TableHead className="text-white">วันที่</TableHead>
-                      <TableHead className="text-white">จัดการ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRequests.length === 0 ? (
-                      <TableRow className="border-white/10">
-                        <TableCell colSpan={8} className="text-center text-white py-8">
-                          {loading ? 
-                            "กำลังโหลดข้อมูล..." : 
-                            activeRequestFilter === 'all' ? 
-                              "ไม่พบคำขอในระบบ" : 
-                              `ไม่พบคำขอในสถานะ "${
-                                activeRequestFilter === 'pending' ? 'รอดำเนินการ' :
-                                activeRequestFilter === 'processing' ? 'กำลังดำเนินการ' :
-                                activeRequestFilter === 'completed' ? 'สำเร็จแล้ว' : 'ยกเลิก'
-                              }"`
-                          }
-                        </TableCell>
-                      </TableRow>
-                    ) : filteredRequests.map(request => {
-                      // Extract code from contact_info if it contains "Code:"
-                      const codeMatch = request.contact_info.match(/Code: ([A-Z0-9]+)/);
-                      const code = codeMatch ? codeMatch[1] : '-';
-                      
-                      // Extract password from contact_info if it contains "Password:"
-                      const passwordMatch = request.contact_info.match(/Password: ([^|]+)/);
-                      const password = passwordMatch ? passwordMatch[1].trim() : '-';
-                      
-                      // Extract contact (phone number) from contact_info - support both old and new format
-                      let contact = '-';
-                      const contactMatch = request.contact_info.match(/Contact: ([^|]+)/);
-                      const phoneMatch = request.contact_info.match(/Phone: ([^|]+)/);
-                      
-                      if (phoneMatch) {
-                        contact = phoneMatch[1].trim();
-                      } else if (contactMatch) {
-                        contact = contactMatch[1].trim();
-                      }
-                      
-                      return (
-                        <TableRow key={request.id} className="border-white/10">
-                                                  <TableCell className="text-white font-mono text-sm font-bold">{code}</TableCell>
-                        <TableCell className="text-white">{request.roblox_username}</TableCell>
-                        <TableCell className="text-white font-mono text-xs">{password}</TableCell>
-                        <TableCell className="text-white">
-                          {request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
-                        </TableCell>
-                        <TableCell className="text-white text-sm font-semibold">
-                          {contact !== '-' ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-400">📱</span>
-                              <span>{contact}</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">ไม่มีข้อมูล</span>
-                          )}
-                        </TableCell>
-                          <TableCell>
-                            <Badge className={
-                              request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
-                              request.status === 'completed' ? 'bg-green-500/20 text-green-300' :
-                              request.status === 'processing' ? 'bg-blue-500/20 text-blue-300' :
-                              'bg-red-500/20 text-red-300'
-                            }>
-                              {request.status === 'pending' ? 'รอดำเนินการ' :
-                               request.status === 'completed' ? 'เสร็จสิ้น' :
-                               request.status === 'processing' ? 'กำลังดำเนินการ' : 'ยกเลิก'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-white text-xs">
-                            {new Date(request.created_at).toLocaleDateString('th-TH')}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-1">
-                              <Button
-                                size="sm"
-                                onClick={() => updateRequestStatus(request.id, 'processing')}
-                                className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs"
-                                disabled={request.status === 'processing'}
-                              >
-                                ดำเนินการ
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => updateRequestStatus(request.id, 'completed')}
-                                className="bg-green-500/20 text-green-300 hover:bg-green-500/30 text-xs"
-                                disabled={request.status === 'completed'}
-                              >
-                                เสร็จสิ้น
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => updateRequestStatus(request.id, 'rejected')}
-                                className="bg-red-500/20 text-red-300 hover:bg-red-500/30 text-xs"
-                                disabled={request.status === 'rejected'}
-                              >
-                                ยกเลิก
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  // Show detailed info in a toast or alert
-                                  const details = `
-โค้ด: ${code}
-ชื่อผู้ใช้: ${request.roblox_username}
-รหัสผ่าน: ${password}
-เบอร์โทรศัพท์: ${contact}
-ประเภท: ${request.robux_amount > 0 ? `${request.robux_amount} Robux` : 'ไก่ตัน'}
-สถานะ: ${request.status}
-วันที่: ${new Date(request.created_at).toLocaleDateString('th-TH')}
-                                  `.trim();
-                                  alert(details);
-                                }}
-                                className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 text-xs"
-                              >
-                                📋 รายละเอียด
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  console.log('🔘 Delete button clicked for request ID:', request.id);
-                                  deleteRequest(request.id);
-                                }}
-                                className="bg-gray-600/20 text-gray-300 hover:bg-gray-600/30 text-xs"
-                              >
-                                ลบ
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
         )}
 
         {activeTab === 'codes' && (

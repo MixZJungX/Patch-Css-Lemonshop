@@ -56,9 +56,39 @@ export default function QueueManager() {
   };
 
   useEffect(() => {
+    // โหลดข้อมูลครั้งแรก
     loadQueueItems();
-    const interval = setInterval(loadQueueItems, 30000);
-    return () => clearInterval(interval);
+    
+    console.log('🔌 [QueueManager] Setting up Realtime subscription...');
+    
+    // 🚀 ใช้ Supabase Realtime แทน polling
+    const channel = supabase
+      .channel('admin_queue_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // ฟังทุก event: INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'queue_items'
+        },
+        (payload) => {
+          console.log('📡 [QueueManager] Realtime update received:', payload);
+          // อัพเดทข้อมูลทันทีเมื่อมีการเปลี่ยนแปลง
+          loadQueueItems();
+        }
+      )
+      .subscribe((status) => {
+        console.log('📊 [QueueManager] Realtime status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ [QueueManager] Successfully subscribed to queue updates!');
+        }
+      });
+    
+    // Cleanup
+    return () => {
+      console.log('🔌 [QueueManager] Unsubscribing from queue updates...');
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const getStatusInfo = (status: string) => {
